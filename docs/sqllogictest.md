@@ -67,8 +67,8 @@ success or an error. A `query` record runs SQL and lists the expected values.
    is sorted by path, so thread timing cannot change it. Two full runs give
    identical bytes.
 8. **Failures are grouped by cause.** A parse error is bucketed by the
-   parser's message without its position, so `x IN t1` and `x IN t2` count as
-   one cause and the report reads as a to-do list.
+   parser's message without its position, so the same unparsed syntax on
+   different lines counts as one cause and the report reads as a to-do list.
 
 ## Three fixes on top of the parser
 

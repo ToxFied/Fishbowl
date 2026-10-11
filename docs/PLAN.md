@@ -227,9 +227,9 @@ engineering case study, the published static site. Deploying and creating the
 GitHub repo need Anestis's go-ahead.
 
 Done, apart from deploying: the full upstream suite (622 files, 5,939,879
-records run) passes **99.99%**, in about 35 seconds on 10 cores, pinned by
+records run) passes **100.00%**, in about 40 seconds on 10 cores, pinned by
 `scripts/pin-sqllogictest.sh` through Fossil's SHA-1 chain. The 29-file sample
-stays as the fast check. `RESULTS.md` lists what fails and why; the generated
+stays as the fast check. `RESULTS.md` records the last 452 failures and what fixed them; the generated
 reports are `sample.{md,json}` and `full.{md,json}`. `.github/workflows/ci.yml`
 runs fmt, clippy, tests, the web build and the sample on every push, and the
 full suite weekly; it has not run, since there is no GitHub repo yet. The case

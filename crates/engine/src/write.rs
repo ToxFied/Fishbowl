@@ -46,6 +46,11 @@ enum Undo {
     Updated { old: (i64, Row), new: (i64, Row) },
 }
 
+/// The changes one writer made, newest last. A statement that fires
+/// triggers writes through many writers and keeps their logs, so that it can
+/// reverse all of them if it fails.
+pub struct UndoLog(Vec<Undo>);
+
 pub struct TableWriter<'a> {
     schema: &'a TableSchema,
     storage: &'a mut Storage,
@@ -70,23 +75,37 @@ impl<'a> TableWriter<'a> {
         let keep =
             self.on_conflict == OnConflict::Fail && matches!(result, Err(Error::Constraint(_)));
         if result.is_err() && !keep {
-            while let Some(change) = self.undo.pop() {
-                match change {
-                    Undo::Inserted(rowid, row) => self.remove(rowid, &row)?,
-                    Undo::Deleted(rowid, row) => self.put(rowid, &row)?,
-                    Undo::Updated { old, new } => {
-                        self.remove(new.0, &new.1)?;
-                        self.put(old.0, &old.1)?;
-                    }
-                }
-            }
+            let undo = std::mem::take(&mut self.undo);
+            self.revert(UndoLog(undo))?;
         }
         result
     }
 
+    /// Ends the writer, handing back its changes instead of keeping or
+    /// reversing them.
+    pub fn into_undo(self) -> UndoLog {
+        UndoLog(self.undo)
+    }
+
+    /// Reverses the changes in `log`, newest first. They must have been made
+    /// to this writer's table.
+    pub fn revert(&mut self, log: UndoLog) -> Result<()> {
+        for change in log.0.into_iter().rev() {
+            match change {
+                Undo::Inserted(rowid, row) => self.remove(rowid, &row)?,
+                Undo::Deleted(rowid, row) => self.put(rowid, &row)?,
+                Undo::Updated { old, new } => {
+                    self.remove(new.0, &new.1)?;
+                    self.put(old.0, &old.1)?;
+                }
+            }
+        }
+        Ok(())
+    }
+
     /// Stores a new row. Its values already have the columns' affinity.
-    /// Returns whether it was stored: `OR IGNORE` can skip it.
-    pub fn insert(&mut self, mut row: Row) -> Result<bool> {
+    /// Returns its rowid, or `None` if `OR IGNORE` skipped it.
+    pub fn insert(&mut self, mut row: Row) -> Result<Option<i64>> {
         let rowid = match self.schema.rowid_alias {
             // An INTEGER PRIMARY KEY left NULL gets the next rowid.
             Some(pk) if row[pk].is_null() => self.storage.next_rowid(&self.schema.name)?,
@@ -105,13 +124,13 @@ impl<'a> TableWriter<'a> {
         }
         match self.check(rowid, &row, None) {
             Err(Error::Constraint(_)) if self.on_conflict == OnConflict::Ignore => {
-                return Ok(false);
+                return Ok(None);
             }
             checked => checked?,
         }
         self.put(rowid, &row)?;
         self.undo.push(Undo::Inserted(rowid, row));
-        Ok(true)
+        Ok(Some(rowid))
     }
 
     /// Replaces the row at `rowid`. Changing the INTEGER PRIMARY KEY moves
@@ -262,7 +281,7 @@ pub fn index_key(index: &IndexSchema, rowid: i64, row: &[Value]) -> IndexKey {
 
 /// An INTEGER PRIMARY KEY holds the rowid, so it must be an integer. Text
 /// like `'5'` was already converted by the column's affinity.
-fn rowid_value(value: &Value) -> Result<i64> {
+pub(crate) fn rowid_value(value: &Value) -> Result<i64> {
     match value {
         Value::Integer(i) => Ok(*i),
         _ => Err(Error::Runtime("datatype mismatch".into())),

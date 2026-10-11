@@ -83,7 +83,7 @@ impl Dialect for FishbowlDialect {
         if parser.parse_keyword(Keyword::REINDEX) {
             return Some(parse_reindex(parser));
         }
-        self.0.parse_statement(parser)
+        crate::trigger::parse_create(parser).or_else(|| self.0.parse_statement(parser))
     }
 
     /// Lets the parser read the hints [`tokenize`] writes.

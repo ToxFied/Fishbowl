@@ -60,15 +60,14 @@ Five independent checks, each aimed at a different way to be wrong.
 
 | Corpus | Files | Records run | Failed | Skipped | Pass rate |
 | --- | ---: | ---: | ---: | ---: | ---: |
-| Full suite | 622 | 5,939,879 | 452 | 1,480,834 | 99.99% |
-| 29-file sample | 29 | 129,348 | 125 | 14,153 | 99.90% |
+| Full suite | 622 | 5,939,879 | 0 | 1,480,834 | 100.00% |
+| 29-file sample | 29 | 129,348 | 0 | 14,153 | 100.00% |
 
 Both are SQLite's sqllogictest at check-in `ab599cbdd0` (2026-10-07). The
 full suite is every test file in the repository at that check-in. Skipped
 records are ones the file marks as not applying to SQLite (`onlyif mysql` and
-the like); they count neither as run nor as passed. Across 5.9 million
-records there are no wrong answers and no engine panics; every failure is
-an error on SQL Fishbowl does not support yet.
+the like); they count neither as run nor as passed. Every one of the
+5,939,879 records run passes.
 
 A pass rate is only worth quoting if it is hard to inflate. The rules:
 
@@ -93,8 +92,8 @@ A pass rate is only worth quoting if it is hard to inflate. The rules:
 The suite has a limit worth stating. Almost all of it is generated: 65% of
 the records are random queries over small tables and 35% are generated index
 tests. It never uses window functions, common table expressions,
-`ALTER TABLE` or JSON. 99.99% means Fishbowl matches
-SQLite on the SQL this suite uses.
+`ALTER TABLE` or JSON. 100% means Fishbowl matches SQLite on the SQL this
+suite uses, not on all of SQL.
 
 ### 2. Differential tests against `sqlite3`
 
@@ -172,6 +171,16 @@ have skewed the number, in both directions:
 - Affinity: `id = '5'` is true for an `INTEGER` column, `+id = '5'` is false,
   and `CAST('1e3' AS INTEGER)` is 1.
 
+**The last failures in the full suite turned up more:**
+
+- `max(DISTINCT a)` is not the same as `max(a)` when plain columns sit next
+  to it. SQLite skips a repeated value without updating the row the plain
+  columns come from, so with `a` = 1, 3, 3 the two pick different rows.
+- `NOT INDEXED` cannot be ignored as a hint. It makes SQLite read in rowid
+  order, which changes what `group_concat` returns.
+- In triggers, `NEW.x` has no column affinity, despite the documentation, and
+  SQLite visits the rows of an `UPDATE` with triggers in rowid order.
+
 **The crash test was blind twice.** Torn writes always left the log short,
 so recovery never read a torn frame; real file systems can grow a file before
 writing its data, so the disk model now does too. And a frame torn inside the
@@ -190,7 +199,7 @@ All on a 10-core Apple M4.
 
 | Measure | Result |
 | --- | --- |
-| Full sqllogictest suite, 5.9 million records | about 35 s, 570 MB peak memory |
+| Full sqllogictest suite, 5.9 million records | about 40 s |
 | 29-file sample | about 8 s |
 | Insert 100,000 rows into an indexed table in a file | 1.09 s (`sqlite3`: 0.04 s) |
 | `count(*)` over those 100,000 rows, process start included | about 10 ms |
@@ -207,15 +216,14 @@ are small, not because the engine is.
 
 ## Known limits
 
-- **No cost-based planner yet.** An index is used only on its first column,
-  one per table, never for `OR` or `ORDER BY`. A join reads its right side in
-  full for every left row instead of looking matches up by index. Milestone
-  M5 adds statistics and costs.
-- **Unsupported SQL:** triggers, common table expressions, window functions,
-  `ALTER TABLE`, blob literals, RIGHT and FULL joins, `USING`,
-  `NATURAL`, savepoints, `AUTOINCREMENT`, `WITHOUT ROWID`, partial and
-  expression indexes. [`RESULTS.md`](../sqllogictest/RESULTS.md) lists every
-  remaining suite failure by cause.
+- **The planner is simpler than SQLite's.** It copies SQLite's cost model
+  but not its `OR` optimization, skip-scan or automatic indexes.
+- **Unsupported SQL:** common table expressions, window functions,
+  `ALTER TABLE`, RIGHT and FULL joins, `USING`, `NATURAL`, savepoints,
+  `AUTOINCREMENT`, `WITHOUT ROWID`, partial and expression indexes. Triggers
+  work, but a trigger is replanned for every row it fires on, and a few
+  forms (RAISE outside a SELECT, writing to a view from a trigger body) are
+  rejected.
 - **One connection per database file,** with no file locking. One
   transaction's changed pages must fit in memory. The log is not checkpointed
   on close.
@@ -227,9 +235,8 @@ are small, not because the engine is.
 ## How it was built
 
 The milestones ran in parallel lanes (SQL, storage, UI, proof), each on its
-own branch and merged when its tests passed. M5, the cost-based planner, is
-still in progress. The pass rate after each merge, on the 29-file sample
-until M8:
+own branch and merged when its tests passed. The pass rate after each
+merge, on the 29-file sample until M8:
 
 | Milestone | Pass rate |
 | --- | ---: |
@@ -240,7 +247,9 @@ until M8:
 | M2: joins, subqueries, compound queries, views | 99.89% |
 | M6: transactions and crash recovery | 99.89% |
 | M7: trace and page viewer | 99.89% |
+| M5: cost-based planner, bit operators | 99.89% |
 | M8: the full suite | 99.99% on 622 files |
+| Last 452 failures: parser gaps, blobs, triggers | 100.00% on 622 files |
 
 More detail: [the plan](PLAN.md), [the harness notes](sqllogictest.md) and
 [the learning notes](learn/README.md), which explain each idea in plain

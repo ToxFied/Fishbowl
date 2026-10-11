@@ -191,6 +191,47 @@ fn data_survives_reopening_the_file() {
 }
 
 #[test]
+fn triggers_survive_reopening_the_file() {
+    let path = std::env::temp_dir().join(format!("fishbowl-trigger-{}.db", std::process::id()));
+    let _ = std::fs::remove_file(&path);
+    {
+        let mut db = Database::open(&path).unwrap();
+        db.execute("CREATE TABLE fish(id INTEGER, name TEXT)")
+            .unwrap();
+        db.execute("CREATE TABLE log(what TEXT)").unwrap();
+        db.execute("CREATE TABLE gone(x)").unwrap();
+        db.execute(
+            "CREATE TRIGGER named AFTER INSERT ON fish WHEN new.name <> 'it''s' \
+             BEGIN INSERT INTO log VALUES ('added ' || new.name); END",
+        )
+        .unwrap();
+        db.execute("CREATE TRIGGER dropped AFTER INSERT ON fish BEGIN SELECT 1; END")
+            .unwrap();
+        db.execute("CREATE TEMP TRIGGER temp AFTER INSERT ON fish BEGIN SELECT 1; END")
+            .unwrap();
+        db.execute("CREATE TRIGGER with_table AFTER INSERT ON gone BEGIN SELECT 1; END")
+            .unwrap();
+        db.execute("DROP TRIGGER dropped").unwrap();
+        db.execute("DROP TABLE gone").unwrap();
+    }
+    let mut db = Database::open(&path).unwrap();
+    db.execute("INSERT INTO fish VALUES (1, 'nemo'), (2, 'it''s')")
+        .unwrap();
+    assert_eq!(
+        rows(&mut db, "SELECT * FROM log"),
+        [vec![text("added nemo")]]
+    );
+    for name in ["dropped", "temp", "with_table"] {
+        assert_eq!(
+            db.execute(&format!("DROP TRIGGER {name}")).unwrap_err(),
+            Error::Catalog(format!("no such trigger: {name}"))
+        );
+    }
+    drop(db);
+    std::fs::remove_file(&path).unwrap();
+}
+
+#[test]
 fn a_file_that_is_not_a_database_is_rejected() {
     let path = std::env::temp_dir().join(format!("fishbowl-junk-{}.db", std::process::id()));
     std::fs::write(&path, vec![b'x'; 4096]).unwrap();

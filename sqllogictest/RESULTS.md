@@ -9,12 +9,12 @@ explain what counts as a pass.
 
 | Corpus | Files | Records run | Failed | Skipped | Pass rate | Queries only |
 | --- | ---: | ---: | ---: | ---: | ---: | ---: |
-| Full suite | 622 | 5,939,879 | 452 | 1,480,834 | **99.99%** | 99.99% |
-| 29-file sample | 29 | 129,348 | 125 | 14,153 | **99.90%** | 99.91% |
+| Full suite | 622 | 5,939,879 | 0 | 1,480,834 | **100.00%** | 100.00% |
+| 29-file sample | 29 | 129,348 | 0 | 14,153 | **100.00%** | 100.00% |
 
 - **Full suite:** every test file in the upstream repository at that
   check-in, listed with SHA-256 in [`manifest-full.txt`](manifest-full.txt).
-  It takes about 35 seconds on a 10-core Apple M4 and needs 1.2 GB of disk.
+  It takes about 40 seconds on a 10-core Apple M4 and needs 1.2 GB of disk.
 - **29-file sample:** a subset of the same files, listed in
   [`manifest.txt`](manifest.txt), with at least one file from each category.
   It runs in about 8 seconds.
@@ -41,24 +41,22 @@ does: joins, subqueries, compound queries, aggregates, NULL handling, type
 affinity and index use. It says nothing about SQL the suite never uses, such
 as window functions, common table expressions, `ALTER TABLE` or JSON.
 
-## What fails and why
+## How the last failures were fixed
 
-All 452 failures in the full suite, grouped by cause. Each cause is in the
-engine, not the harness. The lane names come from [the plan](../docs/PLAN.md).
+Nothing fails now. When the full suite first ran, 458 records failed. The
+fixes, by cause:
 
-| Records | Cause | Where | Likely fix |
-| ---: | --- | --- | --- |
-| 335 | Deeply nested `WHERE` clauses hit the parser's recursion limit. `sqlparser` stops at 50 levels by default. | Generated queries in `index/between`, `in`, `commute` and `orderby_nosort` | Lane A: raise the limit where `parse()` in `crates/engine/src/lib.rs` builds the parser. Check stack depth in the planner, evaluator and browser build when doing so. |
-| 72 | `x IN t1`, SQLite's shorthand for `x IN (SELECT * FROM t1)`, does not parse. | `evidence/in1.test` | Lane A: accept the form in the parser or rewrite it before parsing. |
-| 27 | Triggers: `CREATE TRIGGER` (13) and `DROP TRIGGER` (14) are not supported. | `evidence/slt_lang_createtrigger.test`, `slt_lang_droptrigger.test` | New feature, unassigned. |
-| 7 | `min(DISTINCT x)` or `max(DISTINCT x)` next to plain columns is rejected. | `random/groupby/slt_good_12.test` | Lane A: aggregates in `planner.rs`. |
-| 6 | `INDEXED BY` and `NOT INDEXED` after a table name do not parse. | `evidence/slt_lang_aggfunc.test` | Lane A: parser; the planner can ignore the hint. |
-| 4 | Blob literals such as `X'303132'` are not supported. | `evidence/in1.test` | Lane A: a blob value type. |
-| 1 | `REINDEX` does not parse. | `evidence/slt_lang_reindex.test` | Lane A: parse it and do nothing. Index B-trees never go stale. |
+| Records | Cause | Fix |
+| ---: | --- | --- |
+| 335 | Deeply nested `WHERE` clauses hit `sqlparser`'s default recursion limit of 50 | The limit is now 100. The deepest record needs 65, and a test runs nesting at 100 on a 1 MiB stack, the WebAssembly default. |
+| 72 | `x IN t1`, SQLite's shorthand for `x IN (SELECT * FROM t1)`, did not parse | Parsed in `dialect.rs` |
+| 27 | `CREATE TRIGGER` and `DROP TRIGGER` were not supported | Real triggers: BEFORE, AFTER and INSTEAD OF, `WHEN`, `NEW` and `OLD`, `RAISE`, stored in the schema |
+| 7 | `min(DISTINCT x)` or `max(DISTINCT x)` next to plain columns was rejected | Accepted, with SQLite's rule for which row the plain columns come from |
+| 6 | `<<` did not parse, so two rows were missing and 4 later sums were wrong | Bit operators (M5), plus two harness fixes: reals print with 16 significant digits as SQLite's `printf` does, and a query that fails while running reads as no rows, as in SQLite's runner |
+| 6 | `INDEXED BY` and `NOT INDEXED` did not parse | Parsed, and they limit the plans the planner may choose, since `NOT INDEXED` changes the row order |
+| 4 | Blob literals such as `X'303132'` were not supported | A blob value type |
+| 1 | `REINDEX` did not parse | Parsed; it checks the name and does nothing else, since index B-trees never go stale |
 
-Every failure is an error. No record in 5.9 million gives a wrong result,
-panics the engine or runs over the 20 million row budget.
-
-The same causes make up the sample's 125 failures: 72 `x IN t1`, 27 trigger
-records, 15 recursion-limit records, 6 `INDEXED BY`, 4 blob
-literals and 1 `REINDEX`.
+The suite never uses some SQL, so 100% does not mean all of SQL works. See
+[the case study](../docs/CASE_STUDY.md#known-limits) for what is still
+"not supported yet".

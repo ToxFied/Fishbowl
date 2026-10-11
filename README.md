@@ -34,16 +34,18 @@ suite, at check-in
 
 | Corpus | Files | Records run | Failed | Skipped | Pass rate | Queries only |
 | --- | ---: | ---: | ---: | ---: | ---: | ---: |
-| Full suite | 622 | 5,939,879 | 452 | 1,480,834 | **99.99%** | 99.99% |
-| 29-file sample | 29 | 129,348 | 125 | 14,153 | **99.90%** | 99.91% |
+| Full suite | 622 | 5,939,879 | 0 | 1,480,834 | **100.00%** | 100.00% |
+| 29-file sample | 29 | 129,348 | 0 | 14,153 | **100.00%** | 100.00% |
 
 The full suite is every test file in the repository at that check-in, and
 gives the headline number. The sample is the fast check CI runs on every push.
 Skipped records are ones a file marks as not applying to SQLite, such as
 `onlyif mysql`; they are never counted as passes. Every file is pinned by
 SHA-256, "not supported yet" counts as a failure, and the report is
-byte-identical from run to run. [`RESULTS.md`](sqllogictest/RESULTS.md) lists
-what fails and why.
+byte-identical from run to run. Passing does not mean all of SQL works: the
+suite never uses window functions, common table expressions or `ALTER TABLE`.
+[`RESULTS.md`](sqllogictest/RESULTS.md) lists the last failures and how they
+were fixed.
 
 The suite is one of five checks. A differential test runs random scripts
 through Fishbowl and the real `sqlite3` and requires the same answers.
@@ -65,7 +67,8 @@ statistics from `ANALYZE`, chooses between a full scan and each index, orders
 joins, looks up matching rows by index inside a join, and lets an index stand
 in for a sort. It keeps the plans it turned down, with their costs, for the
 UI. `BEGIN`, `COMMIT` and `ROLLBACK` group changes into transactions, which
-commit through a write-ahead log. Anything else is rejected with "not
+commit through a write-ahead log. Triggers fire before, after or instead of
+each changed row. Anything else is rejected with "not
 supported yet" rather than answered wrongly.
 
 | Part | State |
@@ -128,7 +131,7 @@ cargo test -p fishbowl --test crash -- --nocapture
 scripts/fetch-sqllogictest.sh
 cargo run --release -p fishbowl-slt -- --write
 
-# sqllogictest, the full suite: 1.2 GB, about 35 seconds on 10 cores
+# sqllogictest, the full suite: 1.2 GB, about 40 seconds on 10 cores
 scripts/fetch-sqllogictest.sh --full
 cargo run --release -p fishbowl-slt -- --full --write
 ```

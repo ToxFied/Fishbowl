@@ -8,20 +8,20 @@
   },
   "totals": {
     "records": {
-      "passed": 5939427,
-      "failed": 452
+      "passed": 5939879,
+      "failed": 0
     },
     "statements": {
-      "passed": 210758,
-      "failed": 28
+      "passed": 210786,
+      "failed": 0
     },
     "queries": {
-      "passed": 5728669,
-      "failed": 424
+      "passed": 5729093,
+      "failed": 0
     },
     "skipped": 1480834,
-    "pass_rate": 99.99,
-    "query_pass_rate": 99.99
+    "pass_rate": 100.0,
+    "query_pass_rate": 100.0
   },
   "files": [
     {
@@ -31,11 +31,11 @@
         "failed": 0
       },
       "queries": {
-        "passed": 111,
-        "failed": 76
+        "passed": 187,
+        "failed": 0
       },
       "skipped": 2,
-      "pass_rate": 64.48
+      "pass_rate": 100.0
     },
     {
       "path": "evidence/in2.test",
@@ -57,24 +57,24 @@
         "failed": 0
       },
       "queries": {
-        "passed": 61,
-        "failed": 6
+        "passed": 67,
+        "failed": 0
       },
       "skipped": 0,
-      "pass_rate": 92.5
+      "pass_rate": 100.0
     },
     {
       "path": "evidence/slt_lang_createtrigger.test",
       "statements": {
-        "passed": 5,
-        "failed": 21
+        "passed": 26,
+        "failed": 0
       },
       "queries": {
         "passed": 0,
         "failed": 0
       },
       "skipped": 0,
-      "pass_rate": 19.23
+      "pass_rate": 100.0
     },
     {
       "path": "evidence/slt_lang_createview.test",
@@ -118,15 +118,15 @@
     {
       "path": "evidence/slt_lang_droptrigger.test",
       "statements": {
-        "passed": 6,
-        "failed": 6
+        "passed": 12,
+        "failed": 0
       },
       "queries": {
         "passed": 0,
         "failed": 0
       },
       "skipped": 0,
-      "pass_rate": 50.0
+      "pass_rate": 100.0
     },
     {
       "path": "evidence/slt_lang_dropview.test",
@@ -144,15 +144,15 @@
     {
       "path": "evidence/slt_lang_reindex.test",
       "statements": {
-        "passed": 6,
-        "failed": 1
+        "passed": 7,
+        "failed": 0
       },
       "queries": {
         "passed": 0,
         "failed": 0
       },
       "skipped": 0,
-      "pass_rate": 85.71
+      "pass_rate": 100.0
     },
     {
       "path": "evidence/slt_lang_replace.test",
@@ -187,11 +187,11 @@
         "failed": 0
       },
       "queries": {
-        "passed": 9980,
-        "failed": 20
+        "passed": 10000,
+        "failed": 0
       },
       "skipped": 0,
-      "pass_rate": 99.8
+      "pass_rate": 100.0
     },
     {
       "path": "index/between/10/slt_good_0.test",
@@ -213,11 +213,11 @@
         "failed": 0
       },
       "queries": {
-        "passed": 9990,
-        "failed": 10
+        "passed": 10000,
+        "failed": 0
       },
       "skipped": 0,
-      "pass_rate": 99.9
+      "pass_rate": 100.0
     },
     {
       "path": "index/between/10/slt_good_2.test",
@@ -239,11 +239,11 @@
         "failed": 0
       },
       "queries": {
-        "passed": 9990,
-        "failed": 10
+        "passed": 10000,
+        "failed": 0
       },
       "skipped": 0,
-      "pass_rate": 99.9
+      "pass_rate": 100.0
     },
     {
       "path": "index/between/10/slt_good_4.test",
@@ -252,11 +252,11 @@
         "failed": 0
       },
       "queries": {
-        "passed": 9990,
-        "failed": 10
+        "passed": 10000,
+        "failed": 0
       },
       "skipped": 0,
-      "pass_rate": 99.9
+      "pass_rate": 100.0
     },
     {
       "path": "index/between/10/slt_good_5.test",
@@ -278,11 +278,11 @@
         "failed": 0
       },
       "queries": {
-        "passed": 9990,
-        "failed": 10
+        "passed": 10000,
+        "failed": 0
       },
       "skipped": 0,
-      "pass_rate": 99.9
+      "pass_rate": 100.0
     },
     {
       "path": "index/between/100/slt_good_1.test",
@@ -291,11 +291,11 @@
         "failed": 0
       },
       "queries": {
-        "passed": 9990,
-        "failed": 10
+        "passed": 10000,
+        "failed": 0
       },
       "skipped": 0,
-      "pass_rate": 99.9
+      "pass_rate": 100.0
     },
     {
       "path": "index/between/100/slt_good_2.test",
@@ -304,11 +304,11 @@
         "failed": 0
       },
       "queries": {
-        "passed": 9970,
-        "failed": 30
+        "passed": 10000,
+        "failed": 0
       },
       "skipped": 0,
-      "pass_rate": 99.7
+      "pass_rate": 100.0
     },
     {
       "path": "index/between/100/slt_good_3.test",
@@ -330,11 +330,11 @@
         "failed": 0
       },
       "queries": {
-        "passed": 9990,
-        "failed": 10
+        "passed": 10000,
+        "failed": 0
       },
       "skipped": 0,
-      "pass_rate": 99.9
+      "pass_rate": 100.0
     },
     {
       "path": "index/between/1000/slt_good_0.test",
@@ -369,11 +369,11 @@
         "failed": 0
       },
       "queries": {
-        "passed": 9990,
-        "failed": 10
+        "passed": 10000,
+        "failed": 0
       },
       "skipped": 0,
-      "pass_rate": 99.9
+      "pass_rate": 100.0
     },
     {
       "path": "index/commute/10/slt_good_10.test",
@@ -434,11 +434,11 @@
         "failed": 0
       },
       "queries": {
-        "passed": 9990,
-        "failed": 10
+        "passed": 10000,
+        "failed": 0
       },
       "skipped": 0,
-      "pass_rate": 99.9
+      "pass_rate": 100.0
     },
     {
       "path": "index/commute/10/slt_good_15.test",
@@ -694,11 +694,11 @@
         "failed": 0
       },
       "queries": {
-        "passed": 9990,
-        "failed": 10
+        "passed": 10000,
+        "failed": 0
       },
       "skipped": 0,
-      "pass_rate": 99.9
+      "pass_rate": 100.0
     },
     {
       "path": "index/commute/10/slt_good_33.test",
@@ -1214,11 +1214,11 @@
         "failed": 0
       },
       "queries": {
-        "passed": 9990,
-        "failed": 15
+        "passed": 10005,
+        "failed": 0
       },
       "skipped": 0,
-      "pass_rate": 99.85
+      "pass_rate": 100.0
     },
     {
       "path": "index/in/10/slt_good_1.test",
@@ -1227,11 +1227,11 @@
         "failed": 0
       },
       "queries": {
-        "passed": 9990,
-        "failed": 15
+        "passed": 10005,
+        "failed": 0
       },
       "skipped": 0,
-      "pass_rate": 99.85
+      "pass_rate": 100.0
     },
     {
       "path": "index/in/10/slt_good_2.test",
@@ -1240,11 +1240,11 @@
         "failed": 0
       },
       "queries": {
-        "passed": 9975,
-        "failed": 30
+        "passed": 10005,
+        "failed": 0
       },
       "skipped": 0,
-      "pass_rate": 99.7
+      "pass_rate": 100.0
     },
     {
       "path": "index/in/10/slt_good_3.test",
@@ -1266,11 +1266,11 @@
         "failed": 0
       },
       "queries": {
-        "passed": 9990,
-        "failed": 15
+        "passed": 10005,
+        "failed": 0
       },
       "skipped": 0,
-      "pass_rate": 99.85
+      "pass_rate": 100.0
     },
     {
       "path": "index/in/10/slt_good_5.test",
@@ -1292,11 +1292,11 @@
         "failed": 0
       },
       "queries": {
-        "passed": 9990,
-        "failed": 15
+        "passed": 10005,
+        "failed": 0
       },
       "skipped": 0,
-      "pass_rate": 99.85
+      "pass_rate": 100.0
     },
     {
       "path": "index/in/100/slt_good_1.test",
@@ -1331,11 +1331,11 @@
         "failed": 0
       },
       "queries": {
-        "passed": 9990,
-        "failed": 15
+        "passed": 10005,
+        "failed": 0
       },
       "skipped": 0,
-      "pass_rate": 99.85
+      "pass_rate": 100.0
     },
     {
       "path": "index/in/100/slt_good_4.test",
@@ -1370,11 +1370,11 @@
         "failed": 0
       },
       "queries": {
-        "passed": 9975,
-        "failed": 30
+        "passed": 10005,
+        "failed": 0
       },
       "skipped": 0,
-      "pass_rate": 99.72
+      "pass_rate": 100.0
     },
     {
       "path": "index/orderby/10/slt_good_0.test",
@@ -2228,11 +2228,11 @@
         "failed": 0
       },
       "queries": {
-        "passed": 9960,
-        "failed": 60
+        "passed": 10020,
+        "failed": 0
       },
       "skipped": 0,
-      "pass_rate": 99.4
+      "pass_rate": 100.0
     },
     {
       "path": "index/orderby_nosort/10/slt_good_5.test",
@@ -6271,11 +6271,11 @@
         "failed": 0
       },
       "queries": {
-        "passed": 9993,
-        "failed": 7
+        "passed": 10000,
+        "failed": 0
       },
       "skipped": 2694,
-      "pass_rate": 99.93
+      "pass_rate": 100.0
     },
     {
       "path": "random/groupby/slt_good_13.test",
@@ -8111,46 +8111,5 @@
       "pass_rate": 100.0
     }
   ],
-  "failure_reasons": [
-    {
-      "reason": "parse error: recursion limit exceeded",
-      "count": 335,
-      "example": "index/between/1/slt_good_0.test:23219: parse error: sql parser error: recursion limit exceeded"
-    },
-    {
-      "reason": "parse error: Expected: (",
-      "count": 72,
-      "example": "evidence/in1.test:70: parse error: sql parser error: Expected: (, found: t1 at Line: 1, Column: 13"
-    },
-    {
-      "reason": "unsupported: DROP TRIGGER",
-      "count": 14,
-      "example": "evidence/slt_lang_createtrigger.test:191: not supported yet: DROP TRIGGER"
-    },
-    {
-      "reason": "unsupported: CREATE TRIGGER",
-      "count": 13,
-      "example": "evidence/slt_lang_createtrigger.test:24: not supported yet: CREATE TRIGGER"
-    },
-    {
-      "reason": "unsupported: plain columns beside min(DISTINCT ...) or max(DISTINCT ...)",
-      "count": 7,
-      "example": "random/groupby/slt_good_12.test:43214: not supported yet: plain columns beside min(DISTINCT ...) or max(DISTINCT ...)"
-    },
-    {
-      "reason": "parse error: Expected: end of statement",
-      "count": 6,
-      "example": "evidence/slt_lang_aggfunc.test:58: parse error: sql parser error: Expected: end of statement, found: INDEXED at Line: 1, Column: 45"
-    },
-    {
-      "reason": "unsupported: literal X'303132'",
-      "count": 4,
-      "example": "evidence/in1.test:296: not supported yet: literal X'303132'"
-    },
-    {
-      "reason": "parse error: Expected: an SQL statement",
-      "count": 1,
-      "example": "evidence/slt_lang_reindex.test:37: parse error: sql parser error: Expected: an SQL statement, found: REINDEX at Line: 1, Column: 1"
-    }
-  ]
+  "failure_reasons": []
 }
