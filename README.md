@@ -1,5 +1,8 @@
 <p align="center">
-  <img src="brand/lockup.svg" width="420" alt="Fishbowl">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="brand/lockup.svg">
+    <img src="brand/lockup-light.svg" width="420" alt="Fishbowl">
+  </picture>
 </p>
 
 <p align="center"><strong>A SQL database you can see inside.</strong></p>
