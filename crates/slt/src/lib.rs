@@ -221,6 +221,7 @@ fn error_reason(e: &Error) -> String {
         Error::Catalog(msg) => msg.split(':').next().unwrap_or(msg).to_string(),
         Error::Constraint(_) => "constraint failed".into(),
         Error::BudgetExceeded(_) => "row budget exceeded".into(),
+        Error::Storage(_) => "storage error".into(),
     }
 }
 

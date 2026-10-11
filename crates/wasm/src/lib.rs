@@ -92,7 +92,9 @@ mod tests {
     fn run_output_matches_the_typescript_contract() {
         let mut fishbowl = Fishbowl::new();
         let out: Value = serde_json::from_str(&fishbowl.run(
-            "CREATE TABLE t(a INTEGER); INSERT INTO t VALUES (1), (2); SELECT a FROM t WHERE a > 1; SELECT b FROM t",
+"CREATE TABLE t(a INTEGER); INSERT INTO t VALUES (1), (2); SELECT a FROM t WHERE a > 1; \
+             UPDATE t SET a = 3 WHERE a = 2; DELETE FROM t WHERE a = 1; \
+             CREATE TABLE gone(x); DROP TABLE gone; SELECT b FROM t",
         ))
         .unwrap();
 
@@ -113,10 +115,24 @@ mod tests {
         assert_eq!(query["plan"]["operator"], "Project");
         assert_eq!(query["plan"]["children"][0]["rows_out"], 1);
 
-        assert_eq!(statements[3]["status"], "error");
-        assert_eq!(statements[3]["message"], "no such column: b");
+        assert_eq!(
+            statements[3]["result"],
+            json!({"kind": "update", "table": "t", "rows": 1})
+        );
+        assert_eq!(
+            statements[4]["result"],
+            json!({"kind": "delete", "table": "t", "rows": 1})
+        );
+        assert_eq!(
+            statements[6]["result"],
+            json!({"kind": "drop_table", "table": "gone"})
+        );
+
+        assert_eq!(statements[7]["status"], "error");
+        assert_eq!(statements[7]["message"], "no such column: b");
+        assert_eq!(out["tables"].as_array().unwrap().len(), 1);
         assert_eq!(out["tables"][0]["name"], "t");
-        assert_eq!(out["tables"][0]["row_count"], 2);
+        assert_eq!(out["tables"][0]["row_count"], 1);
         assert_eq!(out["tables"][0]["columns"][0]["affinity"], "integer");
     }
 }

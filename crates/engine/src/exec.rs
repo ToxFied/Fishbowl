@@ -5,17 +5,17 @@
 use crate::error::{Error, Result};
 use crate::expr::Expr;
 use crate::plan::{PlanNode, PlanProfile};
-use crate::storage::{MemoryStorage, Row};
+use crate::storage::{Row, Storage, TableScan};
 
 /// Shared state for one statement: where rows live and how much work is left.
 pub struct ExecContext<'a> {
-    pub storage: &'a MemoryStorage,
+    pub storage: &'a Storage,
     budget: Option<u64>,
     rows_processed: u64,
 }
 
 impl<'a> ExecContext<'a> {
-    pub fn new(storage: &'a MemoryStorage, budget: Option<u64>) -> Self {
+    pub fn new(storage: &'a Storage, budget: Option<u64>) -> Self {
         ExecContext {
             storage,
             budget,
@@ -43,8 +43,7 @@ struct Operator {
 
 enum OperatorKind {
     SeqScan {
-        table: String,
-        position: usize,
+        scan: TableScan,
     },
     OneRow {
         done: bool,
@@ -63,8 +62,7 @@ impl Operator {
     fn build(node: &PlanNode) -> Operator {
         let kind = match node {
             PlanNode::SeqScan { table, .. } => OperatorKind::SeqScan {
-                table: table.clone(),
-                position: 0,
+                scan: TableScan::new(table),
             },
             PlanNode::OneRow => OperatorKind::OneRow { done: false },
             PlanNode::Filter { input, predicate } => OperatorKind::Filter {
@@ -81,11 +79,7 @@ impl Operator {
 
     fn next(&mut self, ctx: &mut ExecContext) -> Result<Option<Row>> {
         let row = match &mut self.kind {
-            OperatorKind::SeqScan { table, position } => {
-                let row = ctx.storage.row(table, *position).cloned();
-                *position += 1;
-                row
-            }
+            OperatorKind::SeqScan { scan } => scan.next(ctx.storage)?,
             OperatorKind::OneRow { done } => {
                 let first = !*done;
                 *done = true;

@@ -18,6 +18,20 @@ pub enum Plan {
         targets: Vec<usize>,
         rows: Vec<Vec<Expr>>,
     },
+    Update {
+        table: String,
+        /// Column position and its new value, computed from the old row.
+        assignments: Vec<(usize, Expr)>,
+        predicate: Option<Expr>,
+    },
+    Delete {
+        table: String,
+        predicate: Option<Expr>,
+    },
+    DropTable {
+        table: String,
+        if_exists: bool,
+    },
     Query(QueryPlan),
 }
 

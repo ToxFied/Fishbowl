@@ -49,6 +49,10 @@ impl Catalog {
         Ok(())
     }
 
+    pub fn remove_table(&mut self, name: &str) -> Option<TableSchema> {
+        self.tables.remove(&name.to_ascii_lowercase())
+    }
+
     pub fn table(&self, name: &str) -> Result<&TableSchema> {
         self.tables
             .get(&name.to_ascii_lowercase())

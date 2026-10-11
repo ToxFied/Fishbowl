@@ -4,6 +4,7 @@
 //! fishbowl                      interactive; statements end with `;`
 //! fishbowl -c "SELECT 1 + 1"    run one script and exit
 //! fishbowl < script.sql         run a file and exit
+//! fishbowl --db fish.db ...     keep the data in a database file
 //! ```
 
 use std::io::{self, BufRead, IsTerminal, Read, Write};
@@ -13,8 +14,17 @@ use fishbowl::{Database, QueryResult, StatementResult};
 
 fn main() -> ExitCode {
     let args: Vec<String> = std::env::args().skip(1).collect();
-    let mut db = Database::new();
-    match args.as_slice() {
+    let (mut db, args) = match args.as_slice() {
+        [flag, path, rest @ ..] if flag == "--db" => match Database::open(path) {
+            Ok(db) => (db, rest),
+            Err(e) => {
+                eprintln!("could not open {path}: {e}");
+                return ExitCode::FAILURE;
+            }
+        },
+        rest => (Database::new(), rest),
+    };
+    match args {
         [flag, sql] if flag == "-c" => run(&mut db, sql),
         [] if !io::stdin().is_terminal() => {
             let mut sql = String::new();
@@ -26,7 +36,7 @@ fn main() -> ExitCode {
         }
         [] => repl(&mut db),
         _ => {
-            eprintln!("usage: fishbowl [-c SQL]");
+            eprintln!("usage: fishbowl [--db FILE] [-c SQL]");
             ExitCode::from(2)
         }
     }
@@ -68,6 +78,9 @@ fn run(db: &mut Database, sql: &str) -> ExitCode {
         match entry.result {
             Ok(StatementResult::CreateTable { table }) => println!("created table {table}"),
             Ok(StatementResult::Insert { table, rows }) => println!("inserted {rows} into {table}"),
+            Ok(StatementResult::Update { table, rows }) => println!("updated {rows} in {table}"),
+            Ok(StatementResult::Delete { table, rows }) => println!("deleted {rows} from {table}"),
+            Ok(StatementResult::DropTable { table }) => println!("dropped table {table}"),
             Ok(StatementResult::Query(result)) => print_query(&result),
             Err(e) => {
                 eprintln!("error: {e}\n  in: {}", entry.sql);

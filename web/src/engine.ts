@@ -25,6 +25,9 @@ export interface QueryResult {
 export type StatementResult =
   | { kind: "create_table"; table: string }
   | { kind: "insert"; table: string; rows: number }
+  | { kind: "update"; table: string; rows: number }
+  | { kind: "delete"; table: string; rows: number }
+  | { kind: "drop_table"; table: string }
   | QueryResult;
 
 export type Entry =

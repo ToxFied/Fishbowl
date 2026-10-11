@@ -7,19 +7,19 @@
   },
   "totals": {
     "records": {
-      "passed": 15404,
-      "failed": 113944
+      "passed": 15428,
+      "failed": 113920
     },
     "statements": {
-      "passed": 1201,
-      "failed": 10739
+      "passed": 1225,
+      "failed": 10715
     },
     "queries": {
       "passed": 14203,
       "failed": 103205
     },
     "skipped": 14153,
-    "pass_rate": 11.9,
+    "pass_rate": 11.92,
     "query_pass_rate": 12.09
   },
   "files": [
@@ -78,15 +78,15 @@
     {
       "path": "evidence/slt_lang_createview.test",
       "statements": {
-        "passed": 6,
-        "failed": 15
+        "passed": 10,
+        "failed": 11
       },
       "queries": {
         "passed": 1,
         "failed": 1
       },
       "skipped": 2,
-      "pass_rate": 30.43
+      "pass_rate": 47.82
     },
     {
       "path": "evidence/slt_lang_dropindex.test",
@@ -104,28 +104,28 @@
     {
       "path": "evidence/slt_lang_droptable.test",
       "statements": {
-        "passed": 4,
-        "failed": 8
+        "passed": 10,
+        "failed": 2
       },
       "queries": {
         "passed": 0,
         "failed": 0
       },
       "skipped": 0,
-      "pass_rate": 33.33
+      "pass_rate": 83.33
     },
     {
       "path": "evidence/slt_lang_droptrigger.test",
       "statements": {
-        "passed": 4,
-        "failed": 8
+        "passed": 5,
+        "failed": 7
       },
       "queries": {
         "passed": 0,
         "failed": 0
       },
       "skipped": 0,
-      "pass_rate": 33.33
+      "pass_rate": 41.66
     },
     {
       "path": "evidence/slt_lang_dropview.test",
@@ -169,15 +169,15 @@
     {
       "path": "evidence/slt_lang_update.test",
       "statements": {
-        "passed": 4,
-        "failed": 14
+        "passed": 17,
+        "failed": 1
       },
       "queries": {
         "passed": 0,
         "failed": 9
       },
       "skipped": 0,
-      "pass_rate": 14.81
+      "pass_rate": 62.96
     },
     {
       "path": "index/between/10/slt_good_0.test",
@@ -404,7 +404,7 @@
   "failure_reasons": [
     {
       "reason": "no such table",
-      "count": 47389,
+      "count": 50096,
       "example": "evidence/in1.test:368: no such table: t4"
     },
     {
@@ -443,11 +443,6 @@
       "example": "evidence/slt_lang_createview.test:111: not supported yet: DROP VIEW"
     },
     {
-      "reason": "unsupported: DELETE",
-      "count": 2129,
-      "example": "evidence/slt_lang_createview.test:69: not supported yet: DELETE"
-    },
-    {
       "reason": "unsupported: CAST",
       "count": 1716,
       "example": "random/aggregates/slt_good_0.test:191: not supported yet: CAST"
@@ -476,11 +471,6 @@
       "reason": "unsupported: column constraint PRIMARY KEY",
       "count": 687,
       "example": "evidence/in1.test:113: not supported yet: column constraint PRIMARY KEY"
-    },
-    {
-      "reason": "unsupported: DROP TABLE",
-      "count": 586,
-      "example": "evidence/slt_lang_droptable.test:22: not supported yet: DROP TABLE"
     },
     {
       "reason": "unsupported: CREATE UNIQUE",
@@ -528,11 +518,6 @@
       "example": "select4.test:3091: expected [768 values hashing to 5d3fe674077ba48f8afa1c6f4e61ced4], got [109, 295, 136, 678, 312, table tn1 row 29 ... +762]"
     },
     {
-      "reason": "unsupported: UPDATE",
-      "count": 15,
-      "example": "evidence/slt_lang_createview.test:80: not supported yet: UPDATE"
-    },
-    {
       "reason": "unsupported: DROP TRIGGER",
       "count": 14,
       "example": "evidence/slt_lang_createtrigger.test:191: not supported yet: DROP TRIGGER"
@@ -566,11 +551,6 @@
       "reason": "unsupported: CREATE TEMPORARY",
       "count": 2,
       "example": "evidence/slt_lang_createview.test:48: not supported yet: CREATE TEMPORARY"
-    },
-    {
-      "reason": "table t1 already exists",
-      "count": 1,
-      "example": "evidence/slt_lang_droptable.test:46: table t1 already exists"
     }
   ]
 }

@@ -8,6 +8,12 @@ function summary(entry: Entry): string {
       return `created ${result.table}`;
     case "insert":
       return `inserted ${result.rows}`;
+    case "update":
+      return `updated ${result.rows}`;
+    case "delete":
+      return `deleted ${result.rows}`;
+    case "drop_table":
+      return `dropped ${result.table}`;
     case "query":
       return `${result.rows.length} ${result.rows.length === 1 ? "row" : "rows"}`;
   }
