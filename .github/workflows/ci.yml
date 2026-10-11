@@ -1,0 +1,118 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+  # The full sqllogictest suite, weekly: Monday 06:00 UTC.
+  schedule:
+    - cron: "0 6 * * 1"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.event_name }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  rust:
+    name: Format, lint and test
+    if: github.event_name != 'schedule'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Install the toolchain from rust-toolchain.toml
+        run: rustup toolchain install
+      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
+      # The differential test compares against the sqlite3 CLI. Pin the
+      # version the expected behavior was checked against, not the distro's.
+      - name: Install sqlite3 3.54.0
+        run: |
+          curl -sSfLo "$RUNNER_TEMP/sqlite.zip" https://www.sqlite.org/2026/sqlite-tools-linux-x64-3540000.zip
+          echo "9f514a3e7cbeef31aa9b135de4ea9c1b8de75cfe544b3de57e91e1b3247956c2  $RUNNER_TEMP/sqlite.zip" | sha256sum -c
+          unzip -q "$RUNNER_TEMP/sqlite.zip" sqlite3 -d "$RUNNER_TEMP/sqlite"
+          echo "$RUNNER_TEMP/sqlite" >> "$GITHUB_PATH"
+      - run: sqlite3 -version
+      - run: cargo fmt --all --check
+      - run: cargo clippy --workspace --all-targets -- -D warnings
+      - run: cargo test --workspace
+
+  web:
+    name: Web build and lint
+    if: github.event_name != 'schedule'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Install the toolchain from rust-toolchain.toml
+        run: rustup toolchain install
+      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
+      - uses: taiki-e/install-action@ab6895351a88b908e96a4697860d4ffea5e57dbe # v2.87.27
+        with:
+          tool: wasm-bindgen@0.2.129
+      - uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
+        with:
+          version: 9.15.4
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: "24"
+          cache: pnpm
+          cache-dependency-path: web/pnpm-lock.yaml
+      - run: pnpm --dir web install --frozen-lockfile
+      - run: pnpm --dir web build
+      - run: pnpm --dir web lint
+
+  # The 29-file sample on every push. The committed report must match a
+  # fresh run, so a behavior change cannot land without its new numbers.
+  sample:
+    name: sqllogictest sample
+    if: github.event_name != 'schedule'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Install the toolchain from rust-toolchain.toml
+        run: rustup toolchain install
+      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
+      - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: sqllogictest/test.nosync
+          key: slt-sample-${{ hashFiles('sqllogictest/manifest.txt') }}
+      - run: scripts/fetch-sqllogictest.sh
+      - run: cargo run --release -p fishbowl-slt -- --write
+      - name: Check the committed report is current
+        run: git diff --exit-code sqllogictest/
+
+  # The full suite: 622 files, 1.2 GB, about 6 million records. Weekly and
+  # on demand, since it adds several minutes and a large download.
+  full:
+    name: sqllogictest full suite
+    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Install the toolchain from rust-toolchain.toml
+        run: rustup toolchain install
+      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
+      - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: sqllogictest/test.nosync
+          key: slt-full-${{ hashFiles('sqllogictest/manifest-full.txt') }}
+      - run: scripts/fetch-sqllogictest.sh --full
+      - run: cargo run --release -p fishbowl-slt -- --full --write
+      - name: Check the committed report is current
+        run: git diff --exit-code sqllogictest/

@@ -26,12 +26,14 @@ pub enum Plan {
     },
     Update {
         table: String,
+        hint: IndexHint,
         /// Column position and its new value, computed from the old row.
         assignments: Vec<(usize, Expr)>,
         predicate: Option<Expr>,
     },
     Delete {
         table: String,
+        hint: IndexHint,
         predicate: Option<Expr>,
     },
     DropTable {
@@ -63,6 +65,8 @@ pub enum Plan {
     Analyze {
         tables: Option<Vec<String>>,
     },
+    /// `REINDEX`: the name checked out and there is nothing to rebuild.
+    Reindex,
     /// `INSERT INTO table SELECT ...`: the query's rows, stored like VALUES.
     InsertSelect {
         table: String,
@@ -70,6 +74,18 @@ pub enum Plan {
         query: QueryPlan,
         on_conflict: OnConflict,
     },
+}
+
+/// What `INDEXED BY` or `NOT INDEXED` after a table name lets the planner
+/// read the table through.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub enum IndexHint {
+    #[default]
+    Any,
+    /// `NOT INDEXED`: the table itself or a rowid lookup, never an index.
+    NoIndex,
+    /// `INDEXED BY`: only this index, by its place in the table's list.
+    Index(usize),
 }
 
 #[derive(Debug, Clone)]

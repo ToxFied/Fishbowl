@@ -4,7 +4,7 @@ import init, { Fishbowl } from "./generated/fishbowl/fishbowl_wasm.js";
 
 export type SqlValue =
   | { type: "null"; text: null }
-  | { type: "integer" | "real" | "text"; text: string };
+  | { type: "integer" | "real" | "text" | "blob"; text: string };
 
 /** The planner's guess at a step's rows and work, in rows read. */
 export interface Estimate {
@@ -79,7 +79,7 @@ export type StatementResult =
   | { kind: "drop_table"; table: string }
   | { kind: "create_view"; view: string }
   | { kind: "drop_view"; view: string }
-  | { kind: "begin" | "commit" | "rollback" }
+  | { kind: "begin" | "commit" | "rollback" | "reindex" }
   | QueryResult;
 
 export type Entry =

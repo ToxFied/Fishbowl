@@ -73,6 +73,21 @@ SELECT a / 2 FROM t WHERE a = 3
 }
 
 #[test]
+fn large_reals_keep_sixteen_significant_digits_like_sqlite() {
+    // Expected values are what sqlite3's printf('%.3f', ...) writes.
+    let result = run("\
+query RRRR nosort
+SELECT 9223372036854775807.0, -123456789012345.67, 12345678901234.5678, 99999999999999.9999
+----
+9223372036854776000.000
+-123456789012345.700
+12345678901234.570
+100000000000000.000
+");
+    assert_eq!(result.queries, queries(1, 0));
+}
+
+#[test]
 fn hashed_results_compare_count_and_md5() {
     let result = run("\
 hash-threshold 2
@@ -130,6 +145,24 @@ SELECT a FROM t WHERE a > 1
 }
 
 #[test]
+fn an_error_while_running_reads_as_no_rows_like_sqlites_runner() {
+    let result = run("\
+query I nosort
+SELECT sum(a) FROM (SELECT 9223372036854775807 AS a UNION ALL SELECT 1)
+----
+
+query I nosort
+WITH c AS (SELECT a FROM t) SELECT a FROM c
+----
+");
+    assert_eq!(result.queries, queries(1, 1));
+    assert_eq!(
+        result.failures[0].reason,
+        "unsupported: WITH (common table expressions)"
+    );
+}
+
+#[test]
 fn unsupported_sql_never_satisfies_statement_error() {
     let result = run("\
 statement error
@@ -184,4 +217,45 @@ SELECT 2
     // the plain halt stops the file before the wrong `SELECT 2`.
     assert_eq!(result.skipped, 2);
     assert_eq!(result.queries, queries(1, 0));
+}
+
+#[test]
+fn a_statement_record_runs_every_statement_in_it() {
+    // SQLite's runner passes statement records to sqlite3_exec, which runs
+    // them all. slt_lang_aggfunc.test relies on that.
+    let result = run("\
+statement ok
+INSERT INTO t VALUES (4, 'y');
+INSERT INTO t VALUES (5, 'z');
+
+statement error
+INSERT INTO t VALUES (6, 'w');
+SELECT nope FROM t
+
+query I rowsort
+SELECT a FROM t WHERE a > 3
+----
+4
+5
+6
+");
+    // The failing second statement does not undo the first, as in sqlite3_exec.
+    assert_eq!(result.statements, queries(4, 0));
+    assert_eq!(result.queries, queries(1, 0));
+}
+
+#[test]
+fn parse_errors_are_grouped_by_cause_without_position() {
+    let result = run("\
+statement ok
+SELECT a FROM t WHERE a IN 1
+
+statement ok
+SELECT b FROM t WHERE b IN 2
+");
+    let reasons: Vec<&str> = result.failures.iter().map(|f| f.reason.as_str()).collect();
+    assert_eq!(
+        reasons,
+        ["parse error: Expected: (", "parse error: Expected: ("]
+    );
 }

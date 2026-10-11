@@ -12,6 +12,7 @@ followed by its bytes:
 | 1 | INTEGER | 8, big-endian |
 | 2 | REAL | 8, an IEEE 754 double |
 | 3 | TEXT | a 4-byte length, then the UTF-8 text |
+| 4 | BLOB | a 4-byte length, then the bytes |
 
 So `(7, NULL, 'hi')` becomes 19 bytes:
 

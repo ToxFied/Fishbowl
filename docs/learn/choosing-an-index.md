@@ -76,5 +76,14 @@ full scan, then the rowid, then the indexes from the newest. That is not
 arbitrary. It keeps Fishbowl reading rows in the same order as SQLite, which
 [can change an answer](equal-values.md).
 
+## Hints
+
+`FROM t INDEXED BY t_a` reads `t` only through the index `t_a`, reading the
+whole index if no condition narrows it. `FROM t NOT INDEXED` reads the table or
+looks up a rowid, never an index. If the named index does not exist, or
+belongs to another table, the query fails with "no such index", as in SQLite.
+A hint changes the order rows arrive in, so `group_concat(x)` can differ with
+and without one.
+
 Code: `crates/engine/src/planner/paths.rs` (listing and costing paths),
 `crates/engine/src/access.rs` (running a lookup).

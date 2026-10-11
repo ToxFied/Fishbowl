@@ -2,8 +2,10 @@
 
 Most databases give each column a strict type and reject values that do not fit.
 SQLite, and so Fishbowl, works differently: **each value carries its own type**.
-A value is NULL, an integer, a real (floating-point number) or text. Blobs come
-later.
+A value is NULL, an integer, a real (floating-point number), text or a blob.
+A blob is raw bytes, written `X'CAFE'`. It sorts after all text, compares
+byte by byte, and is never converted on its way into a column. Where a number
+is wanted, as in `X'31' + 1`, its bytes are read as text, so that is 2.
 
 A column's declared type only gives it an **affinity**, a preferred type. When a
 value is stored, the database converts it toward that preference if it can do

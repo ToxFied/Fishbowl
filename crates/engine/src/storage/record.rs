@@ -6,6 +6,7 @@
 //!   1  INTEGER   8 bytes, big-endian two's complement
 //!   2  REAL      8 bytes, big-endian IEEE 754
 //!   3  TEXT      length (u32), then that many UTF-8 bytes
+//!   4  BLOB      length (u32), then that many bytes
 //! ```
 //!
 //! A row `(7, NULL, 'hi')` is 19 bytes:
@@ -19,6 +20,7 @@ const NULL: u8 = 0;
 const INTEGER: u8 = 1;
 const REAL: u8 = 2;
 const TEXT: u8 = 3;
+const BLOB: u8 = 4;
 
 pub fn encode(row: &[Value]) -> Vec<u8> {
     let mut out = Vec::with_capacity(2 + row.len() * 9);
@@ -39,6 +41,11 @@ pub fn encode(row: &[Value]) -> Vec<u8> {
                 out.extend_from_slice(&(s.len() as u32).to_be_bytes());
                 out.extend_from_slice(s.as_bytes());
             }
+            Value::Blob(b) => {
+                out.push(BLOB);
+                out.extend_from_slice(&(b.len() as u32).to_be_bytes());
+                out.extend_from_slice(b);
+            }
         }
     }
     out
@@ -52,6 +59,7 @@ pub fn encoded_len(row: &[Value]) -> usize {
             Value::Null => 1,
             Value::Integer(_) | Value::Real(_) => 9,
             Value::Text(s) => 5 + s.len(),
+            Value::Blob(b) => 5 + b.len(),
         })
         .sum::<usize>()
 }
@@ -66,16 +74,11 @@ pub fn decode(bytes: &[u8]) -> Result<Row> {
             NULL => Value::Null,
             INTEGER => Value::Integer(i64::from_be_bytes(take(&mut rest)?)),
             REAL => Value::Real(f64::from_be_bytes(take(&mut rest)?)),
-            TEXT => {
-                let len = u32::from_be_bytes(take(&mut rest)?) as usize;
-                let text = rest
-                    .get(..len)
-                    .ok_or_else(|| corrupt("text runs past the end"))?;
-                rest = &rest[len..];
-                Value::Text(
-                    String::from_utf8(text.to_vec()).map_err(|_| corrupt("text is not UTF-8"))?,
-                )
-            }
+            TEXT => Value::Text(
+                String::from_utf8(take_bytes(&mut rest)?.to_vec())
+                    .map_err(|_| corrupt("text is not UTF-8"))?,
+            ),
+            BLOB => Value::Blob(take_bytes(&mut rest)?.to_vec()),
             other => return Err(corrupt(&format!("unknown type tag {other}"))),
         });
     }
@@ -83,6 +86,16 @@ pub fn decode(bytes: &[u8]) -> Result<Row> {
         return Err(corrupt("bytes left over after the last value"));
     }
     Ok(row)
+}
+
+/// Takes a length (u32) and then that many bytes off the front of `rest`.
+fn take_bytes<'a>(rest: &mut &'a [u8]) -> Result<&'a [u8]> {
+    let len = u32::from_be_bytes(take(rest)?) as usize;
+    let bytes = rest
+        .get(..len)
+        .ok_or_else(|| corrupt("a value runs past the end"))?;
+    *rest = &rest[len..];
+    Ok(bytes)
 }
 
 /// Takes the next `N` bytes off the front of `rest`.
@@ -134,6 +147,7 @@ mod tests {
                 .prop_filter("not NaN", |f| !f.is_nan())
                 .prop_map(Value::Real),
             ".{0,40}".prop_map(Value::Text),
+            proptest::collection::vec(any::<u8>(), 0..40).prop_map(Value::Blob),
         ]
     }
 

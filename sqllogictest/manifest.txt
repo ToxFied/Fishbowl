@@ -1,5 +1,6 @@
 # SQLite sqllogictest corpus subset used for Fishbowl's pass rate.
 # Fetch with scripts/fetch-sqllogictest.sh. Paths are relative to test/ upstream.
+# corpus: 29-file sample
 # source: https://www.sqlite.org/sqllogictest
 # checkin: ab599cbdd0976a63c5cfc7755588f716a7621f27
 83d8958a4f86de196a0756e548f24c71db6edf2679d70393d546d542c84fc2fd  evidence/in1.test

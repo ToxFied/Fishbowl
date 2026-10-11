@@ -1,5 +1,6 @@
 {
   "corpus": {
+    "name": "29-file sample",
     "source": "https://www.sqlite.org/sqllogictest",
     "checkin": "ab599cbdd0976a63c5cfc7755588f716a7621f27",
     "files": 29,
@@ -7,20 +8,20 @@
   },
   "totals": {
     "records": {
-      "passed": 129218,
-      "failed": 130
+      "passed": 129348,
+      "failed": 0
     },
     "statements": {
-      "passed": 11911,
-      "failed": 29
+      "passed": 11940,
+      "failed": 0
     },
     "queries": {
-      "passed": 117307,
-      "failed": 101
+      "passed": 117408,
+      "failed": 0
     },
     "skipped": 14153,
-    "pass_rate": 99.89,
-    "query_pass_rate": 99.91
+    "pass_rate": 100.0,
+    "query_pass_rate": 100.0
   },
   "files": [
     {
@@ -30,11 +31,11 @@
         "failed": 0
       },
       "queries": {
-        "passed": 111,
-        "failed": 76
+        "passed": 187,
+        "failed": 0
       },
       "skipped": 2,
-      "pass_rate": 64.48
+      "pass_rate": 100.0
     },
     {
       "path": "evidence/in2.test",
@@ -52,28 +53,28 @@
     {
       "path": "evidence/slt_lang_aggfunc.test",
       "statements": {
-        "passed": 12,
-        "failed": 1
+        "passed": 13,
+        "failed": 0
       },
       "queries": {
-        "passed": 57,
-        "failed": 10
+        "passed": 67,
+        "failed": 0
       },
       "skipped": 0,
-      "pass_rate": 86.25
+      "pass_rate": 100.0
     },
     {
       "path": "evidence/slt_lang_createtrigger.test",
       "statements": {
-        "passed": 5,
-        "failed": 21
+        "passed": 26,
+        "failed": 0
       },
       "queries": {
         "passed": 0,
         "failed": 0
       },
       "skipped": 0,
-      "pass_rate": 19.23
+      "pass_rate": 100.0
     },
     {
       "path": "evidence/slt_lang_createview.test",
@@ -117,15 +118,15 @@
     {
       "path": "evidence/slt_lang_droptrigger.test",
       "statements": {
-        "passed": 6,
-        "failed": 6
+        "passed": 12,
+        "failed": 0
       },
       "queries": {
         "passed": 0,
         "failed": 0
       },
       "skipped": 0,
-      "pass_rate": 50.0
+      "pass_rate": 100.0
     },
     {
       "path": "evidence/slt_lang_dropview.test",
@@ -143,15 +144,15 @@
     {
       "path": "evidence/slt_lang_reindex.test",
       "statements": {
-        "passed": 6,
-        "failed": 1
+        "passed": 7,
+        "failed": 0
       },
       "queries": {
         "passed": 0,
         "failed": 0
       },
       "skipped": 0,
-      "pass_rate": 85.71
+      "pass_rate": 100.0
     },
     {
       "path": "evidence/slt_lang_replace.test",
@@ -225,11 +226,11 @@
         "failed": 0
       },
       "queries": {
-        "passed": 9990,
-        "failed": 15
+        "passed": 10005,
+        "failed": 0
       },
       "skipped": 0,
-      "pass_rate": 99.85
+      "pass_rate": 100.0
     },
     {
       "path": "index/orderby/10/slt_good_0.test",
@@ -401,36 +402,5 @@
       "pass_rate": 100.0
     }
   ],
-  "failure_reasons": [
-    {
-      "reason": "parse error",
-      "count": 95,
-      "example": "evidence/in1.test:70: parse error: sql parser error: Expected: (, found: t1 at Line: 1, Column: 13"
-    },
-    {
-      "reason": "unsupported: DROP TRIGGER",
-      "count": 14,
-      "example": "evidence/slt_lang_createtrigger.test:191: not supported yet: DROP TRIGGER"
-    },
-    {
-      "reason": "unsupported: CREATE TRIGGER",
-      "count": 13,
-      "example": "evidence/slt_lang_createtrigger.test:24: not supported yet: CREATE TRIGGER"
-    },
-    {
-      "reason": "unsupported: literal X'303132'",
-      "count": 4,
-      "example": "evidence/in1.test:296: not supported yet: literal X'303132'"
-    },
-    {
-      "reason": "wrong result",
-      "count": 3,
-      "example": "evidence/slt_lang_aggfunc.test:484: expected [-9223372036854776000.000], got [-9223372036854775808.000]"
-    },
-    {
-      "reason": "integer overflow",
-      "count": 1,
-      "example": "evidence/slt_lang_aggfunc.test:480: integer overflow"
-    }
-  ]
+  "failure_reasons": []
 }

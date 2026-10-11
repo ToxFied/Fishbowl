@@ -529,7 +529,10 @@ pub fn cast(v: Value, affinity: Affinity) -> Value {
             Value::Real(f) => small_integer(f).map_or(Value::Real(f), Value::Integer),
             other => other,
         },
-        (Affinity::Numeric | Affinity::Blob, v) => v,
+        (Affinity::Numeric, Value::Blob(b)) => cast(Value::Text(lossy(&b)), Affinity::Numeric),
+        (Affinity::Blob, Value::Blob(b)) => Value::Blob(b),
+        (Affinity::Blob, v) => Value::Blob(v.to_string().into_bytes()),
+        (Affinity::Numeric, v) => v,
     }
 }
 
@@ -546,6 +549,7 @@ fn small_integer(f: f64) -> Option<i64> {
 pub fn to_integer(v: &Value) -> i64 {
     match v {
         Value::Text(s) => integer_prefix(s),
+        Value::Blob(b) => integer_prefix(&lossy(b)),
         other => other.to_i64_lossy(),
     }
 }
@@ -588,17 +592,31 @@ fn eval_unary(op: UnaryOp, v: Value) -> Value {
             .checked_neg()
             .map_or(Value::Real(-(i as f64)), Value::Integer),
         (UnaryOp::Negate, Value::Real(f)) => Value::Real(-f),
-        (UnaryOp::Negate, Value::Text(s)) => eval_unary(UnaryOp::Negate, numeric_prefix(&s)),
+        (UnaryOp::Negate, v @ (Value::Text(_) | Value::Blob(_))) => {
+            eval_unary(UnaryOp::Negate, to_number(v))
+        }
         (UnaryOp::BitNot, v) => Value::Integer(!to_integer(&v)),
     }
 }
 
-/// Text takes part in arithmetic through its numeric prefix.
+/// Text takes part in arithmetic through its numeric prefix, and a blob
+/// through its bytes read as text.
 fn to_number(v: Value) -> Value {
     match v {
         Value::Text(s) => numeric_prefix(&s),
+        Value::Blob(b) => numeric_prefix(&lossy(&b)),
         other => other,
     }
+}
+
+/// A blob as SQL spells it: `X'0AFF'`.
+pub(crate) fn blob_literal(bytes: &[u8]) -> String {
+    let hex: String = bytes.iter().map(|b| format!("{b:02X}")).collect();
+    format!("X'{hex}'")
+}
+
+fn lossy(bytes: &[u8]) -> String {
+    String::from_utf8_lossy(bytes).into_owned()
 }
 
 /// Logic, concatenation and arithmetic. Comparisons are handled by [`compare`],
@@ -768,6 +786,7 @@ impl fmt::Display for Expr {
         let not = |negated: bool| if negated { "NOT " } else { "" };
         match self {
             Expr::Literal(Value::Text(s)) => write!(f, "'{}'", s.replace('\'', "''")),
+            Expr::Literal(Value::Blob(b)) => f.write_str(&blob_literal(b)),
             Expr::Literal(v) => write!(f, "{v}"),
             Expr::Column { name, .. } => f.write_str(name),
             Expr::Unary {

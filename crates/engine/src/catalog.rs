@@ -1,5 +1,5 @@
-//! The catalog: what tables and views exist, what columns they have, and
-//! the tables' indexes.
+//! The catalog: what tables and views exist, what columns they have, the
+//! tables' indexes, and the triggers on both.
 
 use std::collections::BTreeMap;
 
@@ -7,6 +7,7 @@ use serde::Serialize;
 use sqlparser::ast;
 
 use crate::error::{Error, Result};
+use crate::trigger::Trigger;
 use crate::value::Affinity;
 
 #[derive(Debug, Clone, Serialize)]
@@ -106,6 +107,9 @@ pub struct Catalog {
     tables: BTreeMap<String, TableSchema>,
     views: BTreeMap<String, View>,
     stats: BTreeMap<String, TableStats>,
+    /// In the order they were made. Triggers have names of their own: one
+    /// may share its name with a table.
+    triggers: Vec<Trigger>,
 }
 
 impl Catalog {
@@ -136,7 +140,10 @@ impl Catalog {
         Err(Error::Catalog(message))
     }
 
+    /// Removes a view and the triggers on it.
     pub fn remove_view(&mut self, name: &str) -> Option<View> {
+        self.triggers
+            .retain(|t| !t.table.eq_ignore_ascii_case(name));
         self.views.remove(&name.to_ascii_lowercase())
     }
 
@@ -144,7 +151,10 @@ impl Catalog {
         self.views.get(&name.to_ascii_lowercase())
     }
 
+    /// Removes a table and the triggers on it.
     pub fn remove_table(&mut self, name: &str) -> Option<TableSchema> {
+        self.triggers
+            .retain(|t| !t.table.eq_ignore_ascii_case(name));
         self.stats.remove(&name.to_ascii_lowercase());
         self.tables.remove(&name.to_ascii_lowercase())
     }
@@ -217,5 +227,39 @@ impl Catalog {
                 .find(|index| index.name.eq_ignore_ascii_case(name))?;
             Some((table, index))
         })
+    }
+
+    pub fn add_trigger(&mut self, trigger: Trigger) -> Result<()> {
+        if self.trigger(&trigger.name).is_some() {
+            return Err(Error::Catalog(format!(
+                "trigger {} already exists",
+                trigger.name
+            )));
+        }
+        self.triggers.push(trigger);
+        Ok(())
+    }
+
+    pub fn remove_trigger(&mut self, name: &str) -> Option<Trigger> {
+        let i = self
+            .triggers
+            .iter()
+            .position(|t| t.name.eq_ignore_ascii_case(name))?;
+        Some(self.triggers.remove(i))
+    }
+
+    pub fn trigger(&self, name: &str) -> Option<&Trigger> {
+        self.triggers
+            .iter()
+            .find(|t| t.name.eq_ignore_ascii_case(name))
+    }
+
+    /// The triggers on a table or view, newest first, the order SQLite
+    /// fires them in.
+    pub fn triggers_on(&self, table: &str) -> impl Iterator<Item = &Trigger> {
+        self.triggers
+            .iter()
+            .rev()
+            .filter(move |t| t.table.eq_ignore_ascii_case(table))
     }
 }

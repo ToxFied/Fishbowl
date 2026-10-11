@@ -21,7 +21,9 @@ use crate::expr::{
     AggregateCall, AggregateFunc, BinaryOp, Expr, ScalarFunc, SubqueryKind, UnaryOp,
     is_sqlite_function,
 };
-use crate::plan::{Estimate, JoinKind, Plan, PlanNode, QueryPlan, SetOp, SortKey, Subquery, Why};
+use crate::plan::{
+    Estimate, IndexHint, JoinKind, Plan, PlanNode, QueryPlan, SetOp, SortKey, Subquery, Why,
+};
 use crate::value::{Affinity, Value};
 
 pub fn plan_statement(catalog: &Catalog, stmt: &ast::Statement) -> Result<Plan> {
@@ -66,8 +68,72 @@ pub fn plan_statement(catalog: &Catalog, stmt: &ast::Statement) -> Result<Plan> 
             table: None,
         } => schema::plan_drop_index(*if_exists, names),
         ast::Statement::Analyze(analyze) => plan_analyze(catalog, analyze),
+        ast::Statement::Vacuum(vacuum) => plan_reindex(catalog, vacuum),
         other => unsupported(statement_kind(other)),
     }
+}
+
+/// `REINDEX`, from [`crate::dialect`], with an optional table, index or
+/// collation name. Index B-trees change with every write and never go stale,
+/// so once the name checks out, as SQLite checks it, there is nothing to do.
+fn plan_reindex(catalog: &Catalog, vacuum: &ast::VacuumStatement) -> Result<Plan> {
+    let ast::VacuumStatement {
+        full: false,
+        sort_only: false,
+        delete_only: false,
+        reindex: true,
+        recluster: false,
+        table_name,
+        threshold: None,
+        boost: false,
+    } = vacuum
+    else {
+        return unsupported("VACUUM");
+    };
+    if let Some(name) = table_name {
+        let name = object_name(name)?;
+        let collation = ["binary", "nocase", "rtrim"]
+            .iter()
+            .any(|c| c.eq_ignore_ascii_case(&name));
+        if !collation && catalog.table(&name).is_err() && catalog.index(&name).is_none() {
+            return Err(Error::Catalog(
+                "unable to identify the object to be reindexed".into(),
+            ));
+        }
+    }
+    Ok(Plan::Reindex)
+}
+
+/// SQLite's `INDEXED BY i` and `NOT INDEXED`, which [`crate::dialect`] reads
+/// as `FORCE INDEX (i)` and `IGNORE INDEX ()`. As in SQLite, the named index
+/// must belong to the table. The hint matters beyond speed: it decides the
+/// order rows are read in, and so what `group_concat()` returns.
+fn index_hint(catalog: &Catalog, table: &str, hints: &[ast::TableIndexHints]) -> Result<IndexHint> {
+    use ast::{TableIndexHintType as Hint, TableIndexType as Kind};
+    let mut result = IndexHint::Any;
+    for hint in hints {
+        result = match (
+            &hint.hint_type,
+            &hint.index_type,
+            &hint.for_clause,
+            hint.index_names.as_slice(),
+        ) {
+            (Hint::Ignore, Kind::Index, None, []) => IndexHint::NoIndex,
+            (Hint::Force, Kind::Index, None, [name]) => {
+                let position = catalog.table(table).ok().and_then(|schema| {
+                    schema
+                        .indexes
+                        .iter()
+                        .position(|i| i.name.eq_ignore_ascii_case(&name.value))
+                });
+                let position = position
+                    .ok_or_else(|| Error::Catalog(format!("no such index: {}", name.value)))?;
+                IndexHint::Index(position)
+            }
+            _ => return unsupported("this index hint"),
+        };
+    }
+    Ok(result)
 }
 
 /// `ANALYZE` counts every table; `ANALYZE name` the table of that name, or
@@ -161,7 +227,7 @@ fn plan_update(catalog: &Catalog, update: &ast::Update) -> Result<Plan> {
     {
         return unsupported("UPDATE OR / FROM / RETURNING / LIMIT");
     }
-    let (schema, scope) = dml_target(catalog, &update.table)?;
+    let (schema, hint, scope) = dml_target(catalog, &update.table)?;
     let mut binder = Binder::without_items(&scope);
     let mut assignments = Vec::new();
     for assignment in &update.assignments {
@@ -176,6 +242,7 @@ fn plan_update(catalog: &Catalog, update: &ast::Update) -> Result<Plan> {
     }
     Ok(Plan::Update {
         table: schema.name.clone(),
+        hint,
         assignments,
         predicate: update
             .selection
@@ -200,10 +267,11 @@ fn plan_delete(catalog: &Catalog, delete: &ast::Delete) -> Result<Plan> {
     let [target] = from.as_slice() else {
         return unsupported("DELETE from several tables");
     };
-    let (schema, scope) = dml_target(catalog, target)?;
+    let (schema, hint, scope) = dml_target(catalog, target)?;
     let mut binder = Binder::without_items(&scope);
     Ok(Plan::Delete {
         table: schema.name.clone(),
+        hint,
         predicate: delete
             .selection
             .as_ref()
@@ -293,12 +361,12 @@ fn writable_table<'a>(catalog: &'a Catalog, name: &ast::ObjectName) -> Result<&'
     catalog.table(&name)
 }
 
-/// The one table an UPDATE or DELETE changes, and the names its expressions
-/// can see.
+/// The one table an UPDATE or DELETE changes, its index hint, and the names
+/// its expressions can see.
 fn dml_target<'a>(
     catalog: &'a Catalog,
     target: &ast::TableWithJoins,
-) -> Result<(&'a TableSchema, Scope<'a>)> {
+) -> Result<(&'a TableSchema, IndexHint, Scope<'a>)> {
     if !target.joins.is_empty() {
         return unsupported("JOIN in UPDATE or DELETE");
     }
@@ -306,15 +374,17 @@ fn dml_target<'a>(
         name,
         alias,
         args: None,
+        index_hints,
         ..
     } = &target.relation
     else {
         return unsupported("UPDATE or DELETE of a subquery or table function");
     };
     let schema = writable_table(catalog, name)?;
+    let hint = index_hint(catalog, &schema.name, index_hints)?;
     let mut scope = Scope::new(None);
     scope.add_table(schema, alias.as_ref());
-    Ok((schema, scope))
+    Ok((schema, hint, scope))
 }
 
 fn plan_insert(catalog: &Catalog, insert: &ast::Insert) -> Result<Plan> {
@@ -681,25 +751,6 @@ fn plan_select(
     if is_aggregate {
         // Plain columns come from the row the last min() or max() chose.
         let row_from = aggregates.iter().rposition(|a| a.func.is_min_max());
-        if let Some(i) = row_from
-            && aggregates[i].distinct
-        {
-            let mut reads_plain_column = false;
-            let mut check = |e: &Expr| {
-                if let Expr::Column { index, .. } = e
-                    && *index < width
-                    && !group_by.iter().any(|k| k.expr == *e)
-                {
-                    reads_plain_column = true;
-                }
-            };
-            exprs.iter().for_each(|e| e.walk(&mut check));
-            sort_keys.iter().for_each(|k| k.expr.walk(&mut check));
-            having.iter().for_each(|e| e.walk(&mut check));
-            if reads_plain_column {
-                return unsupported("plain columns beside min(DISTINCT ...) or max(DISTINCT ...)");
-            }
-        }
         root = PlanNode::Aggregate {
             input: Box::new(root),
             group_by: group_by.clone(),
@@ -762,7 +813,7 @@ fn wanted_order(
 ) -> Option<paths::Wanted> {
     let [
         FromItem {
-            rows: Rows::Table(schema),
+            rows: Rows::Table(schema, _),
             ..
         },
     ] = from
@@ -837,7 +888,7 @@ fn sources<'q>(
         .zip(used)
         .map(|((item, table), used)| join::Source {
             rows: match &item.rows {
-                Rows::Table(schema) => Rows::Table(schema),
+                Rows::Table(schema, hint) => Rows::Table(schema, *hint),
                 // Weighing join orders needs only a subquery's estimate.
                 Rows::Query(_, estimate) if weigh_only => {
                     Rows::Query(Box::new(PlanNode::OneRow), *estimate)
@@ -875,18 +926,21 @@ fn check_left_join_on(scope: &Scope, from: &[FromItem], on: &[Option<Expr>]) -> 
 pub fn access_for_write(
     catalog: &Catalog,
     schema: &TableSchema,
+    hint: IndexHint,
     predicate: Option<&Expr>,
 ) -> IndexAccess {
-    let Some(predicate) = predicate else {
+    if predicate.is_none() && !matches!(hint, IndexHint::Index(_)) {
         return IndexAccess::whole_table();
-    };
+    }
     let tables_of = |e: &Expr| (!has_subquery(e)).then_some(0);
-    let terms: Vec<paths::Term> = split_and(predicate.clone())
-        .iter()
+    let terms: Vec<paths::Term> = predicate
+        .into_iter()
+        .flat_map(|p| split_and(p.clone()))
         .enumerate()
-        .flat_map(|(c, e)| paths::terms_of(c, e, schema, 0, &tables_of))
+        .flat_map(|(c, e)| paths::terms_of(c, &e, schema, 0, &tables_of))
         .collect();
     let target = paths::Target {
+        hint,
         sizes: cost::Sizes::new(schema, catalog.stats(&schema.name)),
         name: &schema.name,
         terms: &terms,
@@ -1130,7 +1184,7 @@ struct FromItem<'q> {
 /// Where a FROM item's rows come from. A table is scanned once the planner
 /// knows which conditions apply to it, so the scan can use an index.
 enum Rows<'q> {
-    Table(&'q TableSchema),
+    Table(&'q TableSchema, IndexHint),
     Query(Box<PlanNode>, Estimate),
 }
 
@@ -1236,15 +1290,17 @@ fn plan_table<'q>(
             name,
             alias,
             args: None,
+            index_hints,
             ..
         } => {
             let name = object_name(name)?;
+            let hint = index_hint(cx.catalog, &name, index_hints)?;
             if let Some(view) = cx.catalog.view(&name) {
                 return plan_view(cx, view, alias.as_ref(), scope);
             }
             let schema = cx.catalog.table(&name)?;
             let name = scope.add_table(schema, alias.as_ref());
-            Ok((Rows::Table(schema), name))
+            Ok((Rows::Table(schema, hint), name))
         }
         ast::TableFactor::Derived {
             lateral: false,
@@ -1984,10 +2040,6 @@ impl<'a> Binder<'a> {
             } => {
                 let type_name = data_type.to_string();
                 let affinity = Affinity::from_declared_type(&type_name);
-                // Blobs are not a value type in Fishbowl yet.
-                if affinity == Affinity::Blob {
-                    return unsupported("CAST AS BLOB");
-                }
                 Expr::Cast {
                     expr: boxed(self.bind(expr, ctx)?),
                     type_name,
@@ -2404,8 +2456,26 @@ fn literal(value: &ast::Value) -> Result<Value> {
                 ),
             }
         }
+        ast::Value::HexStringLiteral(hex) => Value::Blob(blob_literal(hex)?),
         other => return unsupported(format!("literal {other}")),
     })
+}
+
+/// The bytes of `X'0aff'`. Like SQLite, anything but an even number of hex
+/// digits is an error.
+fn blob_literal(hex: &str) -> Result<Vec<u8>> {
+    let bad = || Error::Parse(format!("unrecognized token: \"X'{hex}'\""));
+    if hex.len() % 2 != 0 {
+        return Err(bad());
+    }
+    (0..hex.len())
+        .step_by(2)
+        .map(|i| {
+            hex.get(i..i + 2)
+                .and_then(|pair| u8::from_str_radix(pair, 16).ok())
+                .ok_or_else(bad)
+        })
+        .collect()
 }
 
 fn object_name(name: &ast::ObjectName) -> Result<String> {

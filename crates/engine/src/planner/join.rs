@@ -20,7 +20,7 @@ use std::rc::Rc;
 use crate::catalog::{Catalog, TableSchema};
 use crate::error::Result;
 use crate::expr::Expr;
-use crate::plan::{Estimate, JoinKind, PlanNode, Rejected, Why};
+use crate::plan::{Estimate, IndexHint, JoinKind, PlanNode, Rejected, Why};
 
 use super::cost::{self, REPLAY_ROW, Sizes};
 use super::paths::{self, Kind, Mask, Path, Target, Term, Wanted};
@@ -122,7 +122,7 @@ impl<'q> Analysis<'q> {
         let mut found: Vec<Vec<(usize, Term)>> = vec![Vec::new(); conjuncts.len()];
         for (c, (expr, left_on)) in conjuncts.iter().enumerate() {
             for (k, item) in items.iter().enumerate() {
-                let Rows::Table(schema) = &item.rows else {
+                let Rows::Table(schema, _) = &item.rows else {
                     continue;
                 };
                 // A LEFT JOIN's table uses its ON condition; others never do.
@@ -199,6 +199,10 @@ impl<'q> Analysis<'q> {
     fn target<'a>(&'a self, k: usize, wanted: Option<&'a Wanted>) -> Option<Target<'a>> {
         let item = &self.items[k];
         Some(Target {
+            hint: match item.rows {
+                Rows::Table(_, hint) => hint,
+                Rows::Query(..) => IndexHint::Any,
+            },
             sizes: self.sizes[k]?,
             name: &item.name,
             terms: &self.terms[k],
@@ -285,7 +289,7 @@ impl<'q> Analysis<'q> {
     fn subquery_estimate(&self, k: usize) -> Estimate {
         match &self.items[k].rows {
             Rows::Query(_, estimate) => *estimate,
-            Rows::Table(_) => unreachable!("a table has sizes"),
+            Rows::Table(..) => unreachable!("a table has sizes"),
         }
     }
 
@@ -483,21 +487,21 @@ impl<'q> Analysis<'q> {
             }
             let (node, lookup, how) = match (&item.rows, step.chosen) {
                 // A single table with an order to keep weighs the sort too.
-                (Rows::Table(_), Some(_)) if n == 1 && wanted.is_some() => {
+                (Rows::Table(..), Some(_)) if n == 1 && wanted.is_some() => {
                     let target = self.target(k, wanted).expect("a table");
                     let paths = target.paths(mask);
                     let chosen = target.best(&paths);
                     ordered = chosen.ordered;
                     (target.node(&paths, chosen), false, String::new())
                 }
-                (Rows::Table(_), Some(i)) => {
+                (Rows::Table(..), Some(i)) => {
                     let target = self.target(k, None).expect("a table");
                     let chosen = &step.paths[i];
                     let node = target.node(&step.paths, chosen);
                     (node, chosen.needs != 0, short(&target, chosen))
                 }
                 (Rows::Query(node, _), _) => ((**node).clone(), false, String::new()),
-                (Rows::Table(_), None) => unreachable!("a table has paths"),
+                (Rows::Table(..), None) => unreachable!("a table has paths"),
             };
             let node = with_filter(node, filters);
             mask |= 1 << item.position;
@@ -603,7 +607,7 @@ impl State {
 
 fn sizes<'q>(catalog: &'q Catalog, item: &Source<'q>) -> Option<Sizes<'q>> {
     match &item.rows {
-        Rows::Table(table) => Some(Sizes::new(table, catalog.stats(&table.name))),
+        Rows::Table(table, _) => Some(Sizes::new(table, catalog.stats(&table.name))),
         Rows::Query(..) => None,
     }
 }

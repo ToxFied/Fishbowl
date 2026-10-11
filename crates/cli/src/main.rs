@@ -83,11 +83,14 @@ fn run(db: &mut Database, sql: &str) -> ExitCode {
             Ok(StatementResult::DropTable { table }) => println!("dropped table {table}"),
             Ok(StatementResult::CreateView { view }) => println!("created view {view}"),
             Ok(StatementResult::DropView { view }) => println!("dropped view {view}"),
+            Ok(StatementResult::CreateTrigger { trigger }) => println!("created trigger {trigger}"),
+            Ok(StatementResult::DropTrigger { trigger }) => println!("dropped trigger {trigger}"),
             Ok(StatementResult::CreateIndex { index, table }) => {
                 println!("created index {index} on {table}")
             }
             Ok(StatementResult::DropIndex { index }) => println!("dropped index {index}"),
             Ok(StatementResult::Analyze { tables }) => println!("analyzed {}", tables.join(", ")),
+            Ok(StatementResult::Reindex) => println!("reindexed"),
             Ok(StatementResult::Begin) => println!("began a transaction"),
             Ok(StatementResult::Commit) => println!("committed"),
             Ok(StatementResult::Rollback) => println!("rolled back"),

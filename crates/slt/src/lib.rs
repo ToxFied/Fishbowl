@@ -139,7 +139,7 @@ pub fn run_script(script: &str, name: &str) -> Result<FileResult, String> {
                     result.skipped += 1;
                     continue;
                 }
-                let outcome = check_statement(run_guarded(&mut db, &sql), &expected);
+                let outcome = check_statement(run_guarded(|| run_all(&mut db, &sql)), &expected);
                 result.record(RecordKind::Statement, loc.line(), outcome);
             }
             Record::Query {
@@ -149,7 +149,8 @@ pub fn run_script(script: &str, name: &str) -> Result<FileResult, String> {
                     result.skipped += 1;
                     continue;
                 }
-                let outcome = check_query(run_guarded(&mut db, &sql), &expected, hash_threshold);
+                let outcome =
+                    check_query(run_guarded(|| db.execute(&sql)), &expected, hash_threshold);
                 result.record(RecordKind::Query, loc.line(), outcome);
             }
             Record::HashThreshold { threshold, .. } => hash_threshold = threshold,
@@ -192,8 +193,8 @@ enum RunOutcome {
     Panic(String),
 }
 
-fn run_guarded(db: &mut Database, sql: &str) -> RunOutcome {
-    match panic::catch_unwind(AssertUnwindSafe(|| db.execute(sql))) {
+fn run_guarded(run: impl FnOnce() -> Result<StatementResult, Error>) -> RunOutcome {
+    match panic::catch_unwind(AssertUnwindSafe(run)) {
         Ok(Ok(result)) => RunOutcome::Ok(result),
         Ok(Err(e)) => RunOutcome::Err(e),
         Err(payload) => {
@@ -207,6 +208,17 @@ fn run_guarded(db: &mut Database, sql: &str) -> RunOutcome {
     }
 }
 
+/// Runs every statement in `sql` and returns the last result or the first
+/// error. The reference runner sends a `statement` record to `sqlite3_exec`,
+/// which runs them all; `slt_lang_aggfunc.test` has a record with two.
+fn run_all(db: &mut Database, sql: &str) -> Result<StatementResult, Error> {
+    let mut last = Err(Error::Parse("no statement to run".into()));
+    for entry in db.run_script(sql) {
+        last = entry.result;
+    }
+    last
+}
+
 type Outcome = Result<(), (String, String)>;
 
 fn fail(reason: impl Into<String>, message: impl Into<String>) -> Outcome {
@@ -217,7 +229,14 @@ fn fail(reason: impl Into<String>, message: impl Into<String>) -> Outcome {
 fn error_reason(e: &Error) -> String {
     match e {
         Error::Unsupported(what) => format!("unsupported: {what}"),
-        Error::Parse(_) => "parse error".into(),
+        Error::Parse(msg) => {
+            // "sql parser error: Expected: (, found: t1 at Line: 1, Column: 13"
+            // becomes "parse error: Expected: (", so one cause is one bucket.
+            let msg = msg.trim_start_matches("sql parser error: ");
+            let msg = msg.split(" at Line:").next().unwrap_or(msg);
+            let msg = msg.split(", found:").next().unwrap_or(msg);
+            format!("parse error: {msg}")
+        }
         Error::Catalog(msg) => msg.split(':').next().unwrap_or(msg).to_string(),
         Error::Constraint(_) => "constraint failed".into(),
         Error::Runtime(msg) => msg.clone(),
@@ -264,6 +283,14 @@ fn check_query(
     let result = match (outcome, expected) {
         (RunOutcome::Panic(msg), _) => return fail("engine panic", msg),
         (RunOutcome::Err(e), QueryExpect::Error(_)) if is_genuine_rejection(&e) => return Ok(()),
+        // SQLite's runner ignores an error from sqlite3_step and prints the
+        // rows it got, so a query that fails while running, like sum()
+        // overflowing, is recorded as an empty result.
+        (RunOutcome::Err(Error::Runtime(_)), QueryExpect::Results { results, .. })
+            if results.is_empty() =>
+        {
+            return Ok(());
+        }
         (RunOutcome::Err(e), _) => return fail(error_reason(&e), e.to_string()),
         (RunOutcome::Ok(_), QueryExpect::Error(_)) => {
             return fail(
@@ -360,7 +387,7 @@ pub fn format_value(value: &Value, ty: &DefaultColumnType) -> String {
     }
     match ty {
         DefaultColumnType::Integer => value.to_i64_lossy().to_string(),
-        DefaultColumnType::FloatingPoint => format!("{:.3}", value.to_f64_lossy()),
+        DefaultColumnType::FloatingPoint => format_real(value.to_f64_lossy()),
         DefaultColumnType::Text | DefaultColumnType::Any => {
             let text = value.to_string();
             if text.is_empty() {
@@ -371,6 +398,32 @@ pub fn format_value(value: &Value, ty: &DefaultColumnType) -> String {
                     .collect()
             }
         }
+    }
+}
+
+/// `%.3f` as SQLite's `printf` writes it. SQLite keeps at most 16
+/// significant digits and pads the rest with zeros, so 2^63 prints as
+/// "9223372036854776000.000" where Rust's `{:.3}` gives every digit.
+fn format_real(x: f64) -> String {
+    let plain = format!("{x:.3}");
+    let digits = plain.bytes().filter(u8::is_ascii_digit).count();
+    if !x.is_finite() || x.abs() < 1.0 || digits <= 16 {
+        return plain;
+    }
+    // "d.ddddddddddddddde<exp>": 16 significant digits, rounded.
+    let scientific = format!("{:.15e}", x.abs());
+    let (mantissa, exp) = scientific.split_once('e').expect("exponent");
+    let significant = mantissa.replace('.', "");
+    let point = exp.parse::<usize>().expect("positive exponent") + 1;
+    let sign = if x < 0.0 { "-" } else { "" };
+    if point >= significant.len() {
+        format!(
+            "{sign}{significant}{}.000",
+            "0".repeat(point - significant.len())
+        )
+    } else {
+        let (int, frac) = significant.split_at(point);
+        format!("{sign}{int}.{frac:0<3}")
     }
 }
 

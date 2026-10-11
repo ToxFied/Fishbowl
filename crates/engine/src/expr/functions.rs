@@ -146,7 +146,11 @@ impl ScalarFunc {
                     null
                 }
             }
-            Length => text(&args[0]).map_or(null, |s| Value::Integer(s.chars().count() as i64)),
+            // A blob's length is in bytes, text's in characters.
+            Length => match &args[0] {
+                Value::Blob(b) => Value::Integer(b.len() as i64),
+                v => text(v).map_or(null, |s| Value::Integer(s.chars().count() as i64)),
+            },
             Lower => text(&args[0]).map_or(null, |s| Value::Text(s.to_ascii_lowercase())),
             Upper => text(&args[0]).map_or(null, |s| Value::Text(s.to_ascii_uppercase())),
             Substr => {

@@ -17,6 +17,9 @@ pub enum Value {
     Integer(i64),
     Real(f64),
     Text(String),
+    /// Bytes, as written `X'CAFE'`. A blob sorts after every text value and
+    /// reads as text where a number is wanted, as in SQLite.
+    Blob(Vec<u8>),
 }
 
 /// The type a column prefers to store, derived from its declared type name.
@@ -92,6 +95,7 @@ impl Value {
             Value::Integer(i) => Some(*i != 0),
             Value::Real(f) => Some(*f != 0.0),
             Value::Text(s) => Some(numeric_prefix(s).as_f64() != 0.0),
+            Value::Blob(b) => Some(numeric_prefix(&String::from_utf8_lossy(b)).as_f64() != 0.0),
         }
     }
 
@@ -101,6 +105,7 @@ impl Value {
             Value::Integer(_) => "integer",
             Value::Real(_) => "real",
             Value::Text(_) => "text",
+            Value::Blob(_) => "blob",
         }
     }
 
@@ -116,6 +121,7 @@ impl Value {
                 Value::Real(f) => real_to_i64(f),
                 _ => 0,
             },
+            Value::Blob(b) => Value::Text(String::from_utf8_lossy(b).into()).to_i64_lossy(),
         }
     }
 
@@ -126,6 +132,7 @@ impl Value {
             Value::Integer(i) => *i as f64,
             Value::Real(f) => *f,
             Value::Text(s) => numeric_prefix(s).as_f64(),
+            Value::Blob(b) => numeric_prefix(&String::from_utf8_lossy(b)).as_f64(),
         }
     }
 
@@ -137,8 +144,8 @@ impl Value {
         }
     }
 
-    /// Orders two non-NULL values: numbers before text, numbers by value, text
-    /// byte by byte. Callers handle NULL first, because comparisons with NULL
+    /// Orders two non-NULL values: numbers, then text, then blobs. Numbers
+    /// compare by value, text and blobs byte by byte. Callers handle NULL first, because comparisons with NULL
     /// are unknown rather than less or greater.
     pub fn compare(&self, other: &Value) -> Ordering {
         match (self, other) {
@@ -149,6 +156,9 @@ impl Value {
             (Value::Integer(a), Value::Real(b)) => compare_int_real(*a, *b),
             (Value::Real(a), Value::Integer(b)) => compare_int_real(*b, *a).reverse(),
             (Value::Real(a), Value::Real(b)) => a.partial_cmp(b).unwrap_or(Ordering::Equal),
+            (Value::Blob(a), Value::Blob(b)) => a.cmp(b),
+            (Value::Blob(_), _) => Ordering::Greater,
+            (_, Value::Blob(_)) => Ordering::Less,
             (Value::Text(a), Value::Text(b)) => a.as_bytes().cmp(b.as_bytes()),
             (Value::Text(_), _) => Ordering::Greater,
             (_, Value::Text(_)) => Ordering::Less,
@@ -282,6 +292,8 @@ impl fmt::Display for Value {
             Value::Integer(i) => write!(f, "{i}"),
             Value::Real(r) => f.write_str(&format_real(*r)),
             Value::Text(s) => f.write_str(s),
+            // The bytes as they are, like `sqlite3_column_text`.
+            Value::Blob(b) => f.write_str(&String::from_utf8_lossy(b)),
         }
     }
 }
