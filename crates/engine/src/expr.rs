@@ -1,9 +1,17 @@
 //! Bound expressions: SQL expressions whose column names have already been
 //! resolved to positions in a row, so evaluating them is just arithmetic.
 
+mod aggregate;
+mod functions;
+
+use std::cmp::Ordering;
 use std::fmt;
 
-use crate::value::{Value, numeric_prefix};
+pub use aggregate::{Accumulator, AggregateCall, AggregateFunc};
+pub use functions::{ScalarFunc, is_sqlite_function};
+
+use crate::error::Result;
+use crate::value::{Affinity, Value, numeric_prefix};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum BinaryOp {
@@ -23,6 +31,26 @@ pub enum BinaryOp {
     Or,
 }
 
+impl BinaryOp {
+    fn is_comparison(self) -> bool {
+        use BinaryOp::*;
+        matches!(self, Eq | NotEq | Lt | LtEq | Gt | GtEq)
+    }
+
+    /// Whether a comparison operator holds for two values in this order.
+    fn holds(self, ord: Ordering) -> bool {
+        use BinaryOp::*;
+        match self {
+            Eq => ord.is_eq(),
+            NotEq => ord.is_ne(),
+            Lt => ord.is_lt(),
+            LtEq => ord.is_le(),
+            Gt => ord.is_gt(),
+            _ => ord.is_ge(),
+        }
+    }
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum UnaryOp {
     Negate,
@@ -34,9 +62,11 @@ pub enum UnaryOp {
 pub enum Expr {
     Literal(Value),
     /// A column, by its position in the input row. The name is for display.
+    /// The affinity is the column's, and steers comparisons.
     Column {
         index: usize,
         name: String,
+        affinity: Affinity,
     },
     Unary {
         op: UnaryOp,
@@ -51,27 +81,322 @@ pub enum Expr {
         expr: Box<Expr>,
         negated: bool,
     },
+    /// `left IS [NOT] DISTINCT FROM right`: like `=`, but NULL equals NULL and
+    /// the answer is never NULL. `distinct` is true for `IS DISTINCT FROM`.
+    Is {
+        left: Box<Expr>,
+        right: Box<Expr>,
+        distinct: bool,
+    },
+    /// `expr IS [NOT] TRUE` or `expr IS [NOT] FALSE`: a truth test that is
+    /// never NULL. `expr IS TRUE` holds when `expr` is a non-zero number.
+    IsTruth {
+        expr: Box<Expr>,
+        truth: bool,
+        negated: bool,
+    },
+    /// `expr [NOT] BETWEEN low AND high`, which means `expr >= low AND expr <= high`.
+    Between {
+        expr: Box<Expr>,
+        low: Box<Expr>,
+        high: Box<Expr>,
+        negated: bool,
+    },
+    /// `expr [NOT] IN (a, b, ...)`.
+    InList {
+        expr: Box<Expr>,
+        list: Vec<Expr>,
+        negated: bool,
+    },
+    /// `CASE [operand] WHEN .. THEN .. [ELSE ..] END`. With an operand, each
+    /// WHEN is compared to it; without one, each WHEN is a condition.
+    Case {
+        operand: Option<Box<Expr>>,
+        branches: Vec<(Expr, Expr)>,
+        otherwise: Option<Box<Expr>>,
+    },
+    /// `CAST(expr AS type)`. The type name is kept for display; the affinity
+    /// derived from it decides the conversion.
+    Cast {
+        expr: Box<Expr>,
+        type_name: String,
+        affinity: Affinity,
+    },
+    Function {
+        func: ScalarFunc,
+        args: Vec<Expr>,
+    },
 }
 
 impl Expr {
-    pub fn eval(&self, row: &[Value]) -> Value {
-        match self {
+    pub fn eval(&self, row: &[Value]) -> Result<Value> {
+        Ok(match self {
             Expr::Literal(v) => v.clone(),
             Expr::Column { index, .. } => row.get(*index).cloned().unwrap_or(Value::Null),
-            Expr::Unary { op, expr } => eval_unary(*op, expr.eval(row)),
+            Expr::Unary { op, expr } => eval_unary(*op, expr.eval(row)?),
             Expr::Binary { op, left, right } => {
-                let l = left.eval(row);
+                let l = left.eval(row)?;
                 // AND and OR can skip the right side when the left decides it.
                 match (op, l.truthiness()) {
-                    (BinaryOp::And, Some(false)) => return Value::Integer(0),
-                    (BinaryOp::Or, Some(true)) => return Value::Integer(1),
+                    (BinaryOp::And, Some(false)) => return Ok(Value::Integer(0)),
+                    (BinaryOp::Or, Some(true)) => return Ok(Value::Integer(1)),
                     _ => {}
                 }
-                eval_binary(*op, l, right.eval(row))
+                let r = right.eval(row)?;
+                if op.is_comparison() {
+                    compare(l, left.affinity(), r, right.affinity())
+                        .map_or(Value::Null, |ord| bool_value(op.holds(ord)))
+                } else {
+                    eval_binary(*op, l, r)
+                }
             }
-            Expr::IsNull { expr, negated } => bool_value(expr.eval(row).is_null() != *negated),
+            Expr::IsNull { expr, negated } => bool_value(expr.eval(row)?.is_null() != *negated),
+            Expr::Is {
+                left,
+                right,
+                distinct,
+            } => {
+                let (l, r) = (left.eval(row)?, right.eval(row)?);
+                let same = match (l.is_null(), r.is_null()) {
+                    (true, true) => true,
+                    (true, false) | (false, true) => false,
+                    _ => compare(l, left.affinity(), r, right.affinity()) == Some(Ordering::Equal),
+                };
+                bool_value(same != *distinct)
+            }
+            Expr::IsTruth {
+                expr,
+                truth,
+                negated,
+            } => bool_value((expr.eval(row)?.truthiness() == Some(*truth)) != *negated),
+            Expr::Between {
+                expr,
+                low,
+                high,
+                negated,
+            } => {
+                let v = expr.eval(row)?;
+                let affinity = expr.affinity();
+                let above = compare(v.clone(), affinity, low.eval(row)?, low.affinity())
+                    .map(Ordering::is_ge);
+                let below =
+                    compare(v, affinity, high.eval(row)?, high.affinity()).map(Ordering::is_le);
+                let inside = match (above, below) {
+                    (Some(false), _) | (_, Some(false)) => Some(false),
+                    (Some(true), Some(true)) => Some(true),
+                    _ => None,
+                };
+                inside.map_or(Value::Null, |b| bool_value(b != *negated))
+            }
+            Expr::InList {
+                expr,
+                list,
+                negated,
+            } => eval_in_list(expr, list, row)?.map_or(Value::Null, |b| bool_value(b != *negated)),
+            Expr::Case {
+                operand,
+                branches,
+                otherwise,
+            } => {
+                let base = match operand {
+                    Some(operand) => Some((operand.eval(row)?, operand.affinity())),
+                    None => None,
+                };
+                for (when, then) in branches {
+                    let w = when.eval(row)?;
+                    let matched = match &base {
+                        Some((b, affinity)) => {
+                            compare(b.clone(), *affinity, w, when.affinity())
+                                == Some(Ordering::Equal)
+                        }
+                        None => w.truthiness() == Some(true),
+                    };
+                    if matched {
+                        return then.eval(row);
+                    }
+                }
+                match otherwise {
+                    Some(e) => e.eval(row)?,
+                    None => Value::Null,
+                }
+            }
+            Expr::Cast { expr, affinity, .. } => cast(expr.eval(row)?, *affinity),
+            Expr::Function { func, args } => func.eval(args, row)?,
+        })
+    }
+
+    /// The affinity an expression brings to a comparison. Only a plain column
+    /// and a CAST have one; everything else, even `+column`, has none.
+    /// See <https://www.sqlite.org/datatype3.html#affinity_of_expressions>.
+    pub fn affinity(&self) -> Option<Affinity> {
+        match self {
+            Expr::Column { affinity, .. } | Expr::Cast { affinity, .. } => Some(*affinity),
+            _ => None,
         }
     }
+
+    /// Calls `f` on this expression and every expression inside it.
+    pub fn walk(&self, f: &mut impl FnMut(&Expr)) {
+        f(self);
+        match self {
+            Expr::Literal(_) | Expr::Column { .. } => {}
+            Expr::Unary { expr, .. }
+            | Expr::IsNull { expr, .. }
+            | Expr::IsTruth { expr, .. }
+            | Expr::Cast { expr, .. } => expr.walk(f),
+            Expr::Binary { left, right, .. } | Expr::Is { left, right, .. } => {
+                left.walk(f);
+                right.walk(f);
+            }
+            Expr::Between {
+                expr, low, high, ..
+            } => {
+                expr.walk(f);
+                low.walk(f);
+                high.walk(f);
+            }
+            Expr::InList { expr, list, .. } => {
+                expr.walk(f);
+                list.iter().for_each(|e| e.walk(f));
+            }
+            Expr::Case {
+                operand,
+                branches,
+                otherwise,
+            } => {
+                operand.iter().for_each(|e| e.walk(f));
+                for (when, then) in branches {
+                    when.walk(f);
+                    then.walk(f);
+                }
+                otherwise.iter().for_each(|e| e.walk(f));
+            }
+            Expr::Function { args, .. } => args.iter().for_each(|e| e.walk(f)),
+        }
+    }
+}
+
+/// Compares two values the way `=`, `<` and friends do. First both sides may
+/// be converted, following SQLite's comparison affinity rules:
+///
+/// - Two columns: if either is numeric (INTEGER, REAL, NUMERIC), text that
+///   looks like a number becomes a number. Otherwise nothing changes, so a
+///   TEXT column and an untyped (BLOB) column compare values as stored.
+/// - A column and an expression: the column's affinity applies to both.
+/// - Two expressions: nothing changes.
+///
+/// Then NULL makes the answer unknown (`None`).
+pub fn compare(
+    l: Value,
+    l_affinity: Option<Affinity>,
+    r: Value,
+    r_affinity: Option<Affinity>,
+) -> Option<Ordering> {
+    if l.is_null() || r.is_null() {
+        return None;
+    }
+    let numeric = |a| matches!(a, Affinity::Integer | Affinity::Real | Affinity::Numeric);
+    let affinity = match (l_affinity, r_affinity) {
+        (Some(a), Some(b)) => (numeric(a) || numeric(b)).then_some(Affinity::Numeric),
+        (Some(a), None) | (None, Some(a)) => Some(a),
+        (None, None) => None,
+    };
+    let (l, r) = match affinity {
+        Some(a) if numeric(a) => (
+            l.apply_affinity(Affinity::Numeric),
+            r.apply_affinity(Affinity::Numeric),
+        ),
+        // Text affinity turns numbers into text, but only when the other side
+        // is text already.
+        Some(Affinity::Text) if matches!(l, Value::Text(_)) || matches!(r, Value::Text(_)) => (
+            l.apply_affinity(Affinity::Text),
+            r.apply_affinity(Affinity::Text),
+        ),
+        _ => (l, r),
+    };
+    Some(l.compare(&r))
+}
+
+/// `x IN (list)` as three-valued logic. The list values have no affinity of
+/// their own, so `x`'s affinity decides: SQLite treats `x IN (a, b)` as
+/// `x = +a OR x = +b`.
+fn eval_in_list(expr: &Expr, list: &[Expr], row: &[Value]) -> Result<Option<bool>> {
+    // An empty list contains nothing, not even NULL.
+    if list.is_empty() {
+        return Ok(Some(false));
+    }
+    let v = expr.eval(row)?;
+    if v.is_null() {
+        return Ok(None);
+    }
+    let affinity = expr.affinity();
+    let mut saw_null = false;
+    for item in list {
+        match compare(v.clone(), affinity, item.eval(row)?, None) {
+            Some(Ordering::Equal) => return Ok(Some(true)),
+            None => saw_null = true,
+            Some(_) => {}
+        }
+    }
+    // Not found, but a NULL in the list might have been equal: unknown.
+    Ok(if saw_null { None } else { Some(false) })
+}
+
+/// `CAST(v AS type)`, where the type has already been reduced to an affinity.
+pub fn cast(v: Value, affinity: Affinity) -> Value {
+    match (affinity, v) {
+        (_, Value::Null) => Value::Null,
+        (Affinity::Text, v) => Value::Text(v.to_string()),
+        (Affinity::Integer, v) => Value::Integer(to_integer(&v)),
+        (Affinity::Real, v) => Value::Real(v.to_f64_lossy()),
+        (Affinity::Numeric, Value::Text(s)) => match numeric_prefix(&s) {
+            Value::Real(f) => small_integer(f).map_or(Value::Real(f), Value::Integer),
+            other => other,
+        },
+        (Affinity::Numeric | Affinity::Blob, v) => v,
+    }
+}
+
+/// A real with no fractional part, below 2^51 in size, as an integer. This is
+/// the range where SQLite's CAST to NUMERIC prefers an integer.
+fn small_integer(f: f64) -> Option<i64> {
+    const LIMIT: f64 = 2_251_799_813_685_248.0;
+    (f.fract() == 0.0 && (-LIMIT..LIMIT).contains(&f)).then_some(f as i64)
+}
+
+/// A value as an integer, the way SQLite reads an integer argument: reals
+/// truncate toward zero, and text uses its leading digits, so `'12abc'` is
+/// 12 and `'1e3'` is 1. Too many digits saturate.
+pub fn to_integer(v: &Value) -> i64 {
+    match v {
+        Value::Text(s) => integer_prefix(s),
+        other => other.to_i64_lossy(),
+    }
+}
+
+fn integer_prefix(s: &str) -> i64 {
+    let t = s.trim_start();
+    let (negative, digits) = match t.as_bytes().first() {
+        Some(b'-') => (true, &t[1..]),
+        Some(b'+') => (false, &t[1..]),
+        _ => (false, t),
+    };
+    let mut n: i64 = 0;
+    for d in digits.bytes().take_while(u8::is_ascii_digit) {
+        let d = i64::from(d - b'0');
+        let next = n.checked_mul(10).and_then(|n| {
+            if negative {
+                n.checked_sub(d)
+            } else {
+                n.checked_add(d)
+            }
+        });
+        match next {
+            Some(next) => n = next,
+            None => return if negative { i64::MIN } else { i64::MAX },
+        }
+    }
+    n
 }
 
 fn bool_value(b: bool) -> Value {
@@ -99,6 +424,8 @@ fn to_number(v: Value) -> Value {
     }
 }
 
+/// Logic, concatenation and arithmetic. Comparisons are handled by [`compare`],
+/// because they need to know the affinity of each side.
 fn eval_binary(op: BinaryOp, l: Value, r: Value) -> Value {
     use BinaryOp::*;
     match op {
@@ -113,38 +440,20 @@ fn eval_binary(op: BinaryOp, l: Value, r: Value) -> Value {
             _ => Value::Null,
         },
         _ if l.is_null() || r.is_null() => Value::Null,
-        Eq | NotEq | Lt | LtEq | Gt | GtEq => {
-            let ord = l.compare(&r);
-            bool_value(match op {
-                Eq => ord.is_eq(),
-                NotEq => ord.is_ne(),
-                Lt => ord.is_lt(),
-                LtEq => ord.is_le(),
-                Gt => ord.is_gt(),
-                _ => ord.is_ge(),
-            })
-        }
         Concat => Value::Text(format!("{l}{r}")),
-        Add | Subtract | Multiply | Divide | Remainder => {
-            arithmetic(op, to_number(l), to_number(r))
+        Eq | NotEq | Lt | LtEq | Gt | GtEq => {
+            compare(l, None, r, None).map_or(Value::Null, |ord| bool_value(op.holds(ord)))
         }
+        Add | Subtract | Multiply | Divide | Remainder => arithmetic(op, l, r),
     }
 }
 
 fn arithmetic(op: BinaryOp, l: Value, r: Value) -> Value {
     use BinaryOp::*;
     if op == Remainder {
-        // SQLite computes % on integers, then returns a real if either side was real.
-        let (a, b) = (l.to_i64_lossy(), r.to_i64_lossy());
-        if b == 0 {
-            return Value::Null;
-        }
-        let rem = a.checked_rem(b).unwrap_or(0);
-        return match (&l, &r) {
-            (Value::Integer(_), Value::Integer(_)) => Value::Integer(rem),
-            _ => Value::Real(rem as f64),
-        };
+        return remainder(l, r);
     }
+    let (l, r) = (to_number(l), to_number(r));
     if let (Value::Integer(a), Value::Integer(b)) = (&l, &r) {
         let exact = match op {
             Add => a.checked_add(*b),
@@ -173,6 +482,50 @@ fn arithmetic(op: BinaryOp, l: Value, r: Value) -> Value {
     }
 }
 
+/// `l % r`. SQLite reads both sides as integers, text by its leading digits
+/// (`'1e3'` is 1), and returns a real if either side was a real number.
+fn remainder(l: Value, r: Value) -> Value {
+    let (a, b) = (to_integer(&l), to_integer(&r));
+    if b == 0 {
+        return Value::Null;
+    }
+    let rem = a.checked_rem(b).unwrap_or(0);
+    match (to_number(l), to_number(r)) {
+        (Value::Integer(_), Value::Integer(_)) => Value::Integer(rem),
+        _ => Value::Real(rem as f64),
+    }
+}
+
+/// A row of values in the order ORDER BY, GROUP BY and DISTINCT use: NULL
+/// first and equal to NULL, then numbers by value, then text byte by byte.
+#[derive(Debug, Clone)]
+pub struct RowKey(pub Vec<Value>);
+
+impl Ord for RowKey {
+    fn cmp(&self, other: &Self) -> Ordering {
+        self.0
+            .iter()
+            .zip(&other.0)
+            .map(|(a, b)| a.compare(b))
+            .find(|ord| ord.is_ne())
+            .unwrap_or_else(|| self.0.len().cmp(&other.0.len()))
+    }
+}
+
+impl PartialOrd for RowKey {
+    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
+        Some(self.cmp(other))
+    }
+}
+
+impl PartialEq for RowKey {
+    fn eq(&self, other: &Self) -> bool {
+        self.cmp(other).is_eq()
+    }
+}
+
+impl Eq for RowKey {}
+
 impl fmt::Display for BinaryOp {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.write_str(match self {
@@ -194,8 +547,20 @@ impl fmt::Display for BinaryOp {
     }
 }
 
+/// Writes items separated by ", ".
+pub(crate) fn comma_list<T: fmt::Display>(f: &mut fmt::Formatter<'_>, items: &[T]) -> fmt::Result {
+    for (i, item) in items.iter().enumerate() {
+        if i > 0 {
+            f.write_str(", ")?;
+        }
+        write!(f, "{item}")?;
+    }
+    Ok(())
+}
+
 impl fmt::Display for Expr {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let not = |negated: bool| if negated { "NOT " } else { "" };
         match self {
             Expr::Literal(Value::Text(s)) => write!(f, "'{}'", s.replace('\'', "''")),
             Expr::Literal(v) => write!(f, "{v}"),
@@ -213,8 +578,61 @@ impl fmt::Display for Expr {
                 expr,
             } => write!(f, "+{expr}"),
             Expr::Binary { op, left, right } => write!(f, "({left} {op} {right})"),
-            Expr::IsNull { expr, negated } => {
-                write!(f, "{expr} IS {}NULL", if *negated { "NOT " } else { "" })
+            Expr::IsNull { expr, negated } => write!(f, "{expr} IS {}NULL", not(*negated)),
+            Expr::Is {
+                left,
+                right,
+                distinct,
+            } => write!(f, "{left} IS {}{right}", not(*distinct)),
+            Expr::IsTruth {
+                expr,
+                truth,
+                negated,
+            } => write!(
+                f,
+                "{expr} IS {}{}",
+                not(*negated),
+                if *truth { "TRUE" } else { "FALSE" }
+            ),
+            Expr::Between {
+                expr,
+                low,
+                high,
+                negated,
+            } => write!(f, "{expr} {}BETWEEN {low} AND {high}", not(*negated)),
+            Expr::InList {
+                expr,
+                list,
+                negated,
+            } => {
+                write!(f, "{expr} {}IN (", not(*negated))?;
+                comma_list(f, list)?;
+                f.write_str(")")
+            }
+            Expr::Case {
+                operand,
+                branches,
+                otherwise,
+            } => {
+                f.write_str("CASE")?;
+                if let Some(operand) = operand {
+                    write!(f, " {operand}")?;
+                }
+                for (when, then) in branches {
+                    write!(f, " WHEN {when} THEN {then}")?;
+                }
+                if let Some(otherwise) = otherwise {
+                    write!(f, " ELSE {otherwise}")?;
+                }
+                f.write_str(" END")
+            }
+            Expr::Cast {
+                expr, type_name, ..
+            } => write!(f, "CAST({expr} AS {type_name})"),
+            Expr::Function { func, args } => {
+                write!(f, "{}(", func.name())?;
+                comma_list(f, args)?;
+                f.write_str(")")
             }
         }
     }
@@ -224,13 +642,26 @@ impl fmt::Display for Expr {
 mod tests {
     use super::*;
 
+    fn lit(v: Value) -> Box<Expr> {
+        Box::new(Expr::Literal(v))
+    }
+
     fn bin(op: BinaryOp, l: Value, r: Value) -> Value {
         Expr::Binary {
             op,
-            left: Box::new(Expr::Literal(l)),
-            right: Box::new(Expr::Literal(r)),
+            left: lit(l),
+            right: lit(r),
         }
         .eval(&[])
+        .unwrap()
+    }
+
+    fn column(affinity: Affinity) -> Box<Expr> {
+        Box::new(Expr::Column {
+            index: 0,
+            name: "c".into(),
+            affinity,
+        })
     }
 
     #[test]
@@ -281,5 +712,76 @@ mod tests {
             ),
             Value::Integer(13)
         );
+    }
+
+    #[test]
+    fn comparisons_apply_affinity() {
+        let (five, text_five) = (Value::Integer(5), Value::Text("5".into()));
+        let eq = |l: &Value, la, r: &Value, ra| {
+            compare(l.clone(), la, r.clone(), ra) == Some(Ordering::Equal)
+        };
+        let (integer, text, blob) = (
+            Some(Affinity::Integer),
+            Some(Affinity::Text),
+            Some(Affinity::Blob),
+        );
+        // An INTEGER column turns '5' into 5, whatever the other side is.
+        assert!(eq(&five, integer, &text_five, None));
+        assert!(eq(&five, integer, &text_five, text));
+        // A TEXT column turns the literal 5 into '5'...
+        assert!(eq(&text_five, text, &five, None));
+        // ...but not the 5 in an untyped column: both are columns.
+        assert!(!eq(&text_five, text, &five, blob));
+        // Two expressions compare as they are.
+        assert!(!eq(&five, None, &text_five, None));
+        // `+column` drops the column's affinity.
+        let plus = Expr::Unary {
+            op: UnaryOp::Plus,
+            expr: column(Affinity::Integer),
+        };
+        assert_eq!(plus.affinity(), None);
+    }
+
+    #[test]
+    fn in_list_follows_three_valued_logic() {
+        let in_list = |v: Value, list: Vec<Value>| {
+            Expr::InList {
+                expr: lit(v),
+                list: list.into_iter().map(Expr::Literal).collect(),
+                negated: false,
+            }
+            .eval(&[])
+            .unwrap()
+        };
+        let (one, two, null) = (Value::Integer(1), Value::Integer(2), Value::Null);
+        assert_eq!(in_list(null.clone(), vec![]), Value::Integer(0));
+        assert_eq!(in_list(null.clone(), vec![one.clone()]), Value::Null);
+        assert_eq!(
+            in_list(one.clone(), vec![null.clone(), one.clone()]),
+            Value::Integer(1)
+        );
+        assert_eq!(in_list(two.clone(), vec![null, one.clone()]), Value::Null);
+        assert_eq!(in_list(two, vec![one]), Value::Integer(0));
+    }
+
+    #[test]
+    fn cast_follows_sqlite_conversions() {
+        let text = |s: &str| Value::Text(s.into());
+        assert_eq!(cast(text("12abc"), Affinity::Integer), Value::Integer(12));
+        assert_eq!(cast(text("1e3"), Affinity::Integer), Value::Integer(1));
+        assert_eq!(
+            cast(text("99999999999999999999"), Affinity::Integer),
+            Value::Integer(i64::MAX)
+        );
+        assert_eq!(
+            cast(Value::Real(-3.7), Affinity::Integer),
+            Value::Integer(-3)
+        );
+        assert_eq!(cast(text("1e3"), Affinity::Numeric), Value::Integer(1000));
+        assert_eq!(cast(text("1e17"), Affinity::Numeric), Value::Real(1e17));
+        assert_eq!(cast(text("abc"), Affinity::Numeric), Value::Integer(0));
+        assert_eq!(cast(Value::Real(3.0), Affinity::Numeric), Value::Real(3.0));
+        assert_eq!(cast(text("abc"), Affinity::Real), Value::Real(0.0));
+        assert_eq!(cast(Value::Real(1.5), Affinity::Text), text("1.5"));
     }
 }

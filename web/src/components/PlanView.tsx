@@ -7,6 +7,12 @@ const OPERATORS: Record<string, string> = {
   Filter: "Passes on only the rows where the condition is true. NULL counts as not true.",
   Project: "Computes the output columns from each row it receives.",
   OneRow: "Produces one empty row, so a SELECT without FROM has something to compute on.",
+  Sort: "Reads every row it is given, then hands them up in order. It cannot return its first row before it has seen the last.",
+  Aggregate:
+    "Sorts rows into groups with equal GROUP BY values and computes count(), sum() and the rest for each group. One row comes out per group.",
+  Distinct: "Passes on each row only the first time it sees it. NULL counts as equal to NULL here.",
+  Limit:
+    "Skips the OFFSET rows, passes on rows until it has enough, then stops asking its input for more.",
 };
 
 interface Line {

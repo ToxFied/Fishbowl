@@ -20,8 +20,11 @@ INSERT INTO fish VALUES
 const EXAMPLES: Record<string, string> = {
   filter: "SELECT name, weight * 1000 AS grams\nFROM fish\nWHERE species = 'koi' AND weight > 1;",
   nulls: "SELECT name, weight\nFROM fish\nWHERE weight IS NULL OR weight < 0.25;",
+  groups:
+    "SELECT species, count(*), avg(weight)\nFROM fish\nGROUP BY species\nHAVING count(*) > 1\nORDER BY 2 DESC;",
+  heaviest: "SELECT name, weight\nFROM fish\nORDER BY weight DESC\nLIMIT 3;",
   expressions: "SELECT 7 / 2, 7 % 2, 7.0 / 2, 'gold' || 'fish', NULL + 1;",
-  error: "SELECT name FROM fish ORDER BY weight;",
+  error: "SELECT a.name, b.name\nFROM fish AS a, fish AS b;",
 };
 
 const START = EXAMPLES.filter ?? "";

@@ -11,6 +11,9 @@ pub enum Error {
     Catalog(String),
     /// A rule the data must follow, such as NOT NULL.
     Constraint(String),
+    /// A value that cannot be computed while the statement runs, such as an
+    /// integer overflow in `sum()` or a LIMIT that is not an integer.
+    Runtime(String),
     /// The statement did more work than the configured row budget allows.
     BudgetExceeded(u64),
 }
@@ -22,6 +25,7 @@ impl fmt::Display for Error {
             Error::Unsupported(what) => write!(f, "not supported yet: {what}"),
             Error::Catalog(msg) => f.write_str(msg),
             Error::Constraint(msg) => write!(f, "constraint failed: {msg}"),
+            Error::Runtime(msg) => f.write_str(msg),
             Error::BudgetExceeded(limit) => {
                 write!(f, "statement exceeded the budget of {limit} rows")
             }
