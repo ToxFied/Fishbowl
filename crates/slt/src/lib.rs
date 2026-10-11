@@ -220,6 +220,7 @@ fn error_reason(e: &Error) -> String {
         Error::Parse(_) => "parse error".into(),
         Error::Catalog(msg) => msg.split(':').next().unwrap_or(msg).to_string(),
         Error::Constraint(_) => "constraint failed".into(),
+        Error::Runtime(msg) => msg.clone(),
         Error::BudgetExceeded(_) => "row budget exceeded".into(),
     }
 }
@@ -230,7 +231,7 @@ fn error_reason(e: &Error) -> String {
 fn is_genuine_rejection(e: &Error) -> bool {
     matches!(
         e,
-        Error::Parse(_) | Error::Catalog(_) | Error::Constraint(_)
+        Error::Parse(_) | Error::Catalog(_) | Error::Constraint(_) | Error::Runtime(_)
     )
 }
 

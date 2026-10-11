@@ -168,7 +168,7 @@ impl Database {
             let mut row = vec![Value::Null; schema.columns.len()];
             for (&target, expr) in targets.iter().zip(exprs) {
                 row[target] = expr
-                    .eval(&[])
+                    .eval(&[])?
                     .apply_affinity(schema.columns[target].affinity);
             }
             for (column, value) in schema.columns.iter().zip(&row) {

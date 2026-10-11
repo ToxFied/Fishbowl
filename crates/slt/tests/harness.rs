@@ -114,7 +114,7 @@ SELECT a FROM t WHERE a > 1
 fn unsupported_sql_never_satisfies_statement_error() {
     let result = run("\
 statement error
-SELECT a FROM t ORDER BY a
+WITH c AS (SELECT a FROM t) SELECT a FROM c
 
 statement error
 SELECT nope FROM t
@@ -124,7 +124,13 @@ SELECT nope FROM t
 ");
     assert_eq!(result.statements, queries(3, 2));
     let reasons: Vec<&str> = result.failures.iter().map(|f| f.reason.as_str()).collect();
-    assert_eq!(reasons, ["unsupported: ORDER BY", "no such column"]);
+    assert_eq!(
+        reasons,
+        [
+            "unsupported: WITH (common table expressions)",
+            "no such column"
+        ]
+    );
 }
 
 #[test]

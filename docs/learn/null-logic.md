@@ -28,5 +28,26 @@ opposite. That is correct SQL, and a common source of bugs.
 
 Try it in the UI with the "nulls" example.
 
-Code: `crates/engine/src/expr.rs` (`eval_binary`) and `Value::truthiness` in
+## NULL in other places
+
+The same "unknown" idea runs through the rest of SQL, with a few twists:
+
+- **IN.** `2 IN (1, NULL)` is unknown: 2 is not 1, but it might be the missing
+  value. `1 IN (1, NULL)` is true. `x IN ()`, with an empty list, is false
+  even when x is NULL.
+- **BETWEEN and CASE.** `x BETWEEN a AND b` means `x >= a AND x <= b`, so
+  NULL anywhere can make it unknown. `CASE x WHEN NULL` never matches, since
+  `x = NULL` is never true. Write `CASE WHEN x IS NULL` instead.
+- **Aggregates skip NULL.** `count(weight)` counts the known weights, while
+  `count(*)` counts rows. `avg(weight)` averages only the known weights.
+- **Grouping treats NULLs as equal.** GROUP BY puts all the NULLs in one group,
+  and DISTINCT keeps one NULL. Here "equal" means "the same for grouping
+  purposes", not `NULL = NULL`.
+- **Sorting puts NULL first.** SQLite treats NULL as smaller than every value,
+  so it comes first in ascending order and last in descending order.
+- **`IS DISTINCT FROM`** is `=` with NULL treated as an ordinary value:
+  `NULL IS NOT DISTINCT FROM NULL` is true, and the answer is never unknown.
+
+Code: `crates/engine/src/expr.rs` (`eval_binary`, `eval_in_list`),
+`crates/engine/src/expr/aggregate.rs`, and `Value::truthiness` in
 `crates/engine/src/value.rs`.

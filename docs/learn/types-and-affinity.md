@@ -31,5 +31,31 @@ integer because the INT rule comes first.
 Fishbowl copies these rules because the sqllogictest expected answers come from
 SQLite. Try the "expressions" example in the UI.
 
+## Affinity in comparisons
+
+Affinity also matters when comparing. Suppose `id` is an `INTEGER` column
+holding 5. Is `id = '5'` true? In SQLite it is. Before comparing, the database
+may convert one side, using these rules:
+
+- **A column against a literal or other expression:** the column's affinity
+  applies to both sides. `id = '5'` turns `'5'` into 5, so it is true. A
+  `TEXT` column turns the number in `name = 5` into `'5'`.
+- **Two columns:** if either is numeric (INTEGER, REAL or NUMERIC), text that
+  looks like a number becomes a number. Otherwise nothing changes, so a `TEXT`
+  column holding `'5'` does not equal an untyped column holding 5.
+- **Two expressions:** nothing changes, and 5 does not equal `'5'`, because
+  numbers always sort before text.
+
+Only a plain column or a `CAST(x AS type)` has an affinity. Anything else has
+none, even `+id`. Writing `+id = '5'` is the classic SQLite trick for turning
+the conversion off, and it is false.
+
+In `x IN (a, b)`, the values in the list have no affinity, so `x` decides.
+`BETWEEN` and `CASE x WHEN ...` compare like `=` does.
+
+`CAST(x AS INTEGER)` converts by the same type-name rules, with SQLite's own
+quirks: `CAST('12abc' AS INTEGER)` is 12, and `CAST('1e3' AS INTEGER)` is 1,
+because it reads only the leading digits.
+
 Code: `crates/engine/src/value.rs` (`Affinity`, `apply_affinity`) and
-`crates/engine/src/expr.rs` (`arithmetic`).
+`crates/engine/src/expr.rs` (`arithmetic`, `compare`, `cast`).
