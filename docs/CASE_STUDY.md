@@ -199,8 +199,10 @@ All on a 10-core Apple M4.
 
 | Measure | Result |
 | --- | --- |
-| Full sqllogictest suite, 5.9 million records | about 40 s |
-| 29-file sample | about 8 s |
+| Full sqllogictest suite, 5.9 million records | about 40 s, 566 MB peak memory |
+| 29-file sample | 1.8 s (7.8 s before the cost-based planner) |
+| Join of 100,000 orders with 10,000 customers, no `ANALYZE` | 0.68 s (52.9 s before the cost-based planner) |
+| Correlated subquery over the same tables | 0.07 s (67 s before) |
 | Insert 100,000 rows into an indexed table in a file | 1.09 s (`sqlite3`: 0.04 s) |
 | `count(*)` over those 100,000 rows, process start included | about 10 ms |
 | Crash test, debug build | about 16 s |
@@ -210,9 +212,15 @@ The runner gives each file its own database and runs files on every core.
 Starting the largest files first cut the full run from 44.6 s to 33 s in
 back-to-back runs, because no long file is left running alone at the end.
 
-Fishbowl is about 27 times slower than SQLite at bulk inserts. Nothing in the
-engine has been tuned for speed yet. The suite stays fast because its tables
-are small, not because the engine is.
+The cost-based planner (M5) made the sample four times faster;
+`select4.test` alone went from 9.7 s to 1.3 s. It costs time elsewhere. `select5.test`, with joins of up to 64 tables, went
+from 0.22 s to 0.75 s, because the planner now searches join orders. The
+full suite went from about 35 s to about 40 s across M5 and the fixes that
+took it to 100%.
+
+Fishbowl is about 27 times slower than SQLite at bulk inserts. The storage
+layer has not been tuned for speed yet. The suite stays fast because its
+tables are small, not because the engine is.
 
 ## Known limits
 

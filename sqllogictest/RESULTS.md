@@ -17,7 +17,7 @@ explain what counts as a pass.
   It takes about 40 seconds on a 10-core Apple M4 and needs 1.2 GB of disk.
 - **29-file sample:** a subset of the same files, listed in
   [`manifest.txt`](manifest.txt), with at least one file from each category.
-  It runs in about 8 seconds.
+  It runs in about 2 seconds.
 - **Skipped** records are ones the test file marks as not applying to SQLite:
   `onlyif mysql`, `onlyif mssql`, `onlyif oracle` and `skipif sqlite`. They
   are neither run nor counted as passes.

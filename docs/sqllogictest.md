@@ -98,7 +98,7 @@ Both corpora come from the SQLite sqllogictest repository at check-in
 
 All 622 test files at that check-in: 1.2 GB and 7.4 million records, of which
 5.9 million apply to SQLite. `sqllogictest/manifest-full.txt` lists them with
-their SHA-256. A run takes about 35 seconds on a 10-core Apple M4 and peaks at
+their SHA-256. A run takes about 40 seconds on a 10-core Apple M4 and peaks at
 about 570 MB of memory. The first download takes about 8 minutes.
 
 `scripts/pin-sqllogictest.sh <checkin>` writes that manifest. Fossil, the
@@ -112,7 +112,7 @@ missed. Run it only to move to a new check-in.
 ### The sample
 
 29 of those files, about 143,000 records, listed in
-`sqllogictest/manifest.txt`. It runs in about 8 seconds, so CI runs it on
+`sqllogictest/manifest.txt`. It runs in about 2 seconds, so CI runs it on
 every push and checks that the committed report still matches.
 
 | Files | Why |

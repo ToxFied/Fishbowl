@@ -127,7 +127,7 @@ pnpm --dir web install && pnpm --dir web dev
 # Crash test: prints how many crash points it tried
 cargo test -p fishbowl --test crash -- --nocapture
 
-# sqllogictest, the 29-file sample: 26 MB, about 8 seconds
+# sqllogictest, the 29-file sample: 26 MB, about 2 seconds
 scripts/fetch-sqllogictest.sh
 cargo run --release -p fishbowl-slt -- --write
 
