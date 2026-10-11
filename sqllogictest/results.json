@@ -7,34 +7,34 @@
   },
   "totals": {
     "records": {
-      "passed": 52755,
-      "failed": 76593
+      "passed": 129216,
+      "failed": 132
     },
     "statements": {
-      "passed": 4441,
-      "failed": 7499
+      "passed": 11909,
+      "failed": 31
     },
     "queries": {
-      "passed": 48314,
-      "failed": 69094
+      "passed": 117307,
+      "failed": 101
     },
     "skipped": 14153,
-    "pass_rate": 40.78,
-    "query_pass_rate": 41.15
+    "pass_rate": 99.89,
+    "query_pass_rate": 99.91
   },
   "files": [
     {
       "path": "evidence/in1.test",
       "statements": {
-        "passed": 5,
-        "failed": 22
+        "passed": 27,
+        "failed": 0
       },
       "queries": {
-        "passed": 49,
-        "failed": 138
+        "passed": 111,
+        "failed": 76
       },
       "skipped": 2,
-      "pass_rate": 25.23
+      "pass_rate": 64.48
     },
     {
       "path": "evidence/in2.test",
@@ -52,47 +52,73 @@
     {
       "path": "evidence/slt_lang_aggfunc.test",
       "statements": {
-        "passed": 9,
-        "failed": 4
+        "passed": 10,
+        "failed": 3
       },
       "queries": {
         "passed": 57,
         "failed": 10
       },
       "skipped": 0,
-      "pass_rate": 82.5
+      "pass_rate": 83.75
     },
     {
       "path": "evidence/slt_lang_createtrigger.test",
       "statements": {
-        "passed": 4,
-        "failed": 22
+        "passed": 5,
+        "failed": 21
       },
       "queries": {
         "passed": 0,
         "failed": 0
       },
       "skipped": 0,
-      "pass_rate": 15.38
+      "pass_rate": 19.23
     },
     {
       "path": "evidence/slt_lang_createview.test",
       "statements": {
-        "passed": 19,
-        "failed": 2
+        "passed": 21,
+        "failed": 0
       },
       "queries": {
         "passed": 2,
         "failed": 0
       },
       "skipped": 2,
-      "pass_rate": 91.3
+      "pass_rate": 100.0
     },
     {
       "path": "evidence/slt_lang_dropindex.test",
       "statements": {
-        "passed": 4,
-        "failed": 4
+        "passed": 8,
+        "failed": 0
+      },
+      "queries": {
+        "passed": 0,
+        "failed": 0
+      },
+      "skipped": 0,
+      "pass_rate": 100.0
+    },
+    {
+      "path": "evidence/slt_lang_droptable.test",
+      "statements": {
+        "passed": 12,
+        "failed": 0
+      },
+      "queries": {
+        "passed": 0,
+        "failed": 0
+      },
+      "skipped": 0,
+      "pass_rate": 100.0
+    },
+    {
+      "path": "evidence/slt_lang_droptrigger.test",
+      "statements": {
+        "passed": 6,
+        "failed": 6
       },
       "queries": {
         "passed": 0,
@@ -102,186 +128,160 @@
       "pass_rate": 50.0
     },
     {
-      "path": "evidence/slt_lang_droptable.test",
-      "statements": {
-        "passed": 10,
-        "failed": 2
-      },
-      "queries": {
-        "passed": 0,
-        "failed": 0
-      },
-      "skipped": 0,
-      "pass_rate": 83.33
-    },
-    {
-      "path": "evidence/slt_lang_droptrigger.test",
-      "statements": {
-        "passed": 5,
-        "failed": 7
-      },
-      "queries": {
-        "passed": 0,
-        "failed": 0
-      },
-      "skipped": 0,
-      "pass_rate": 41.66
-    },
-    {
       "path": "evidence/slt_lang_dropview.test",
       "statements": {
-        "passed": 10,
-        "failed": 1
+        "passed": 11,
+        "failed": 0
       },
       "queries": {
         "passed": 2,
         "failed": 0
       },
       "skipped": 0,
-      "pass_rate": 92.3
+      "pass_rate": 100.0
     },
     {
       "path": "evidence/slt_lang_reindex.test",
       "statements": {
-        "passed": 5,
-        "failed": 2
+        "passed": 6,
+        "failed": 1
       },
       "queries": {
         "passed": 0,
         "failed": 0
       },
       "skipped": 0,
-      "pass_rate": 71.42
+      "pass_rate": 85.71
     },
     {
       "path": "evidence/slt_lang_replace.test",
       "statements": {
-        "passed": 0,
-        "failed": 8
+        "passed": 8,
+        "failed": 0
       },
       "queries": {
-        "passed": 0,
-        "failed": 6
+        "passed": 6,
+        "failed": 0
       },
       "skipped": 0,
-      "pass_rate": 0.0
+      "pass_rate": 100.0
     },
     {
       "path": "evidence/slt_lang_update.test",
       "statements": {
-        "passed": 17,
-        "failed": 1
+        "passed": 18,
+        "failed": 0
       },
       "queries": {
         "passed": 9,
         "failed": 0
       },
       "skipped": 0,
-      "pass_rate": 96.29
+      "pass_rate": 100.0
     },
     {
       "path": "index/between/10/slt_good_0.test",
       "statements": {
-        "passed": 0,
-        "failed": 33
+        "passed": 33,
+        "failed": 0
       },
       "queries": {
-        "passed": 0,
-        "failed": 10000
+        "passed": 10000,
+        "failed": 0
       },
       "skipped": 0,
-      "pass_rate": 0.0
+      "pass_rate": 100.0
     },
     {
       "path": "index/commute/10/slt_good_0.test",
       "statements": {
-        "passed": 0,
-        "failed": 34
+        "passed": 34,
+        "failed": 0
       },
       "queries": {
-        "passed": 0,
-        "failed": 10000
+        "passed": 10000,
+        "failed": 0
       },
       "skipped": 0,
-      "pass_rate": 0.0
+      "pass_rate": 100.0
     },
     {
       "path": "index/delete/10/slt_good_0.test",
       "statements": {
-        "passed": 0,
-        "failed": 6476
+        "passed": 6476,
+        "failed": 0
       },
       "queries": {
-        "passed": 0,
-        "failed": 4254
+        "passed": 4254,
+        "failed": 0
       },
       "skipped": 0,
-      "pass_rate": 0.0
+      "pass_rate": 100.0
     },
     {
       "path": "index/in/10/slt_good_0.test",
       "statements": {
-        "passed": 0,
-        "failed": 30
+        "passed": 30,
+        "failed": 0
       },
       "queries": {
-        "passed": 0,
-        "failed": 10005
+        "passed": 9990,
+        "failed": 15
       },
       "skipped": 0,
-      "pass_rate": 0.0
+      "pass_rate": 99.85
     },
     {
       "path": "index/orderby/10/slt_good_0.test",
       "statements": {
-        "passed": 0,
-        "failed": 33
+        "passed": 33,
+        "failed": 0
       },
       "queries": {
-        "passed": 0,
-        "failed": 10020
+        "passed": 10020,
+        "failed": 0
       },
       "skipped": 0,
-      "pass_rate": 0.0
+      "pass_rate": 100.0
     },
     {
       "path": "index/orderby_nosort/10/slt_good_0.test",
       "statements": {
-        "passed": 0,
-        "failed": 33
+        "passed": 33,
+        "failed": 0
       },
       "queries": {
-        "passed": 0,
-        "failed": 10020
+        "passed": 10020,
+        "failed": 0
       },
       "skipped": 0,
-      "pass_rate": 0.0
+      "pass_rate": 100.0
     },
     {
       "path": "index/random/10/slt_good_0.test",
       "statements": {
-        "passed": 0,
-        "failed": 32
+        "passed": 32,
+        "failed": 0
       },
       "queries": {
-        "passed": 0,
-        "failed": 10000
+        "passed": 10000,
+        "failed": 0
       },
       "skipped": 2140,
-      "pass_rate": 0.0
+      "pass_rate": 100.0
     },
     {
       "path": "index/view/10/slt_good_1.test",
       "statements": {
-        "passed": 3195,
-        "failed": 33
+        "passed": 3228,
+        "failed": 0
       },
       "queries": {
-        "passed": 0,
-        "failed": 3907
+        "passed": 3907,
+        "failed": 0
       },
       "skipped": 1065,
-      "pass_rate": 44.77
+      "pass_rate": 100.0
     },
     {
       "path": "random/aggregates/slt_good_0.test",
@@ -377,60 +377,35 @@
     {
       "path": "select4.test",
       "statements": {
-        "passed": 1009,
-        "failed": 16
+        "passed": 1025,
+        "failed": 0
       },
       "queries": {
-        "passed": 2830,
-        "failed": 2
+        "passed": 2832,
+        "failed": 0
       },
       "skipped": 0,
-      "pass_rate": 99.53
+      "pass_rate": 100.0
     },
     {
       "path": "select5.test",
       "statements": {
-        "passed": 0,
-        "failed": 704
+        "passed": 704,
+        "failed": 0
       },
       "queries": {
-        "passed": 0,
-        "failed": 732
+        "passed": 732,
+        "failed": 0
       },
       "skipped": 0,
-      "pass_rate": 0.0
+      "pass_rate": 100.0
     }
   ],
   "failure_reasons": [
     {
-      "reason": "no such table",
-      "count": 74068,
-      "example": "evidence/in1.test:122: no such table: t2"
-    },
-    {
-      "reason": "unsupported: CREATE INDEX",
-      "count": 1086,
-      "example": "evidence/slt_lang_aggfunc.test:15: not supported yet: CREATE INDEX"
-    },
-    {
-      "reason": "unsupported: column constraint PRIMARY KEY",
-      "count": 687,
-      "example": "evidence/in1.test:113: not supported yet: column constraint PRIMARY KEY"
-    },
-    {
-      "reason": "unsupported: CREATE UNIQUE",
-      "count": 580,
-      "example": "index/between/10/slt_good_0.test:60: not supported yet: CREATE UNIQUE"
-    },
-    {
       "reason": "parse error",
       "count": 97,
       "example": "evidence/in1.test:70: parse error: sql parser error: Expected: (, found: t1 at Line: 1, Column: 13"
-    },
-    {
-      "reason": "wrong result",
-      "count": 24,
-      "example": "evidence/in1.test:667: expected [1], got [0]"
     },
     {
       "reason": "unsupported: DROP TRIGGER",
@@ -443,34 +418,14 @@
       "example": "evidence/slt_lang_createtrigger.test:24: not supported yet: CREATE TRIGGER"
     },
     {
-      "reason": "unsupported: INSERT OR / ON CONFLICT / RETURNING",
-      "count": 5,
-      "example": "evidence/slt_lang_createview.test:98: not supported yet: INSERT OR / ON CONFLICT / RETURNING"
-    },
-    {
-      "reason": "unsupported: column constraint UNIQUE",
-      "count": 5,
-      "example": "evidence/in1.test:160: not supported yet: column constraint UNIQUE"
-    },
-    {
-      "reason": "unsupported: DROP INDEX",
-      "count": 4,
-      "example": "evidence/slt_lang_dropindex.test:23: not supported yet: DROP INDEX"
-    },
-    {
-      "reason": "unsupported: INSERT ... SELECT",
-      "count": 4,
-      "example": "evidence/in1.test:380: not supported yet: INSERT ... SELECT"
-    },
-    {
       "reason": "unsupported: literal X'303132'",
       "count": 4,
       "example": "evidence/in1.test:296: not supported yet: literal X'303132'"
     },
     {
-      "reason": "row budget exceeded",
-      "count": 2,
-      "example": "select4.test:39784: statement exceeded the budget of 20000000 rows"
+      "reason": "wrong result",
+      "count": 4,
+      "example": "evidence/slt_lang_aggfunc.test:480: expected [], got [9.000]"
     }
   ]
 }

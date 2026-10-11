@@ -19,9 +19,12 @@ back. An index is sorted, so the answer comes out sorted, with NULL first,
 then numbers, then text. Fishbowl does the same with an ordered set, so
 `SELECT 3 UNION SELECT 1` returns 1, then 3.
 
-`1` and `1.0` count as the same row but print differently. SQLite's temporary
-index overwrites an equal entry, so UNION keeps the last one it saw, while
-INTERSECT keeps the left side's. Fishbowl copies both rules.
+`1` and `1.0` count as the same row but print differently, so which one comes
+out is visible. In SQLite the first of equal rows from one side stays, and a
+UNION's right side replaces an equal row from the left: `SELECT 1 UNION
+SELECT 1.0` returns `1.0`. INTERSECT and EXCEPT return the left side's rows.
+Fishbowl follows the same rules; the differential test against `sqlite3`
+found them.
 
 ## Left to right
 

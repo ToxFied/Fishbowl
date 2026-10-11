@@ -7,14 +7,21 @@
 //! - [`pager`]: the [`Pager`] caches pages in a small buffer pool and hands
 //!   out free pages.
 //! - [`page`]: the byte layout of every kind of page.
-//! - [`btree`]: each table is a B+tree of rows keyed by rowid.
+//! - [`btree`]: each table is a B+tree of rows keyed by rowid, and each index
+//!   a B+tree of (values, rowid) keys.
 //! - [`record`]: how one row of values becomes bytes.
+//! - [`index`]: index keys and their order.
 //!
 //! This module ties them together. Like SQLite's `sqlite_schema`, a schema
-//! table at page 1 lists every table with its root page and the
-//! `CREATE TABLE` statement that made it, so a database file can be reopened.
+//! table at page 1 lists every table, index and view with its root page and
+//! the statement that made it, so a database file can be reopened. A view
+//! has no rows, so its root page is 0.
+//!
+//! Storage knows nothing about columns or constraints. The caller decides
+//! what goes into an index and checks the rules; see `write.rs`.
 
 pub mod btree;
+pub mod index;
 pub mod page;
 pub mod pager;
 pub mod record;
@@ -27,7 +34,8 @@ use std::io;
 use crate::error::{Error, Result};
 use crate::value::Value;
 use btree::{BTree, Cursor};
-use page::PageId;
+use index::{IndexKey, MAX_KEY_SIZE};
+use page::{Key, PageId};
 use pager::{DEFAULT_POOL_PAGES, Pager};
 pub use store::{MemoryStore, PageStore};
 
@@ -50,6 +58,9 @@ pub struct Storage {
     schema: BTree,
     /// Keyed by lowercase name, like the catalog.
     tables: HashMap<String, Table>,
+    indexes: HashMap<String, Index>,
+    /// Each view's row in the schema table.
+    views: HashMap<String, i64>,
 }
 
 struct Table {
@@ -57,6 +68,26 @@ struct Table {
     /// The table's row in the schema table.
     schema_rowid: i64,
     rows: usize,
+}
+
+struct Index {
+    tree: BTree<IndexKey>,
+    /// The table it indexes, lowercase.
+    table: String,
+    schema_rowid: i64,
+}
+
+/// One row of the schema table, laid out like SQLite's `sqlite_schema`:
+/// `(type, name, tbl_name, rootpage, sql)`. An index made for a `UNIQUE` or
+/// `PRIMARY KEY` constraint has no SQL of its own.
+fn schema_row(kind: &str, name: &str, table: &str, root: PageId, sql: Option<&str>) -> Row {
+    vec![
+        Value::Text(kind.into()),
+        Value::Text(name.into()),
+        Value::Text(table.into()),
+        Value::Integer(root.into()),
+        sql.map_or(Value::Null, |sql| Value::Text(sql.into())),
+    ]
 }
 
 impl Storage {
@@ -68,8 +99,8 @@ impl Storage {
     }
 
     /// Opens a store, creating a new database if it is empty. Also returns
-    /// the `CREATE TABLE` statements of the tables it already holds, oldest
-    /// first, so the caller can rebuild its catalog.
+    /// the `CREATE TABLE`, `CREATE INDEX` and `CREATE VIEW` statements it
+    /// holds, oldest first, so the caller can rebuild its catalog.
     pub fn open(store: Box<dyn PageStore>) -> Result<(Storage, Vec<String>)> {
         let mut pager = Pager::open(store, DEFAULT_POOL_PAGES)?;
         let schema = if pager.page_count() == 1 {
@@ -82,33 +113,60 @@ impl Storage {
         };
 
         let mut tables = HashMap::new();
+        let mut indexes = HashMap::new();
+        let mut views = HashMap::new();
         let mut statements = Vec::new();
         let mut cursor = Cursor::new(&mut pager, schema)?;
         while let Some((schema_rowid, bytes)) = cursor.next(&mut pager)? {
             let row = record::decode(&bytes)?;
-            let [Value::Text(name), Value::Integer(root), Value::Text(sql)] = row.as_slice() else {
-                return Err(Error::Storage(format!(
-                    "schema row {schema_rowid} is damaged"
-                )));
+            let damaged = || Error::Storage(format!("schema row {schema_rowid} is damaged"));
+            let [
+                Value::Text(kind),
+                Value::Text(name),
+                Value::Text(table),
+                Value::Integer(root),
+                sql,
+            ] = row.as_slice()
+            else {
+                return Err(damaged());
             };
-            let root = PageId::try_from(*root)
-                .map_err(|_| Error::Storage(format!("table {name} has a bad root page")))?;
-            let tree = BTree::open(root);
-            let rows = tree.count(&mut pager)?;
-            tables.insert(
-                name.to_ascii_lowercase(),
-                Table {
-                    tree,
-                    schema_rowid,
-                    rows,
-                },
-            );
-            statements.push(sql.clone());
+            let root = PageId::try_from(*root).map_err(|_| damaged())?;
+            match (kind.as_str(), sql) {
+                ("table", Value::Text(sql)) => {
+                    let tree = BTree::open(root);
+                    let rows = tree.count(&mut pager)?;
+                    let table = Table {
+                        tree,
+                        schema_rowid,
+                        rows,
+                    };
+                    tables.insert(name.to_ascii_lowercase(), table);
+                    statements.push(sql.clone());
+                }
+                ("index", sql) => {
+                    let index = Index {
+                        tree: BTree::open(root),
+                        table: table.to_ascii_lowercase(),
+                        schema_rowid,
+                    };
+                    indexes.insert(name.to_ascii_lowercase(), index);
+                    if let Value::Text(sql) = sql {
+                        statements.push(sql.clone());
+                    }
+                }
+                ("view", Value::Text(sql)) => {
+                    views.insert(name.to_ascii_lowercase(), schema_rowid);
+                    statements.push(sql.clone());
+                }
+                _ => return Err(damaged()),
+            }
         }
         let storage = Storage {
             pager: RefCell::new(pager),
             schema,
             tables,
+            indexes,
+            views,
         };
         Ok((storage, statements))
     }
@@ -118,14 +176,11 @@ impl Storage {
     pub fn create_table(&mut self, name: &str, sql: &str) -> Result<()> {
         let pager = self.pager.get_mut();
         let tree = BTree::create(pager)?;
-        let schema_rowid = next_rowid(pager, self.schema)?;
-        let row = [
-            Value::Text(name.to_string()),
-            Value::Integer(tree.root().into()),
-            Value::Text(sql.to_string()),
-        ];
-        self.schema
-            .insert(pager, schema_rowid, &record::encode(&row))?;
+        let schema_rowid = add_schema_row(
+            pager,
+            self.schema,
+            &schema_row("table", name, name, tree.root(), Some(sql)),
+        )?;
         self.tables.insert(
             name.to_ascii_lowercase(),
             Table {
@@ -137,31 +192,93 @@ impl Storage {
         Ok(())
     }
 
-    /// Deletes a table and returns all of its pages to the free list.
+    /// Creates an empty index on `table`. `sql` is the `CREATE INDEX`
+    /// statement, or `None` for an index a constraint made, which the
+    /// `CREATE TABLE` statement brings back.
+    pub fn create_index(&mut self, name: &str, table: &str, sql: Option<&str>) -> Result<()> {
+        let table_name = table.to_ascii_lowercase();
+        if !self.tables.contains_key(&table_name) {
+            return Err(no_such_table(table));
+        }
+        let pager = self.pager.get_mut();
+        let tree = BTree::create(pager)?;
+        let schema_rowid = add_schema_row(
+            pager,
+            self.schema,
+            &schema_row("index", name, table, tree.root(), sql),
+        )?;
+        let index = Index {
+            tree,
+            table: table_name,
+            schema_rowid,
+        };
+        self.indexes.insert(name.to_ascii_lowercase(), index);
+        Ok(())
+    }
+
+    /// Deletes a table and its indexes, and returns all of their pages to
+    /// the free list.
     pub fn drop_table(&mut self, name: &str) -> Result<()> {
+        let key = name.to_ascii_lowercase();
         let table = self
             .tables
-            .remove(&name.to_ascii_lowercase())
+            .remove(&key)
             .ok_or_else(|| no_such_table(name))?;
+        let doomed: Vec<String> = self
+            .indexes
+            .iter()
+            .filter(|(_, index)| index.table == key)
+            .map(|(name, _)| name.clone())
+            .collect();
+        for index in doomed {
+            self.drop_index(&index)?;
+        }
         let pager = self.pager.get_mut();
         table.tree.destroy(pager)?;
         self.schema.delete(pager, table.schema_rowid)?;
         Ok(())
     }
 
+    /// Records a view's `CREATE VIEW` statement. A view holds no rows, so
+    /// that is all there is to store.
+    pub fn create_view(&mut self, name: &str, sql: &str) -> Result<()> {
+        let pager = self.pager.get_mut();
+        let row = schema_row("view", name, name, 0, Some(sql));
+        let schema_rowid = add_schema_row(pager, self.schema, &row)?;
+        self.views.insert(name.to_ascii_lowercase(), schema_rowid);
+        Ok(())
+    }
+
+    /// Forgets a view. A view that was never stored, like a TEMP view, is
+    /// not an error.
+    pub fn drop_view(&mut self, name: &str) -> Result<()> {
+        if let Some(schema_rowid) = self.views.remove(&name.to_ascii_lowercase()) {
+            self.schema.delete(self.pager.get_mut(), schema_rowid)?;
+        }
+        Ok(())
+    }
+
+    pub fn drop_index(&mut self, name: &str) -> Result<()> {
+        let index = self
+            .indexes
+            .remove(&name.to_ascii_lowercase())
+            .ok_or_else(|| no_such_index(name))?;
+        let pager = self.pager.get_mut();
+        index.tree.destroy(pager)?;
+        self.schema.delete(pager, index.schema_rowid)?;
+        Ok(())
+    }
+
     /// Adds a row with the next free rowid, one past the largest, and
     /// returns that rowid.
     pub fn insert(&mut self, table: &str, row: &[Value]) -> Result<i64> {
-        let pager = self.pager.get_mut();
-        let table = table_mut(&mut self.tables, table)?;
-        let rowid = next_rowid(pager, table.tree)?;
-        table.tree.insert(pager, rowid, &record::encode(row))?;
-        table.rows += 1;
+        let rowid = self.next_rowid(table)?;
+        self.put(table, rowid, row)?;
         Ok(rowid)
     }
 
-    /// Replaces the row stored under `rowid`.
-    pub fn update(&mut self, table: &str, rowid: i64, row: &[Value]) -> Result<()> {
+    /// Stores `row` under `rowid`, replacing any row already there.
+    pub fn put(&mut self, table: &str, rowid: i64, row: &[Value]) -> Result<()> {
         let pager = self.pager.get_mut();
         let table = table_mut(&mut self.tables, table)?;
         if table.tree.insert(pager, rowid, &record::encode(row))? {
@@ -181,10 +298,59 @@ impl Storage {
         Ok(found)
     }
 
+    /// The row stored under `rowid`, found by walking down the table's tree.
+    pub fn get(&self, table: &str, rowid: i64) -> Result<Option<Row>> {
+        let tree = self.tree(table)?;
+        match tree.get(&mut self.pager.borrow_mut(), rowid)? {
+            Some(bytes) => record::decode(&bytes).map(Some),
+            None => Ok(None),
+        }
+    }
+
+    /// One past the largest rowid in use, or 1 for an empty table, as in
+    /// SQLite.
+    pub fn next_rowid(&self, table: &str) -> Result<i64> {
+        let tree = self.tree(table)?;
+        match tree.last_key(&mut self.pager.borrow_mut())? {
+            None => Ok(1),
+            Some(i64::MAX) => Err(Error::Storage("no rowids left in this table".into())),
+            Some(last) => Ok(last + 1),
+        }
+    }
+
+    /// Adds an entry to an index.
+    pub fn index_insert(&mut self, index: &str, key: IndexKey) -> Result<()> {
+        if key.encoded_size() > MAX_KEY_SIZE {
+            return Err(Error::Unsupported(format!(
+                "index entries larger than {MAX_KEY_SIZE} bytes"
+            )));
+        }
+        let tree = self.index_tree(index)?;
+        tree.insert(self.pager.get_mut(), key, &[])?;
+        Ok(())
+    }
+
+    /// Removes an entry from an index. Returns whether it was there.
+    pub fn index_delete(&mut self, index: &str, key: IndexKey) -> Result<bool> {
+        let tree = self.index_tree(index)?;
+        tree.delete(self.pager.get_mut(), key)
+    }
+
     pub fn row_count(&self, table: &str) -> usize {
         self.tables
             .get(&table.to_ascii_lowercase())
             .map_or(0, |t| t.rows)
+    }
+
+    /// Checks the B-tree rules of a table and all of its indexes.
+    pub fn check_trees(&self, table: &str) -> Result<()> {
+        let pager = &mut *self.pager.borrow_mut();
+        self.tree(table)?.check(pager)?;
+        let key = table.to_ascii_lowercase();
+        for index in self.indexes.values().filter(|i| i.table == key) {
+            index.tree.check(pager)?;
+        }
+        Ok(())
     }
 
     /// Writes every changed page to the store.
@@ -198,12 +364,22 @@ impl Storage {
             .map(|t| t.tree)
             .ok_or_else(|| no_such_table(table))
     }
+
+    fn index_tree(&self, index: &str) -> Result<BTree<IndexKey>> {
+        self.indexes
+            .get(&index.to_ascii_lowercase())
+            .map(|i| i.tree)
+            .ok_or_else(|| no_such_index(index))
+    }
 }
 
 /// Reads a table's rows in rowid order. It holds no borrow of the storage
 /// between rows, so a plan can keep one per scan step.
 pub struct TableScan {
     table: String,
+    /// Where to start: the first rowid at or above this value (inclusive)
+    /// or above it.
+    from: Option<(Value, bool)>,
     cursor: Option<Cursor>,
 }
 
@@ -211,7 +387,19 @@ impl TableScan {
     pub fn new(table: &str) -> TableScan {
         TableScan {
             table: table.to_string(),
+            from: None,
             cursor: None,
+        }
+    }
+
+    /// A scan that starts at the first rowid `>= from` (inclusive) or
+    /// `> from`, found by walking down the tree rather than along every leaf
+    /// before it. `from` can be any value: rowid 3 is above 2.5 and below
+    /// any text.
+    pub fn from_value(table: &str, from: Option<(Value, bool)>) -> TableScan {
+        TableScan {
+            from,
+            ..TableScan::new(table)
         }
     }
 
@@ -223,7 +411,13 @@ impl TableScan {
     pub fn next_entry(&mut self, storage: &Storage) -> Result<Option<(i64, Row)>> {
         let pager = &mut *storage.pager.borrow_mut();
         if self.cursor.is_none() {
-            self.cursor = Some(Cursor::new(pager, storage.tree(&self.table)?)?);
+            let tree = storage.tree(&self.table)?;
+            let before = |&rowid: &i64| match &self.from {
+                None => false,
+                Some((from, true)) => Value::Integer(rowid).compare(from).is_lt(),
+                Some((from, false)) => Value::Integer(rowid).compare(from).is_le(),
+            };
+            self.cursor = Some(Cursor::seek(pager, tree, before)?);
         }
         let cursor = self.cursor.as_mut().expect("cursor was just set");
         match cursor.next(pager)? {
@@ -231,6 +425,52 @@ impl TableScan {
             None => Ok(None),
         }
     }
+}
+
+/// Reads an index's entries in order, starting at a lower bound.
+pub struct IndexCursor {
+    index: String,
+    /// Skip entries whose first values are below these, or equal to them
+    /// when the bound is exclusive.
+    from: Option<(Vec<Value>, bool)>,
+    cursor: Option<Cursor<IndexKey>>,
+}
+
+impl IndexCursor {
+    /// A cursor at the first entry whose leading values are `>= from`
+    /// (inclusive) or `> from`, or at the first entry when `from` is `None`.
+    pub fn new(index: &str, from: Option<(Vec<Value>, bool)>) -> IndexCursor {
+        IndexCursor {
+            index: index.to_string(),
+            from,
+            cursor: None,
+        }
+    }
+
+    pub fn next(&mut self, storage: &Storage) -> Result<Option<IndexKey>> {
+        let pager = &mut *storage.pager.borrow_mut();
+        if self.cursor.is_none() {
+            let tree = storage.index_tree(&self.index)?;
+            let from = &self.from;
+            let before = |key: &IndexKey| match from {
+                None => false,
+                Some((values, true)) => key.compare_prefix(values).is_lt(),
+                Some((values, false)) => key.compare_prefix(values).is_le(),
+            };
+            self.cursor = Some(Cursor::seek(pager, tree, before)?);
+        }
+        let cursor = self.cursor.as_mut().expect("cursor was just set");
+        Ok(cursor.next(pager)?.map(|(key, _)| key))
+    }
+}
+
+fn add_schema_row(pager: &mut Pager, schema: BTree, row: &[Value]) -> Result<i64> {
+    let rowid = match schema.last_key(pager)? {
+        None => 1,
+        Some(last) => last + 1,
+    };
+    schema.insert(pager, rowid, &record::encode(row))?;
+    Ok(rowid)
 }
 
 fn table_mut<'a>(tables: &'a mut HashMap<String, Table>, name: &str) -> Result<&'a mut Table> {
@@ -243,11 +483,6 @@ fn no_such_table(name: &str) -> Error {
     Error::Catalog(format!("no such table: {name}"))
 }
 
-/// One past the largest rowid in use, or 1 for an empty tree, as in SQLite.
-fn next_rowid(pager: &mut Pager, tree: BTree) -> Result<i64> {
-    match tree.last_key(pager)? {
-        None => Ok(1),
-        Some(i64::MAX) => Err(Error::Storage("no rowids left in this table".into())),
-        Some(last) => Ok(last + 1),
-    }
+fn no_such_index(name: &str) -> Error {
+    Error::Catalog(format!("no such index: {name}"))
 }

@@ -26,13 +26,15 @@ The first byte of every page (after the header) says what it holds:
 | Header (page 0) | The magic word `FISHBOWL`, the page size, and the start of the free list |
 | Leaf | Rows, sorted by rowid. See [B+trees](b-plus-trees.md) |
 | Interior | Signposts to other pages, also in [B+trees](b-plus-trees.md) |
+| Index leaf and index interior | The same, for an index's (value, rowid) entries. See [indexes](indexes.md) |
 | Overflow | The tail of a row too big for a leaf. See [row encoding](row-encoding.md) |
 | Free | Nothing. It waits on the free list to be reused |
 
-Page 1 is always the schema table: one row per table, with its name, its root
-page and the `CREATE TABLE` statement that made it. When Fishbowl opens a file,
-it reads that table and replays the statements to rebuild its list of tables.
-SQLite does the same with its `sqlite_schema` table.
+Page 1 is always the schema table: one row per table or index, with its kind,
+its name, its table, its root page and the `CREATE TABLE` or `CREATE INDEX`
+statement that made it. When Fishbowl opens a file, it reads that table and
+replays the statements to rebuild its list of tables. SQLite does the same with
+its `sqlite_schema` table, which has the same five columns.
 
 Here are the first bytes of a real leaf page after
 `INSERT INTO fish VALUES (1, 'goldie'), (2, 'nemo')`:

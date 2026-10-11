@@ -4,6 +4,8 @@ import type { PlanProfile } from "../engine";
 // Plain-English notes shown for the selected step.
 const OPERATORS: Record<string, string> = {
   SeqScan: "Reads every row of the table, one at a time, in storage order.",
+  IndexScan:
+    "Walks down an index's B-tree to the first matching entry, reads entries in order until the last match, and fetches each row by its rowid. Rows it never reaches are never read.",
   Filter: "Passes on only the rows where the condition is true. NULL counts as not true.",
   Project: "Computes the output columns from each row it receives.",
   OneRow: "Produces one empty row, so a SELECT without FROM has something to compute on.",

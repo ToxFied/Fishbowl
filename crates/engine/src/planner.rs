@@ -4,10 +4,13 @@
 //! "column 0 > 1", checked against the catalog. Anything Fishbowl does not
 //! implement yet is rejected here with [`Error::Unsupported`], never ignored.
 
+mod schema;
+
 use std::cell::RefCell;
 
 use sqlparser::ast;
 
+use crate::access;
 use crate::catalog::{Catalog, Column, TableSchema, View};
 use crate::error::{Error, Result, unsupported};
 use crate::expr::{
@@ -47,6 +50,17 @@ pub fn plan_statement(catalog: &Catalog, stmt: &ast::Statement) -> Result<Plan> 
             temporary: false,
             ..
         } => plan_drop_table(catalog, *if_exists, names),
+        ast::Statement::CreateIndex(create) => schema::plan_create_index(catalog, create),
+        ast::Statement::Drop {
+            object_type: ast::ObjectType::Index,
+            if_exists,
+            names,
+            cascade: false,
+            restrict: false,
+            purge: false,
+            temporary: false,
+            table: None,
+        } => schema::plan_drop_index(*if_exists, names),
         other => unsupported(statement_kind(other)),
     }
 }
@@ -55,14 +69,15 @@ fn plan_create_table(create: &ast::CreateTable) -> Result<Plan> {
     if create.query.is_some() {
         return unsupported("CREATE TABLE ... AS SELECT");
     }
-    if !create.constraints.is_empty() {
-        return unsupported("table constraints");
+    if create.without_rowid {
+        return unsupported("WITHOUT ROWID");
     }
     if create.columns.is_empty() {
         return Err(Error::Parse("a table needs at least one column".into()));
     }
     let name = object_name(&create.name)?;
     let mut columns: Vec<Column> = Vec::new();
+    let mut keys = schema::Keys::default();
     for def in &create.columns {
         let declared_type = match def.data_type {
             ast::DataType::Unspecified => String::new(),
@@ -73,7 +88,7 @@ fn plan_create_table(create: &ast::CreateTable) -> Result<Plan> {
             match option.option {
                 ast::ColumnOption::NotNull => not_null = true,
                 ast::ColumnOption::Null => {}
-                ref other => return unsupported(format!("column constraint {other}")),
+                ref other => keys.column_option(columns.len(), &def.name.value, other)?,
             }
         }
         if columns
@@ -90,10 +105,17 @@ fn plan_create_table(create: &ast::CreateTable) -> Result<Plan> {
             affinity: Affinity::from_declared_type(&declared_type),
             declared_type,
             not_null,
+            primary_key: false,
         });
     }
+    let (rowid_alias, indexes) = keys.finish(&name, &mut columns, &create.constraints)?;
     Ok(Plan::CreateTable {
-        schema: TableSchema { name, columns },
+        schema: TableSchema {
+            name,
+            columns,
+            rowid_alias,
+            indexes,
+        },
         if_not_exists: create.if_not_exists,
     })
 }
@@ -200,7 +222,6 @@ fn plan_create_view(create: &ast::CreateView) -> Result<Plan> {
         columns.push(column.name.value.clone());
     }
     // Like SQLite, the SELECT is checked when a query uses the view, not now.
-    // A TEMP view behaves like any other: Fishbowl does not save views yet.
     Ok(Plan::CreateView {
         view: View {
             name: object_name(&create.name)?,
@@ -208,6 +229,7 @@ fn plan_create_view(create: &ast::CreateView) -> Result<Plan> {
             query: create.query.clone(),
         },
         if_not_exists: create.if_not_exists,
+        temporary: create.temporary,
     })
 }
 
@@ -265,9 +287,10 @@ fn dml_target<'a>(
 }
 
 fn plan_insert(catalog: &Catalog, insert: &ast::Insert) -> Result<Plan> {
-    if insert.or.is_some() || insert.on.is_some() || insert.returning.is_some() {
+    if insert.ignore || insert.on.is_some() || insert.returning.is_some() {
         return unsupported("INSERT OR / ON CONFLICT / RETURNING");
     }
+    let on_conflict = schema::on_conflict(insert.or);
     let ast::TableObject::TableName(table_name) = &insert.table else {
         return unsupported("INSERT INTO a table function");
     };
@@ -290,7 +313,20 @@ fn plan_insert(catalog: &Catalog, insert: &ast::Insert) -> Result<Plan> {
         return unsupported("INSERT without VALUES");
     };
     let ast::SetExpr::Values(values) = source.body.as_ref() else {
-        return unsupported("INSERT ... SELECT");
+        let query = plan_query(&Planner::new(catalog), source, None)?;
+        if query.columns.len() != targets.len() {
+            return Err(Error::Catalog(format!(
+                "{} values for {} columns",
+                query.columns.len(),
+                targets.len()
+            )));
+        }
+        return Ok(Plan::InsertSelect {
+            table: schema.name.clone(),
+            targets,
+            query,
+            on_conflict,
+        });
     };
     // VALUES rows are constants: there is no table in scope to reference.
     let scope = Scope::new(None);
@@ -315,6 +351,7 @@ fn plan_insert(catalog: &Catalog, insert: &ast::Insert) -> Result<Plan> {
         table: schema.name.clone(),
         targets,
         rows,
+        on_conflict,
     })
 }
 
@@ -385,7 +422,15 @@ fn plan_select(
         _ => return unsupported("GROUP BY ALL or GROUP BY modifiers"),
     };
 
-    let (scope, from) = plan_from(cx, &select.from, outer)?;
+    let (mut scope, mut from) = plan_from(cx, &select.from, outer)?;
+    if let Some(order) = join_order(cx, &scope, &from, select)? {
+        scope.reorder(&order);
+        let mut slots: Vec<Option<FromItem>> = from.into_iter().map(Some).collect();
+        from = order
+            .iter()
+            .map(|&k| slots[k].take().expect("each table once"))
+            .collect();
+    }
     let items = select_items(&scope, &select.projection)?;
     let mut binder = Binder {
         scope: &scope,
@@ -707,20 +752,26 @@ fn select_is_distinct(select: &ast::Select) -> Result<bool> {
     }
 }
 
-/// One table, view or subquery in FROM, planned, and how it joins the ones
-/// before it.
+/// One table, view or subquery in FROM, and how it joins the ones before it.
 struct FromItem<'q> {
-    node: PlanNode,
+    rows: Rows<'q>,
     name: String,
     kind: JoinKind,
     /// The ON condition, bound once every table in FROM is in scope.
     on: Option<&'q ast::Expr>,
 }
 
+/// Where a FROM item's rows come from. A table is scanned once the planner
+/// knows which conditions apply to it, so the scan can use an index.
+enum Rows<'q> {
+    Table(&'q TableSchema),
+    Query(PlanNode),
+}
+
 /// Plans each table in FROM and puts their columns in one scope, in order.
 /// A row of the join is a row of each table, one after the other.
 fn plan_from<'q, 's>(
-    cx: &Planner,
+    cx: &Planner<'q>,
     from: &'q [ast::TableWithJoins],
     outer: Option<&'s Scope<'s>>,
 ) -> Result<(Scope<'s>, Vec<FromItem<'q>>)> {
@@ -736,7 +787,7 @@ fn plan_from<'q, 's>(
 /// Adds `a JOIN b ON ... JOIN c ...` to FROM, joined to what is there with
 /// `kind` and `on`.
 fn add_joins<'q>(
-    cx: &Planner,
+    cx: &Planner<'q>,
     table: &'q ast::TableWithJoins,
     kind: JoinKind,
     on: Option<&'q ast::Expr>,
@@ -775,7 +826,7 @@ fn join_kind(join: &ast::Join) -> Result<(JoinKind, Option<&ast::Expr>)> {
 /// table by table, where that keeps its meaning: first in FROM, after a
 /// comma, or when every join in it is an inner join.
 fn add_relation<'q>(
-    cx: &Planner,
+    cx: &Planner<'q>,
     factor: &'q ast::TableFactor,
     kind: JoinKind,
     on: Option<&'q ast::Expr>,
@@ -797,9 +848,9 @@ fn add_relation<'q>(
         }
         return add_joins(cx, table_with_joins, kind, on, scope, items);
     }
-    let (node, name) = plan_table(cx, factor, scope)?;
+    let (rows, name) = plan_table(cx, factor, scope)?;
     items.push(FromItem {
-        node,
+        rows,
         name,
         kind,
         on,
@@ -808,12 +859,12 @@ fn add_relation<'q>(
 }
 
 /// Plans one table, view or subquery in FROM and adds its columns to `scope`.
-/// Returns the plan and the name it goes by.
-fn plan_table(
-    cx: &Planner,
+/// Returns where its rows come from and the name it goes by.
+fn plan_table<'q>(
+    cx: &Planner<'q>,
     factor: &ast::TableFactor,
     scope: &mut Scope,
-) -> Result<(PlanNode, String)> {
+) -> Result<(Rows<'q>, String)> {
     match factor {
         ast::TableFactor::Table {
             name,
@@ -827,7 +878,7 @@ fn plan_table(
             }
             let schema = cx.catalog.table(&name)?;
             let name = scope.add_table(schema, alias.as_ref());
-            Ok((scan(schema), name))
+            Ok((Rows::Table(schema), name))
         }
         ast::TableFactor::Derived {
             lateral: false,
@@ -848,19 +899,19 @@ fn plan_table(
                 input: Box::new(plan.root),
                 name: name.clone(),
             };
-            Ok((node, name))
+            Ok((Rows::Query(node), name))
         }
         _ => unsupported("subquery or table function in FROM"),
     }
 }
 
 /// A view in FROM is planned like a subquery, from its stored SELECT.
-fn plan_view(
+fn plan_view<'q>(
     cx: &Planner,
     view: &View,
     alias: Option<&ast::TableAlias>,
     scope: &mut Scope,
-) -> Result<(PlanNode, String)> {
+) -> Result<(Rows<'q>, String)> {
     if alias.is_some_and(|a| !a.columns.is_empty()) {
         return unsupported("column names after a view's alias");
     }
@@ -898,14 +949,22 @@ fn plan_view(
         input: Box::new(plan.root),
         name: name.clone(),
     };
-    Ok((node, name))
+    Ok((Rows::Query(node), name))
 }
 
-/// How the rows of a table are read.
-fn scan(schema: &TableSchema) -> PlanNode {
-    PlanNode::SeqScan {
-        table: schema.name.clone(),
-        reason: format!("{} has no index, so every row is read", schema.name),
+/// Reads a FROM item's rows and keeps those where `filters` hold. The
+/// filters read only this item, so for a table an index may narrow the scan
+/// (see [`access::use_index`]); the Filter above it still checks them all.
+fn scan(rows: Rows, filters: Vec<Expr>) -> PlanNode {
+    match rows {
+        Rows::Table(schema) => {
+            let seq_scan = PlanNode::SeqScan {
+                table: schema.name.clone(),
+                reason: format!("{} has no index, so every row is read", schema.name),
+            };
+            access::use_index(with_filter(seq_scan, filters), Some(schema))
+        }
+        Rows::Query(node) => with_filter(node, filters),
     }
 }
 
@@ -933,7 +992,7 @@ fn join_tree(
     }
     if from.len() == 1 {
         let first = from.into_iter().next().expect("checked above");
-        return Ok(with_filter(first.node, predicate.into_iter().collect()));
+        return Ok(scan(first.rows, predicate.into_iter().collect()));
     }
 
     // Where each table's columns end in a joined row.
@@ -1004,7 +1063,7 @@ fn join_tree(
         filters
             .iter_mut()
             .for_each(|e| e.shift_columns(tables[k].offset));
-        let node = with_filter(item.node, filters);
+        let node = scan(item.rows, filters);
         let joined = match root {
             None => node,
             Some(left) => PlanNode::NestedLoopJoin {
@@ -1016,7 +1075,8 @@ fn join_tree(
                 condition: and_all(std::mem::take(&mut on_join[k])),
                 right_width: tables[k].columns.len(),
                 reason: format!(
-                    "no index can find the matching rows of {}, so each left row is checked against all of them",
+                    "joins do not look up matching rows by index yet, so each left row is \
+                     checked against every row of {}",
                     item.name
                 ),
             },
@@ -1024,6 +1084,86 @@ fn join_tree(
         root = Some(with_filter(joined, std::mem::take(&mut after[k])));
     }
     Ok(root.expect("FROM has a first table"))
+}
+
+/// The order to join inner-joined tables in, when it differs from FROM's.
+///
+/// A nested loop does the least work when each table it adds is tied to the
+/// ones before it by a condition, so the loops never pair rows that nothing
+/// links. The rule is simple: start with the first table that has a
+/// condition of its own, like `a = 6`, then keep adding a table that a
+/// condition connects to the tables so far, one with its own condition
+/// first. With no such table, take the next in FROM order. The cost-based
+/// planner (M5) will weigh real costs instead.
+///
+/// LEFT JOINs keep FROM order: moving one changes which rows it pads.
+fn join_order(
+    cx: &Planner,
+    scope: &Scope,
+    from: &[FromItem],
+    select: &ast::Select,
+) -> Result<Option<Vec<usize>>> {
+    let n = from.len();
+    if n < 2 || from.iter().any(|item| item.kind == JoinKind::Left) {
+        return Ok(None);
+    }
+    // Which tables each condition reads, bound once to find out.
+    let items = select_items(scope, &select.projection)?;
+    let mut binder = Binder {
+        scope,
+        items: &items,
+        aggregates: Vec::new(),
+        cx: Some(cx),
+    };
+    let mut conditions = Vec::new();
+    for on in from.iter().filter_map(|item| item.on) {
+        conditions.extend(split_and(binder.bind(on, Ctx::ON)?));
+    }
+    if let Some(predicate) = &select.selection {
+        conditions.extend(split_and(binder.bind(predicate, Ctx::ROW)?));
+    }
+    let table_of = |column: usize| {
+        scope
+            .tables
+            .iter()
+            .position(|t| (t.offset..t.offset + t.columns.len()).contains(&column))
+    };
+    let reads: Vec<Vec<usize>> = conditions
+        .iter()
+        .filter(|c| !has_subquery(c))
+        .map(|c| {
+            let mut tables: Vec<usize> = columns_read(c).filter_map(table_of).collect();
+            tables.sort_unstable();
+            tables.dedup();
+            tables
+        })
+        .collect();
+    let has_own = |k: usize| reads.iter().any(|r| r.as_slice() == [k]);
+
+    let mut joined: Vec<usize> = Vec::new();
+    let mut left: Vec<usize> = (0..n).collect();
+    while !left.is_empty() {
+        let connected = |k: usize| {
+            reads.iter().any(|r| {
+                r.len() > 1 && r.contains(&k) && r.iter().all(|t| *t == k || joined.contains(t))
+            })
+        };
+        let pick = if joined.is_empty() {
+            left.iter().copied().find(|&k| has_own(k))
+        } else {
+            let tied: Vec<usize> = left.iter().copied().filter(|&k| connected(k)).collect();
+            tied.iter()
+                .copied()
+                .find(|&k| has_own(k))
+                .or(tied.first().copied())
+                .or_else(|| left.iter().copied().find(|&k| has_own(k)))
+        }
+        .unwrap_or(left[0]);
+        joined.push(pick);
+        left.retain(|&k| k != pick);
+    }
+    let in_from_order = joined.iter().enumerate().all(|(i, &k)| i == k);
+    Ok((!in_from_order).then_some(joined))
 }
 
 fn with_filter(input: PlanNode, conjuncts: Vec<Expr>) -> PlanNode {
@@ -1209,6 +1349,8 @@ struct ScopeTable {
     columns: Vec<(String, Affinity)>,
     /// Where its columns start in a joined row.
     offset: usize,
+    /// Its place in FROM, which `*` follows even if the join order differs.
+    position: usize,
 }
 
 impl ScopeTable {
@@ -1243,6 +1385,7 @@ impl<'a> Scope<'a> {
                 .map(|c| (c.name.clone(), c.affinity))
                 .collect(),
             offset: self.width(),
+            position: self.tables.len(),
         });
         name
     }
@@ -1271,7 +1414,19 @@ impl<'a> Scope<'a> {
             name,
             columns,
             offset: self.width(),
+            position: self.tables.len(),
         });
+    }
+
+    /// Puts the tables in join order: `order[i]` is the table that comes
+    /// i-th. Each table's columns move to where it now sits in a joined row.
+    fn reorder(&mut self, order: &[usize]) {
+        let mut slots: Vec<Option<ScopeTable>> = self.tables.drain(..).map(Some).collect();
+        for &k in order {
+            let mut table = slots[k].take().expect("each table once");
+            table.offset = self.width();
+            self.tables.push(table);
+        }
     }
 
     /// Finds a column among this query's own tables. `Ok(None)` means none
@@ -1315,7 +1470,9 @@ impl<'a> Scope<'a> {
             return Err(Error::Catalog("no tables specified".into()));
         }
         let mut matched = false;
-        for table in &self.tables {
+        let mut in_from_order: Vec<&ScopeTable> = self.tables.iter().collect();
+        in_from_order.sort_by_key(|t| t.position);
+        for table in in_from_order {
             if qualifier.is_some_and(|q| !table.matches(q)) {
                 continue;
             }

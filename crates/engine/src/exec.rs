@@ -17,6 +17,7 @@ use std::collections::{BTreeMap, BTreeSet};
 use std::ptr;
 use std::rc::Rc;
 
+use crate::access;
 use crate::error::{Error, Result, unsupported};
 use crate::expr::{Accumulator, AggregateCall, Env, Expr, RowKey, SubqueryKind};
 use crate::plan::{JoinKind, PlanNode, PlanProfile, SetOp, SortKey, Subquery};
@@ -73,6 +74,7 @@ enum State {
     Scan {
         scan: TableScan,
     },
+    IndexScan(access::Scan),
     OneRow {
         done: bool,
     },
@@ -109,6 +111,9 @@ impl State {
             PlanNode::SeqScan { table, .. } => State::Scan {
                 scan: TableScan::new(table),
             },
+            PlanNode::IndexScan { table, access, .. } => {
+                State::IndexScan(access::Scan::new(table, access))
+            }
             PlanNode::OneRow => State::OneRow { done: false },
             PlanNode::Filter { .. } | PlanNode::Project { .. } | PlanNode::SubqueryScan { .. } => {
                 State::None
@@ -199,6 +204,7 @@ impl<'p> Operator<'p> {
         let subqueries = &mut self.subqueries;
         match (self.node, &mut self.state) {
             (PlanNode::SeqScan { .. }, State::Scan { scan }) => scan.next(ctx.storage),
+            (PlanNode::IndexScan { .. }, State::IndexScan(scan)) => scan.next(ctx.storage),
             (PlanNode::OneRow, State::OneRow { done }) => {
                 let first = !*done;
                 *done = true;
@@ -509,9 +515,10 @@ fn evaluate(
 /// UNION, INTERSECT and EXCEPT: reads both inputs and returns the answer
 /// sorted, each row once.
 ///
-/// Rows like `1` and `1.0` are equal but print differently. SQLite keeps
-/// the one it saw last, because its temporary index overwrites an equal
-/// entry, except that INTERSECT keeps the left side's.
+/// Rows like `1` and `1.0` are equal but print differently. Which one
+/// SQLite returns follows from its temporary index: within one side the
+/// first of equal rows stays, and a UNION's right side overwrites an equal
+/// row from the left. INTERSECT and EXCEPT return the left side's rows.
 fn combine(
     op: SetOp,
     left: &mut Option<Box<Operator>>,
@@ -520,27 +527,23 @@ fn combine(
 ) -> Result<Vec<Row>> {
     let mut rows = BTreeSet::new();
     while let Some(row) = pull(left, ctx)? {
-        rows.replace(RowKey(row));
+        rows.insert(RowKey(row));
     }
-    let mut both = BTreeSet::new();
+    let mut other = BTreeSet::new();
     while let Some(row) = pull(right, ctx)? {
-        let key = RowKey(row);
-        match op {
-            SetOp::Union => {
+        other.insert(RowKey(row));
+    }
+    let rows: BTreeSet<RowKey> = match op {
+        SetOp::Union => {
+            for key in other {
                 rows.replace(key);
             }
-            SetOp::Intersect => {
-                if let Some(kept) = rows.get(&key) {
-                    both.insert(kept.clone());
-                }
-            }
-            SetOp::Except => {
-                rows.remove(&key);
-            }
-            SetOp::UnionAll => unreachable!("UNION ALL appends instead"),
+            rows
         }
-    }
-    let rows = if op == SetOp::Intersect { both } else { rows };
+        SetOp::Intersect => rows.into_iter().filter(|k| other.contains(k)).collect(),
+        SetOp::Except => rows.into_iter().filter(|k| !other.contains(k)).collect(),
+        SetOp::UnionAll => unreachable!("UNION ALL appends instead"),
+    };
     Ok(rows.into_iter().map(|key| key.0).collect())
 }
 

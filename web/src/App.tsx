@@ -6,7 +6,7 @@ import { SchemaList } from "./components/SchemaList";
 import { StatementLog } from "./components/StatementLog";
 import { createEngine, type Engine, type Entry, type TableInfo } from "./engine";
 
-const SEED = `CREATE TABLE fish (id INTEGER, name TEXT, species TEXT, weight REAL);
+const SEED = `CREATE TABLE fish (id INTEGER PRIMARY KEY, name TEXT, species TEXT, weight REAL);
 INSERT INTO fish VALUES
   (1, 'goldie', 'goldfish', 0.2),
   (2, 'bubbles', 'koi', 1.5),
@@ -15,10 +15,12 @@ INSERT INTO fish VALUES
   (5, 'wanda', 'goldfish', 0.3),
   (6, 'koko', 'koi', 2.4),
   (7, 'finn', 'betta', 0.1),
-  (8, 'pearl', 'koi', NULL);`;
+  (8, 'pearl', 'koi', NULL);
+CREATE INDEX fish_species ON fish (species);`;
 
 const EXAMPLES: Record<string, string> = {
   filter: "SELECT name, weight * 1000 AS grams\nFROM fish\nWHERE species = 'koi' AND weight > 1;",
+  lookup: "SELECT id, name\nFROM fish\nWHERE id BETWEEN 3 AND 5;",
   nulls: "SELECT name, weight\nFROM fish\nWHERE weight IS NULL OR weight < 0.25;",
   groups:
     "SELECT species, count(*), avg(weight)\nFROM fish\nGROUP BY species\nHAVING count(*) > 1\nORDER BY 2 DESC;",

@@ -50,9 +50,12 @@ pass rate is the project's headline claim.
 | `planner.rs` | Syntax tree to plan, name resolution, loud rejection of unsupported SQL |
 | `plan.rs` | Plan nodes and the profiled plan tree the UI draws |
 | `expr.rs` | Bound expressions and their evaluation (three-valued logic, arithmetic, subqueries through an `Env`) |
+| `planner/schema.rs` | `PRIMARY KEY` and `UNIQUE` in `CREATE TABLE`, `CREATE INDEX`, `DROP INDEX` |
+| `access.rs` | Access paths: when to use an index, and the IndexScan that reads one |
 | `exec.rs` | Iterator-model executor with per-step row counts and a row budget |
-| `storage/` | Page store (file or memory), pager and buffer pool, row encoding, B+tree tables, schema table |
-| `lib.rs` | `Database`: runs statements, makes INSERT all-or-nothing |
+| `write.rs` | Row writes: rowids, index maintenance, constraint checks, undo on failure |
+| `storage/` | Page store (file or memory), pager and buffer pool, row encoding, B+trees for tables and indexes, schema table |
+| `lib.rs` | `Database`: runs statements, `integrity_check` |
 
 ## Key design choices
 
@@ -65,6 +68,9 @@ pass rate is the project's headline claim.
 | Unsupported SQL is an error, never ignored | A database that silently skips `ORDER BY` returns wrong answers; an error only costs pass rate. |
 | One file, fixed 4 KiB pages (M3) | Matches the OS page size and SQLite's layout, and pages are easy to draw. |
 | B+tree tables keyed by rowid, separate index B-trees (M3, M4) | SQLite's proven layout, and it makes "scan the table or use the index" a real, visible choice. |
+| One B-tree implementation, generic over its key (M4) | Tables use the rowid, indexes use (values, rowid). Splits, merges and their property tests serve both. |
+| IndexScan keeps the Filter above it (M4) | The index only narrows rows down and the Filter decides them, so a loose bound costs speed, never correctness. |
+| Constraints checked row by row with an undo log (M4) | Matches SQLite's order of checks exactly, and a failed statement still leaves no trace. |
 | Write-ahead log for crash safety (M6) | Recovery is "replay committed frames", which is simple to reason about and to animate. |
 | Storage behind a page-store trait (M3) | A real file on native builds, memory in the browser, a fault-injecting store in crash tests. |
 | JSON across the WebAssembly boundary | A two-method API. A Rust test pins the shape that `web/src/engine.ts` relies on. |
@@ -86,7 +92,9 @@ Workspace, in-memory engine slice (CREATE TABLE, INSERT, SELECT with WHERE),
 CLI, WebAssembly build, UI with plan tree and step-through, sqllogictest harness
 with a pinned 29-file corpus. Baseline: **11.90%** of records.
 
-After M1 and M3: **31.06%**. After M2: **40.78%**.
+After M1 and M3: **31.06%**. After M4: **84.31%**. After M2 on top of M4:
+**99.89%**, with 4 wrong results left (the `1<<63` rows in
+`slt_lang_aggfunc.test`: `<<` is not supported, so those rows are missing).
 
 ### M1. Query breadth
 
@@ -107,7 +115,10 @@ Done: inner, cross and LEFT joins with conditions pushed down to the table
 they read; NestedLoopJoin and Materialize steps; scalar, `IN` and `EXISTS`
 subqueries, correlated ones included, drawn under the step that runs them;
 subqueries in FROM; compound SELECTs, left to right as in SQLite; `CREATE
-VIEW` and `DROP VIEW`.
+VIEW` and `DROP VIEW`, saved in the schema table (TEMP views are not). Each
+table in a join can use an index for its own conditions, and inner joins
+follow a simple order rule (start from a filtered table, then follow the
+conditions) until M5 brings costs.
 
 ### M3. Storage engine
 
@@ -127,10 +138,16 @@ Files: new `crates/engine/src/storage/` directory replacing `storage.rs`, the
 B-trees keyed by (value, rowid), index maintenance on every write, and an
 IndexScan plan node. Depends on M3.
 
+Done. Also shipped: `INTEGER PRIMARY KEY` as the rowid, `DROP INDEX`,
+`INSERT ... SELECT`, `INSERT OR REPLACE/IGNORE/FAIL/ABORT`, UPDATE and DELETE
+finding rows through an index, `Database::integrity_check`, and a differential
+test against the system `sqlite3`.
+
 ### M5. Cost-based planner
 
 Table statistics, a cost model, a choice between a full scan and each usable
-index, join ordering. The planner keeps the rejected plans and their costs so
+index, join ordering (replacing M2's connect-the-conditions rule), and index
+lookups inside a join. The planner keeps the rejected plans and their costs so
 the UI can show the chosen plan beside the alternatives. Depends on M2 and M4.
 
 ### M6. Transactions and crash recovery
@@ -182,16 +199,18 @@ Shared seams to coordinate:
 
 ## Known gaps
 
-- `PRIMARY KEY` and `UNIQUE` are rejected, not ignored, until M4 can enforce them.
+- An IndexScan uses only an index's first column, one index per query, and
+  never for `OR` or `ORDER BY`. Choosing better is M5's cost model.
+- Index entries are limited to 512 bytes, so a long text value in an indexed
+  column is rejected with "not supported yet".
+- `AUTOINCREMENT`, `WITHOUT ROWID`, partial and expression indexes, `UPDATE OR`
+  and `ON CONFLICT` clauses are rejected.
 - Changes are written to disk at the end of each statement, but a crash mid-write
   can leave a mix of old and new pages until the write-ahead log lands (M6).
 - The browser build is about 700 KB gzipped, mostly `sqlparser`. `wasm-opt` and
   trimming dialects are possible later.
-- Views live in the catalog only: they are not saved to the database file, so
-  a reopened file has no views. Saving them needs a schema-table entry (M4's
-  files).
-- Tables join in FROM order. Two 8-table joins in `select4.test` exceed the row
-  budget for that reason; join ordering is M5.
-- `INSERT ... SELECT`, RIGHT and FULL joins, `USING`, `NATURAL`, subqueries in
-  `UPDATE`/`DELETE`, and an aggregate of only an enclosing query's columns are
-  rejected as "not supported yet".
+- A join reads its right side in full for every left row (from memory, after
+  Materialize). It does not look matching rows up by index yet; that is M5.
+- RIGHT and FULL joins, `USING`, `NATURAL`, subqueries in `UPDATE`/`DELETE`,
+  and an aggregate of only an enclosing query's columns are rejected as "not
+  supported yet".

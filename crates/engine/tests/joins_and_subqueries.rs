@@ -291,8 +291,16 @@ fn compound_selects_work_left_to_right() {
         rows(&mut db, "SELECT 3 UNION ALL SELECT 1 EXCEPT SELECT 2"),
         ["1", "3"]
     );
-    // Equal rows that print differently: UNION keeps the last, INTERSECT the left.
+    // Equal rows that print differently: within a side the first stays, a
+    // UNION's right side replaces the left's, and INTERSECT keeps the left's.
     assert_eq!(rows(&mut db, "SELECT 1 UNION SELECT 1.0"), ["1.0"]);
+    assert_eq!(
+        rows(
+            &mut db,
+            "SELECT 1 UNION ALL SELECT 1.0 UNION SELECT 7 WHERE 0"
+        ),
+        ["1"]
+    );
     assert_eq!(rows(&mut db, "SELECT 1 INTERSECT SELECT 1.0"), ["1"]);
 }
 
@@ -418,4 +426,54 @@ fn unsupported_joins_and_subqueries_are_rejected_not_guessed() {
             "{sql} should be unsupported"
         );
     }
+}
+
+#[test]
+fn views_survive_reopening_the_file_but_temp_views_do_not() {
+    let path = std::env::temp_dir().join(format!("fishbowl-views-{}.db", std::process::id()));
+    let _ = std::fs::remove_file(&path);
+    {
+        let mut db = Database::open(&path).unwrap();
+        for sql in [
+            "CREATE TABLE t(a INTEGER, b TEXT)",
+            "INSERT INTO t VALUES (1, 'x'), (2, 'y')",
+            "CREATE VIEW kept(p, q) AS SELECT a, b FROM t WHERE a > 1",
+            "CREATE TEMP VIEW scratch AS SELECT a FROM t",
+            "CREATE VIEW gone AS SELECT 1",
+            "DROP VIEW gone",
+        ] {
+            db.execute(sql).unwrap();
+        }
+    }
+    let mut db = Database::open(&path).unwrap();
+    assert_eq!(rows(&mut db, "SELECT q FROM kept"), ["y"]);
+    assert_eq!(
+        error(&mut db, "SELECT * FROM scratch"),
+        "no such table: scratch"
+    );
+    assert_eq!(error(&mut db, "SELECT * FROM gone"), "no such table: gone");
+    drop(db);
+    std::fs::remove_file(&path).unwrap();
+}
+
+#[test]
+fn inner_joins_start_from_a_filtered_table_and_follow_conditions() {
+    let mut db = setup();
+    let sql = "SELECT * FROM t3, t2, t1 WHERE t2.a = t1.a AND t1.b = 'x' ORDER BY 1, 4";
+    let result = query(&mut db, sql);
+    // `*` keeps FROM order even though t1 is joined first.
+    assert_eq!(result.columns, ["x", "y", "a", "c", "a", "b"]);
+    let scans: Vec<String> = plan_lines(&result.plan)
+        .into_iter()
+        .filter(|line| line.contains("SeqScan"))
+        .map(|line| line.trim().to_string())
+        .collect();
+    assert_eq!(
+        scans,
+        ["SeqScan t1 [3]", "SeqScan t2 [3]", "SeqScan t3 [2]"]
+    );
+    assert_eq!(
+        rows(&mut db, sql),
+        ["1|1|3|q|3|x", "1|1|3|r|3|x", "2|2|3|q|3|x", "2|2|3|r|3|x"]
+    );
 }

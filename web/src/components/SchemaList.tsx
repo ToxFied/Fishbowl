@@ -13,9 +13,19 @@ export function SchemaList({ tables }: { tables: TableInfo[] }) {
               <li key={column.name}>
                 {column.name}{" "}
                 <span className="text-white/34">{column.declared_type || "(no type)"}</span>
+                {column.primary_key && <span className="text-white/34"> PRIMARY KEY</span>}
                 {column.not_null && <span className="text-white/34"> NOT NULL</span>}
               </li>
             ))}
+            {table.indexes.map((index) => {
+              const columns = index.columns.map((c) => (c.descending ? `${c.name} DESC` : c.name));
+              return (
+                <li key={`index ${index.name}`}>
+                  <span className="text-white/34">{index.unique ? "unique index " : "index "}</span>
+                  {index.name} <span className="text-white/34">({columns.join(", ")})</span>
+                </li>
+              );
+            })}
           </ul>
         </li>
       ))}

@@ -1,0 +1,7 @@
+# Seeds for failure cases proptest has generated in the past. It is
+# automatically read and these particular cases re-run before any
+# novel cases are generated.
+#
+# It is recommended to check this file in to source control so that
+# everyone who runs the test benefits from these saved cases.
+cc a6e1fd10c67c1e638a26b3169f2dbac730e5443c97e8a2ab4948dccd540b6ca0 # shrinks to schema = "CREATE TABLE t(id INTEGER, u INTEGER, v, w TEXT, PRIMARY KEY (w, u))", body = ["INSERT INTO t VALUES (0,NULL,2,NULL)", "INSERT INTO t VALUES (0,NULL,2.0,NULL)", "SELECT v FROM t WHERE id < 1 UNION SELECT id FROM t WHERE id = NULL"]

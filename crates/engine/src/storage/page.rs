@@ -11,21 +11,25 @@
 //!   12..16  first free page (u32, 0 = none)
 //!   16..20  free page count (u32)
 //!
-//! Leaf page: rows, in rowid order
-//!   0       kind = 1
+//! Leaf page: rows, in key order
+//!   0       kind = 1 (table) or 5 (index)
 //!   1..3    cell count (u16)
 //!   3..7    next leaf to the right (u32, 0 = this is the last leaf)
 //!   7..     cells, back to back:
-//!           rowid (i64) | payload length (u32) | payload
+//!           key | payload length (u32) | payload
 //!           A payload over MAX_INLINE_PAYLOAD bytes is replaced by the id of
 //!           its first overflow page (u32).
 //!
 //! Interior page: signposts to child pages
-//!   0       kind = 2
+//!   0       kind = 2 (table) or 6 (index)
 //!   1..3    key count (u16)
-//!   3..7    rightmost child (u32): rowids above the last key
+//!   3..7    rightmost child (u32): keys above the last key
 //!   7..     cells, back to back:
-//!           child (u32) | key (i64): every rowid in child is <= key
+//!           child (u32) | key: every key in child is <= key
+//!
+//! A table's key is its rowid (i64). An index's key is the indexed values and
+//! the rowid, as a length (u16) and a row record, and it has no payload. See
+//! `index.rs`.
 //!
 //! Overflow page: the rest of a payload too big for a leaf
 //!   0       kind = 3
@@ -37,6 +41,8 @@
 //!   0       kind = 4
 //!   1..5    next free page (u32, 0 = last)
 //! ```
+
+use std::fmt;
 
 use crate::error::{Error, Result};
 
@@ -53,11 +59,15 @@ const LEAF: u8 = 1;
 const INTERIOR: u8 = 2;
 const OVERFLOW: u8 = 3;
 const FREE: u8 = 4;
+pub const INDEX_LEAF: u8 = 5;
+pub const INDEX_INTERIOR: u8 = 6;
 
 /// Every B-tree and overflow page has 7 bytes of header before its contents.
 pub const NODE_HEADER: usize = 7;
-const LEAF_CELL_HEADER: usize = 8 + 4;
-const INTERIOR_CELL: usize = 4 + 8;
+/// The payload length after each leaf key.
+const PAYLOAD_LEN: usize = 4;
+/// The child page number before each interior key.
+const CHILD: usize = 4;
 
 /// Payloads up to this size live in the leaf. The limit keeps at least four
 /// cells per leaf, which guarantees that a split leaves both halves fitting.
@@ -101,24 +111,64 @@ impl Header {
     }
 }
 
-/// A B+tree page, decoded. The tree code edits these and writes them back.
-#[derive(Debug, Clone, PartialEq)]
-pub enum Node {
-    Leaf(Leaf),
-    Interior(Interior),
+/// What a B+tree is sorted by. Tables use the rowid; indexes use
+/// [`IndexKey`](super::index::IndexKey).
+pub trait Key: Ord + Clone + fmt::Debug {
+    /// The page kinds this tree uses, so a table page is never read as an
+    /// index page or the other way round.
+    const LEAF: u8;
+    const INTERIOR: u8;
+    /// Bytes the key takes on a page.
+    fn encoded_size(&self) -> usize;
+    fn write(&self, w: &mut Writer);
+    fn read(r: &mut Reader) -> Result<Self>;
 }
 
-#[derive(Debug, Clone, PartialEq, Default)]
-pub struct Leaf {
-    pub cells: Vec<Cell>,
-    /// The leaf holding the next rowids, so a scan can walk leaf to leaf.
+impl Key for i64 {
+    const LEAF: u8 = LEAF;
+    const INTERIOR: u8 = INTERIOR;
+
+    fn encoded_size(&self) -> usize {
+        8
+    }
+
+    fn write(&self, w: &mut Writer) {
+        w.i64(*self);
+    }
+
+    fn read(r: &mut Reader) -> Result<Self> {
+        r.i64()
+    }
+}
+
+/// A B+tree page, decoded. The tree code edits these and writes them back.
+#[derive(Debug, Clone, PartialEq)]
+pub enum Node<K = i64> {
+    Leaf(Leaf<K>),
+    Interior(Interior<K>),
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct Leaf<K = i64> {
+    pub cells: Vec<Cell<K>>,
+    /// The leaf holding the next keys, so a scan can walk leaf to leaf.
     pub next: Option<PageId>,
 }
 
-/// One row in a leaf: its rowid and its encoded bytes.
+impl<K> Default for Leaf<K> {
+    fn default() -> Self {
+        Leaf {
+            cells: Vec::new(),
+            next: None,
+        }
+    }
+}
+
+/// One entry in a leaf: its key and its encoded bytes. In a table the key
+/// is the rowid and the payload is the row.
 #[derive(Debug, Clone, PartialEq)]
-pub struct Cell {
-    pub rowid: i64,
+pub struct Cell<K = i64> {
+    pub key: K,
     pub payload: Payload,
 }
 
@@ -132,18 +182,19 @@ pub enum Payload {
     },
 }
 
-/// `children[i]` holds rowids `<= keys[i]` (and above `keys[i - 1]`). The last
+/// `children[i]` holds keys `<= keys[i]` (and above `keys[i - 1]`). The last
 /// child holds everything above the last key, so there is one more child than
 /// there are keys.
 #[derive(Debug, Clone, PartialEq)]
-pub struct Interior {
-    pub keys: Vec<i64>,
+pub struct Interior<K = i64> {
+    pub keys: Vec<K>,
     pub children: Vec<PageId>,
 }
 
-impl Cell {
+impl<K: Key> Cell<K> {
     pub fn size(&self) -> usize {
-        LEAF_CELL_HEADER
+        self.key.encoded_size()
+            + PAYLOAD_LEN
             + match &self.payload {
                 Payload::Inline(bytes) => bytes.len(),
                 Payload::Overflow { .. } => 4,
@@ -151,27 +202,35 @@ impl Cell {
     }
 }
 
-impl Leaf {
+impl<K: Key> Leaf<K> {
     pub fn size(&self) -> usize {
         NODE_HEADER + self.cells.iter().map(Cell::size).sum::<usize>()
     }
 }
 
-impl Interior {
+impl<K: Key> Interior<K> {
     pub fn size(&self) -> usize {
-        NODE_HEADER + self.keys.len() * INTERIOR_CELL
+        NODE_HEADER + self.keys.iter().map(Interior::cell_size).sum::<usize>()
     }
 
-    /// Keys an interior page can hold.
-    pub const CAPACITY: usize = (PAGE_SIZE - NODE_HEADER) / INTERIOR_CELL;
+    /// Bytes one signpost takes: a child page number and a key.
+    pub fn cell_size(key: &K) -> usize {
+        CHILD + key.encoded_size()
+    }
 
-    /// Which child to follow for `rowid`.
-    pub fn child_index(&self, rowid: i64) -> usize {
-        self.keys.partition_point(|&key| key < rowid)
+    /// Which child to follow for `key`.
+    pub fn child_index(&self, key: &K) -> usize {
+        self.child_index_by(|k| k < key)
+    }
+
+    /// Which child holds the first key for which `before` is false. Keys
+    /// are sorted, so `before` is true for a run of keys and then false.
+    pub fn child_index_by(&self, before: impl Fn(&K) -> bool) -> usize {
+        self.keys.partition_point(before)
     }
 }
 
-impl Node {
+impl<K: Key> Node<K> {
     pub fn size(&self) -> usize {
         match self {
             Node::Leaf(leaf) => leaf.size(),
@@ -185,11 +244,11 @@ impl Node {
         let mut w = Writer::new(page);
         match self {
             Node::Leaf(leaf) => {
-                w.u8(LEAF);
+                w.u8(K::LEAF);
                 w.u16(leaf.cells.len() as u16);
                 w.u32(leaf.next.unwrap_or(0));
                 for cell in &leaf.cells {
-                    w.i64(cell.rowid);
+                    cell.key.write(&mut w);
                     match &cell.payload {
                         Payload::Inline(bytes) => {
                             w.u32(bytes.len() as u32);
@@ -203,27 +262,27 @@ impl Node {
                 }
             }
             Node::Interior(interior) => {
-                w.u8(INTERIOR);
+                w.u8(K::INTERIOR);
                 w.u16(interior.keys.len() as u16);
                 w.u32(*interior.children.last().expect("interior has a child"));
                 for (child, key) in interior.children.iter().zip(&interior.keys) {
                     w.u32(*child);
-                    w.i64(*key);
+                    key.write(&mut w);
                 }
             }
         }
     }
 
-    pub fn decode(id: PageId, page: &Page) -> Result<Node> {
+    pub fn decode(id: PageId, page: &Page) -> Result<Node<K>> {
         let mut r = Reader::new(page, id);
         let kind = r.u8()?;
         let count = r.u16()? as usize;
         let pointer = r.u32()?;
         match kind {
-            LEAF => {
+            _ if kind == K::LEAF => {
                 let mut cells = Vec::with_capacity(count);
                 for _ in 0..count {
-                    let rowid = r.i64()?;
+                    let key = K::read(&mut r)?;
                     let len = r.u32()?;
                     let payload = if len as usize <= MAX_INLINE_PAYLOAD {
                         Payload::Inline(r.bytes(len as usize)?.to_vec())
@@ -233,24 +292,28 @@ impl Node {
                             first: r.u32()?,
                         }
                     };
-                    cells.push(Cell { rowid, payload });
+                    cells.push(Cell { key, payload });
                 }
                 Ok(Node::Leaf(Leaf {
                     cells,
                     next: (pointer != 0).then_some(pointer),
                 }))
             }
-            INTERIOR => {
+            _ if kind == K::INTERIOR => {
                 let mut keys = Vec::with_capacity(count);
                 let mut children = Vec::with_capacity(count + 1);
                 for _ in 0..count {
                     children.push(r.u32()?);
-                    keys.push(r.i64()?);
+                    keys.push(K::read(&mut r)?);
                 }
                 children.push(pointer);
                 Ok(Node::Interior(Interior { keys, children }))
             }
-            other => Err(r.corrupt(&format!("expected a B-tree page, found kind {other}"))),
+            other => Err(r.corrupt(&format!(
+                "expected a B-tree page of kind {} or {}, found kind {other}",
+                K::LEAF,
+                K::INTERIOR
+            ))),
         }
     }
 }
@@ -293,7 +356,8 @@ pub fn decode_free(id: PageId, page: &Page) -> Result<Option<PageId>> {
     Ok((next != 0).then_some(next))
 }
 
-struct Writer<'a> {
+/// Writes fields into a page one after another.
+pub struct Writer<'a> {
     page: &'a mut Page,
     pos: usize,
 }
@@ -303,7 +367,7 @@ impl<'a> Writer<'a> {
         Writer { page, pos: 0 }
     }
 
-    fn bytes(&mut self, bytes: &[u8]) {
+    pub fn bytes(&mut self, bytes: &[u8]) {
         self.page[self.pos..self.pos + bytes.len()].copy_from_slice(bytes);
         self.pos += bytes.len();
     }
@@ -312,7 +376,7 @@ impl<'a> Writer<'a> {
         self.bytes(&[v]);
     }
 
-    fn u16(&mut self, v: u16) {
+    pub fn u16(&mut self, v: u16) {
         self.bytes(&v.to_be_bytes());
     }
 
@@ -320,14 +384,14 @@ impl<'a> Writer<'a> {
         self.bytes(&v.to_be_bytes());
     }
 
-    fn i64(&mut self, v: i64) {
+    pub fn i64(&mut self, v: i64) {
         self.bytes(&v.to_be_bytes());
     }
 }
 
 /// Reads fields in order, failing cleanly instead of panicking if a damaged
 /// page claims more bytes than it has.
-struct Reader<'a> {
+pub struct Reader<'a> {
     page: &'a Page,
     pos: usize,
     id: PageId,
@@ -338,11 +402,11 @@ impl<'a> Reader<'a> {
         Reader { page, pos: 0, id }
     }
 
-    fn corrupt(&self, what: &str) -> Error {
+    pub fn corrupt(&self, what: &str) -> Error {
         Error::Storage(format!("page {} is corrupt: {what}", self.id))
     }
 
-    fn bytes(&mut self, len: usize) -> Result<&'a [u8]> {
+    pub fn bytes(&mut self, len: usize) -> Result<&'a [u8]> {
         let end = self.pos + len;
         let bytes = self
             .page
@@ -360,7 +424,7 @@ impl<'a> Reader<'a> {
         Ok(self.array::<1>()?[0])
     }
 
-    fn u16(&mut self) -> Result<u16> {
+    pub fn u16(&mut self) -> Result<u16> {
         self.array().map(u16::from_be_bytes)
     }
 
@@ -368,7 +432,7 @@ impl<'a> Reader<'a> {
         self.array().map(u32::from_be_bytes)
     }
 
-    fn i64(&mut self) -> Result<i64> {
+    pub fn i64(&mut self) -> Result<i64> {
         self.array().map(i64::from_be_bytes)
     }
 }
@@ -377,7 +441,7 @@ impl<'a> Reader<'a> {
 mod tests {
     use super::*;
 
-    fn round_trip(node: &Node) -> Node {
+    fn round_trip<K: Key>(node: &Node<K>) -> Node<K> {
         let mut page = [0; PAGE_SIZE];
         node.encode(&mut page);
         Node::decode(9, &page).unwrap()
@@ -387,7 +451,7 @@ mod tests {
     fn leaf_bytes_follow_the_documented_layout() {
         let leaf = Node::Leaf(Leaf {
             cells: vec![Cell {
-                rowid: 5,
+                key: 5,
                 payload: Payload::Inline(vec![0xAA, 0xBB]),
             }],
             next: Some(3),
@@ -414,7 +478,7 @@ mod tests {
         assert_eq!(round_trip(&interior), interior);
         let overflowing = Node::Leaf(Leaf {
             cells: vec![Cell {
-                rowid: 1,
+                key: 1,
                 payload: Payload::Overflow {
                     len: 5000,
                     first: 7,
@@ -432,8 +496,11 @@ mod tests {
         page[1..3].copy_from_slice(&500u16.to_be_bytes());
         page[7 + 8..7 + 12].copy_from_slice(&900u32.to_be_bytes());
         // 500 cells of 900 bytes cannot fit in one page.
-        assert!(matches!(Node::decode(1, &page), Err(Error::Storage(_))));
-        assert!(Node::decode(1, &[0; PAGE_SIZE]).is_err());
+        assert!(matches!(
+            Node::<i64>::decode(1, &page),
+            Err(Error::Storage(_))
+        ));
+        assert!(Node::<i64>::decode(1, &[0; PAGE_SIZE]).is_err());
         assert!(Header::decode(&[0; PAGE_SIZE]).is_err());
     }
 }

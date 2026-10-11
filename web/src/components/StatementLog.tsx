@@ -18,6 +18,10 @@ function summary(entry: Entry): string {
       return `created view ${result.view}`;
     case "drop_view":
       return `dropped view ${result.view}`;
+    case "create_index":
+      return `created ${result.index}`;
+    case "drop_index":
+      return `dropped ${result.index}`;
     case "query":
       return `${result.rows.length} ${result.rows.length === 1 ? "row" : "rows"}`;
   }

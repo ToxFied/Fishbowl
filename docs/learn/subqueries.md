@@ -56,7 +56,8 @@ queries out" reads the second from the top.
 the SELECT, and every query that uses `v` plans that SELECT again in its
 place. The plan shows it as a SubqueryScan step with the view's plan beneath.
 Like SQLite, Fishbowl checks a view's SELECT when a query uses it, not when it
-is created. Views are not saved to the database file yet.
+is created. The schema table keeps each view's `CREATE VIEW` statement, so a
+view comes back when a database file is reopened; a TEMP view does not.
 
 Code: `crates/engine/src/planner.rs` (`Binder::identifier`,
 `Binder::subquery`, `plan_view`), `crates/engine/src/exec.rs` (`SubqueryOp`).

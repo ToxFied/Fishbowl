@@ -26,7 +26,7 @@ impl fmt::Display for Error {
             Error::Parse(msg) => write!(f, "parse error: {msg}"),
             Error::Unsupported(what) => write!(f, "not supported yet: {what}"),
             Error::Catalog(msg) => f.write_str(msg),
-            Error::Constraint(msg) => write!(f, "constraint failed: {msg}"),
+            Error::Constraint(msg) => f.write_str(msg),
             Error::Runtime(msg) => f.write_str(msg),
             Error::BudgetExceeded(limit) => {
                 write!(f, "statement exceeded the budget of {limit} rows")
