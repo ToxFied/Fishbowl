@@ -96,6 +96,7 @@ cargo run --release -p fishbowl-slt
 | `crates/slt` | sqllogictest runner and report |
 | `crates/wasm` | WebAssembly bindings |
 | `web/` | React, Vite and Tailwind UI. A static site with no server |
+| `guide/` | Private course on how Fishbowl works, a Lakebed app. See [its README](guide/README.md) |
 | `sqllogictest/` | Corpus manifest and generated results |
 | `docs/` | [Plan and roadmap](docs/PLAN.md), [harness notes](docs/sqllogictest.md), [learning notes](docs/learn/README.md) |
 | `brand/` | Logo, colors and type. See [BRAND.md](brand/BRAND.md) |
