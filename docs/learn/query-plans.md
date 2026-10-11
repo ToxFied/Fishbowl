@@ -21,11 +21,20 @@ The same query can have many correct plans that differ hugely in speed. If
 difference between microseconds and seconds. Choosing well is the planner's job,
 and it chooses by estimating the cost of each option.
 
-Fishbowl has indexes (milestone 4) but no cost model yet. It follows one rule:
-if a WHERE term is an equality or range on an indexed column, read the index
-(an IndexScan); otherwise read every row (a SeqScan). The plan's "why" line
-says which applied. Milestone 5 adds a cost model, and the UI will show the
-rejected plans next to the chosen one. See [indexes](indexes.md).
+Fishbowl's planner (milestone 5) lists the ways to read each table and the
+orders to join them in, estimates the cost of each with a
+[cost model](cost-models.md), and keeps the cheapest. The plan says why, with
+the estimate and the plans it turned down:
+
+```text
+IndexScan fish USING INDEX fish_species (species = 'koi')  [rows=3]
+  why: index fish_species finds about 2 of the 8 rows, and each leads to its row by rowid
+  estimate: rows=2 cost=14
+  rejected: SeqScan fish  [rows=8 cost=24]
+```
+
+The UI shows the same side by side under "why this plan". See
+[choosing an index](choosing-an-index.md) and [join ordering](join-ordering.md).
 
 ## Seeing plans in Fishbowl
 

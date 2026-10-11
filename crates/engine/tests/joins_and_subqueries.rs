@@ -158,17 +158,19 @@ fn conditions_move_down_to_the_table_they_read() {
         &mut db,
         "SELECT t1.a FROM t1, t2 WHERE t1.a = t2.a AND c = 'q' AND b IS NOT NULL",
     );
-    // t2 is read once; Materialize hands its one matching row to each t1 row.
+    // Each condition filters its own table before the join. The equality
+    // on t2 is expected to keep fewer rows, so t2 goes first, and t1 is read
+    // once into Materialize, which hands its two rows to t2's one.
     assert_eq!(
         plan_lines(&result.plan),
         [
             "Project t1.a [1]",
             "  NestedLoopJoin INNER ON (t1.a = t2.a) [1]",
-            "    Filter t1.b IS NOT NULL [2]",
-            "      SeqScan t1 [3]",
+            "    Filter (t2.c = 'q') [1]",
+            "      SeqScan t2 [3]",
             "    Materialize [2]",
-            "      Filter (t2.c = 'q') [1]",
-            "        SeqScan t2 [3]",
+            "      Filter t1.b IS NOT NULL [2]",
+            "        SeqScan t1 [3]",
         ]
     );
 }
@@ -475,5 +477,20 @@ fn inner_joins_start_from_a_filtered_table_and_follow_conditions() {
     assert_eq!(
         rows(&mut db, sql),
         ["1|1|3|q|3|x", "1|1|3|r|3|x", "2|2|3|q|3|x", "2|2|3|r|3|x"]
+    );
+}
+
+#[test]
+fn a_join_has_at_most_64_tables() {
+    let mut db = Database::new();
+    db.execute("CREATE TABLE t(a)").unwrap();
+    let from = |n: usize| vec!["t"; n].join(", ");
+    assert!(
+        db.execute(&format!("SELECT count(*) FROM {}", from(64)))
+            .is_ok()
+    );
+    assert_eq!(
+        error(&mut db, &format!("SELECT count(*) FROM {}", from(65))),
+        "parse error: at most 64 tables in a join"
     );
 }

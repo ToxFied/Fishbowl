@@ -168,7 +168,7 @@ fn insert_or_rules_resolve_conflicts_like_sqlite() {
          INSERT OR REPLACE INTO t VALUES (2, 'x', 9);",
     );
     let pairs = |db: &mut Database| -> Vec<(i64, String)> {
-        rows(db, "SELECT a, b FROM t")
+        rows(db, "SELECT a, b FROM t ORDER BY a")
             .into_iter()
             .map(|r| (r[0].to_i64_lossy(), r[1].to_string()))
             .collect()
@@ -290,15 +290,17 @@ fn where_terms_on_an_indexed_column_use_an_index_scan() {
          CREATE INDEX tab_a ON tab(a);
          INSERT INTO tab VALUES (1, 10, 'x'), (2, 20, 'y'), (3, 30, 'z'), (4, 20, NULL), (5, NULL, 'w');",
     );
+    // Each query reads only pk and a, so index tab_a holds every column it
+    // needs and the table is never read, as in SQLite.
     let cases = [
         (
             "SELECT pk FROM tab WHERE a = '20'",
-            "tab USING INDEX tab_a (a = 20)",
+            "tab USING COVERING INDEX tab_a (a = 20)",
             vec![2, 4],
         ),
         (
             "SELECT pk FROM tab WHERE a < 25 AND 15 < a AND a <= 30",
-            "tab USING INDEX tab_a (a > 15 AND a < 25)",
+            "tab USING COVERING INDEX tab_a (a > 15 AND a < 25 AND a <= 30)",
             vec![2, 4],
         ),
         (
@@ -308,7 +310,7 @@ fn where_terms_on_an_indexed_column_use_an_index_scan() {
         ),
         (
             "SELECT pk FROM tab WHERE a IN (30, 10, 10.0, NULL)",
-            "tab USING INDEX tab_a (a IN (10, 30))",
+            "tab USING COVERING INDEX tab_a (a IN (10, 30))",
             vec![1, 3],
         ),
         (
@@ -318,8 +320,14 @@ fn where_terms_on_an_indexed_column_use_an_index_scan() {
         ),
         (
             "SELECT pk FROM tab WHERE a < 15",
-            "tab USING INDEX tab_a (a < 15)",
+            "tab USING COVERING INDEX tab_a (a < 15)",
             vec![1],
+        ),
+        // Nothing equals NULL, so the lookup finds nothing.
+        (
+            "SELECT pk FROM tab WHERE a = NULL",
+            "tab USING COVERING INDEX tab_a (a = NULL)",
+            vec![],
         ),
     ];
     for (sql, detail, expected) in cases {
@@ -333,7 +341,7 @@ fn where_terms_on_an_indexed_column_use_an_index_scan() {
         assert!(
             scan.reason
                 .as_ref()
-                .is_some_and(|r| r.contains("the WHERE term"))
+                .is_some_and(|r| r.contains("finds about"))
         );
         let found: Vec<i64> = found.iter().map(|r| r[0].to_i64_lossy()).collect();
         assert_eq!(found, expected, "{sql}");
@@ -343,16 +351,27 @@ fn where_terms_on_an_indexed_column_use_an_index_scan() {
     let (_, plan) = query(&mut db, "SELECT pk FROM tab WHERE a = 20");
     assert_eq!(scan(&plan).rows_out, 2);
 
-    for sql in [
-        "SELECT pk FROM tab WHERE b = 'x'",
-        "SELECT pk FROM tab WHERE a = 10 OR a = 20",
-        "SELECT pk FROM tab WHERE a + 0 = 10",
-        "SELECT pk FROM tab WHERE a = pk",
-        "SELECT pk FROM tab WHERE a = NULL",
-        "SELECT pk FROM tab",
+    // No term narrows these down. When the query reads only pk and a, the
+    // narrower index is read whole instead of the table.
+    for (sql, detail) in [
+        ("SELECT pk FROM tab WHERE b = 'x'", "tab"),
+        (
+            "SELECT pk FROM tab WHERE a = 10 OR a = 20",
+            "tab USING COVERING INDEX tab_a",
+        ),
+        (
+            "SELECT pk FROM tab WHERE a + 0 = 10",
+            "tab USING COVERING INDEX tab_a",
+        ),
+        (
+            "SELECT pk FROM tab WHERE a = pk",
+            "tab USING COVERING INDEX tab_a",
+        ),
+        ("SELECT pk FROM tab", "tab USING COVERING INDEX tab_a"),
+        ("SELECT * FROM tab", "tab"),
     ] {
         let (_, plan) = query(&mut db, sql);
-        assert_eq!(scan(&plan).operator, "SeqScan", "{sql}");
+        assert_eq!(scan(&plan).detail, detail, "{sql}");
     }
 }
 
@@ -397,7 +416,7 @@ fn indexes_survive_reopening_the_file() {
     db.integrity_check().unwrap();
     let (found, plan) = query(&mut db, "SELECT id FROM t WHERE n = 5");
     assert_eq!(found, [vec![int(1)], vec![int(3)]]);
-    assert_eq!(scan(&plan).detail, "t USING INDEX t_n (n = 5)");
+    assert_eq!(scan(&plan).detail, "t USING COVERING INDEX t_n (n = 5)");
     assert_eq!(
         error(&mut db, "INSERT INTO t VALUES (9, 'a', 1)"),
         "UNIQUE constraint failed: t.code"

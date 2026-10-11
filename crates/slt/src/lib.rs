@@ -283,6 +283,14 @@ fn check_query(
     let result = match (outcome, expected) {
         (RunOutcome::Panic(msg), _) => return fail("engine panic", msg),
         (RunOutcome::Err(e), QueryExpect::Error(_)) if is_genuine_rejection(&e) => return Ok(()),
+        // SQLite's runner ignores an error from sqlite3_step and prints the
+        // rows it got, so a query that fails while running, like sum()
+        // overflowing, is recorded as an empty result.
+        (RunOutcome::Err(Error::Runtime(_)), QueryExpect::Results { results, .. })
+            if results.is_empty() =>
+        {
+            return Ok(());
+        }
         (RunOutcome::Err(e), _) => return fail(error_reason(&e), e.to_string()),
         (RunOutcome::Ok(_), QueryExpect::Error(_)) => {
             return fail(
@@ -379,7 +387,7 @@ pub fn format_value(value: &Value, ty: &DefaultColumnType) -> String {
     }
     match ty {
         DefaultColumnType::Integer => value.to_i64_lossy().to_string(),
-        DefaultColumnType::FloatingPoint => format!("{:.3}", value.to_f64_lossy()),
+        DefaultColumnType::FloatingPoint => format_real(value.to_f64_lossy()),
         DefaultColumnType::Text | DefaultColumnType::Any => {
             let text = value.to_string();
             if text.is_empty() {
@@ -390,6 +398,32 @@ pub fn format_value(value: &Value, ty: &DefaultColumnType) -> String {
                     .collect()
             }
         }
+    }
+}
+
+/// `%.3f` as SQLite's `printf` writes it. SQLite keeps at most 16
+/// significant digits and pads the rest with zeros, so 2^63 prints as
+/// "9223372036854776000.000" where Rust's `{:.3}` gives every digit.
+fn format_real(x: f64) -> String {
+    let plain = format!("{x:.3}");
+    let digits = plain.bytes().filter(u8::is_ascii_digit).count();
+    if !x.is_finite() || x.abs() < 1.0 || digits <= 16 {
+        return plain;
+    }
+    // "d.ddddddddddddddde<exp>": 16 significant digits, rounded.
+    let scientific = format!("{:.15e}", x.abs());
+    let (mantissa, exp) = scientific.split_once('e').expect("exponent");
+    let significant = mantissa.replace('.', "");
+    let point = exp.parse::<usize>().expect("positive exponent") + 1;
+    let sign = if x < 0.0 { "-" } else { "" };
+    if point >= significant.len() {
+        format!(
+            "{sign}{significant}{}.000",
+            "0".repeat(point - significant.len())
+        )
+    } else {
+        let (int, frac) = significant.split_at(point);
+        format!("{sign}{int}.{frac:0<3}")
     }
 }
 

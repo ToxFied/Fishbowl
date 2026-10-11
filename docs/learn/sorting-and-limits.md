@@ -21,9 +21,11 @@ see it: the Sort step's input count equals the table size even when Limit asks
 for only three rows.
 
 That is also why indexes matter for ORDER BY. An index keeps rows in order
-already, so the planner could skip the Sort step entirely. Fishbowl has
-indexes, but its planner does not use them for ORDER BY yet (milestone 5), so
-the plan says "no index returns rows in this order".
+already, so the planner can skip the Sort step entirely, and then a LIMIT
+stops the scan as soon as it has enough rows. `ORDER BY id LIMIT 5` on a table
+with an INTEGER PRIMARY KEY reads 5 rows, not all of them. The planner weighs
+it against a sort (see [choosing an index](choosing-an-index.md)). Index
+entries are not read backwards yet, so ORDER BY ... DESC always sorts.
 
 ## What order, exactly
 

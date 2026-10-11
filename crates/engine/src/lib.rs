@@ -16,6 +16,7 @@
 
 pub mod access;
 pub mod catalog;
+pub mod dialect;
 pub mod error;
 pub mod exec;
 pub mod expr;
@@ -26,9 +27,10 @@ pub mod trace;
 pub mod value;
 pub mod write;
 
+use std::collections::{BTreeMap, BTreeSet};
+
 use serde::Serialize;
 use sqlparser::ast;
-use sqlparser::dialect::SQLiteDialect;
 use sqlparser::parser::Parser;
 
 pub use error::{Error, Result};
@@ -38,6 +40,7 @@ pub use trace::Trace;
 pub use value::Value;
 
 use catalog::{Catalog, TableSchema};
+use dialect::FishbowlDialect;
 use exec::ExecContext;
 use plan::Plan;
 use storage::index::IndexKey;
@@ -48,16 +51,42 @@ use write::{OnConflict, TableWriter};
 #[derive(Debug, Clone, Serialize)]
 #[serde(tag = "kind", rename_all = "snake_case")]
 pub enum StatementResult {
-    CreateTable { table: String },
-    Insert { table: String, rows: u64 },
-    Update { table: String, rows: u64 },
-    Delete { table: String, rows: u64 },
-    DropTable { table: String },
-    CreateView { view: String },
-    DropView { view: String },
+    CreateTable {
+        table: String,
+    },
+    Insert {
+        table: String,
+        rows: u64,
+    },
+    Update {
+        table: String,
+        rows: u64,
+    },
+    Delete {
+        table: String,
+        rows: u64,
+    },
+    DropTable {
+        table: String,
+    },
+    CreateView {
+        view: String,
+    },
+    DropView {
+        view: String,
+    },
     Query(QueryResult),
-    CreateIndex { index: String, table: String },
-    DropIndex { index: String },
+    CreateIndex {
+        index: String,
+        table: String,
+    },
+    DropIndex {
+        index: String,
+    },
+    /// The tables `ANALYZE` counted.
+    Analyze {
+        tables: Vec<String>,
+    },
     Begin,
     Commit,
     Rollback,
@@ -399,6 +428,15 @@ impl Database {
                 self.catalog.remove_index(&name);
                 StatementResult::DropIndex { index: name }
             }
+            Plan::Analyze { tables } => {
+                let tables = tables
+                    .unwrap_or_else(|| self.catalog.tables().map(|t| t.name.clone()).collect());
+                for table in &tables {
+                    let stats = self.count(self.catalog.table(table)?)?;
+                    self.catalog.set_stats(table, stats);
+                }
+                StatementResult::Analyze { tables }
+            }
             Plan::Insert {
                 table,
                 targets,
@@ -515,7 +553,7 @@ impl Database {
         predicate: Option<&expr::Expr>,
     ) -> Result<StatementResult> {
         let schema = self.catalog.table(table)?;
-        let access = access::for_write(schema, predicate);
+        let access = planner::access_for_write(&self.catalog, schema, predicate);
         let mut matches = self.matching_rows(table, &access, predicate)?;
         // Rows change in the order the scan found them, and each change is
         // checked against the rows not yet changed, so the order decides
@@ -552,7 +590,7 @@ impl Database {
 
     fn delete(&mut self, table: &str, predicate: Option<&expr::Expr>) -> Result<StatementResult> {
         let schema = self.catalog.table(table)?;
-        let access = access::for_write(schema, predicate);
+        let access = planner::access_for_write(&self.catalog, schema, predicate);
         let doomed = self.matching_rows(table, &access, predicate)?;
         let count = doomed.len() as u64;
         let mut writer = TableWriter::new(schema, &mut self.storage, OnConflict::Abort);
@@ -563,6 +601,51 @@ impl Database {
         Ok(StatementResult::Delete {
             table: table.to_string(),
             rows: count,
+        })
+    }
+
+    /// What `ANALYZE` records for one table: its rows, the distinct values
+    /// of each column, and for each index how many rows share a prefix of
+    /// its key, rounded up as in SQLite's `sqlite_stat1`.
+    fn count(&self, schema: &TableSchema) -> Result<catalog::TableStats> {
+        let mut rows = 0u64;
+        let mut values: Vec<BTreeSet<expr::RowKey>> = vec![BTreeSet::new(); schema.columns.len()];
+        let mut scan = TableScan::new(&schema.name);
+        while let Some(row) = scan.next(&self.storage)? {
+            rows += 1;
+            for (seen, value) in values.iter_mut().zip(row) {
+                seen.insert(expr::RowKey(vec![value]));
+            }
+        }
+        let mut indexes = BTreeMap::new();
+        for index in &schema.indexes {
+            // Entries come in key order, so a new prefix is a new value.
+            let mut distinct = vec![0u64; index.columns.len()];
+            let mut previous: Option<IndexKey> = None;
+            let mut cursor = IndexCursor::new(&index.name, None);
+            while let Some(key) = cursor.next(&self.storage)? {
+                let same = previous.as_ref().map_or(0, |p| {
+                    p.values
+                        .iter()
+                        .zip(&key.values)
+                        .take_while(|(a, b)| a.compare(b).is_eq())
+                        .count()
+                });
+                for d in &mut distinct[same..] {
+                    *d += 1;
+                }
+                previous = Some(key);
+            }
+            let per_key = distinct
+                .iter()
+                .map(|&d| if d == 0 { 1.0 } else { rows.div_ceil(d) as f64 })
+                .collect();
+            indexes.insert(index.name.to_ascii_lowercase(), per_key);
+        }
+        Ok(catalog::TableStats {
+            rows,
+            distinct: values.iter().map(|v| v.len() as u64).collect(),
+            indexes,
         })
     }
 
@@ -628,7 +711,7 @@ impl Database {
         access: &access::IndexAccess,
         predicate: Option<&expr::Expr>,
     ) -> Result<Vec<(i64, Row)>> {
-        let mut scan = access::Scan::new(table, access);
+        let mut scan = access::Scan::start(table, access, &[], &mut expr::NoEnv)?;
         let mut matches = Vec::new();
         let mut processed = 0u64;
         while let Some((rowid, row)) = scan.next_entry(&self.storage)? {
@@ -663,5 +746,5 @@ fn ends_transaction(stmt: &ast::Statement, error: &Error) -> bool {
 }
 
 fn parse(sql: &str) -> Result<Vec<ast::Statement>> {
-    Parser::parse_sql(&SQLiteDialect {}, sql).map_err(|e| Error::Parse(e.to_string()))
+    Parser::parse_sql(&FishbowlDialect::default(), sql).map_err(|e| Error::Parse(e.to_string()))
 }

@@ -9,8 +9,8 @@ explain what counts as a pass.
 
 | Corpus | Files | Records run | Failed | Skipped | Pass rate | Queries only |
 | --- | ---: | ---: | ---: | ---: | ---: | ---: |
-| Full suite | 622 | 5,939,879 | 458 | 1,480,834 | **99.99%** | 99.99% |
-| 29-file sample | 29 | 129,348 | 131 | 14,153 | **99.89%** | 99.91% |
+| Full suite | 622 | 5,939,879 | 452 | 1,480,834 | **99.99%** | 99.99% |
+| 29-file sample | 29 | 129,348 | 125 | 14,153 | **99.90%** | 99.91% |
 
 - **Full suite:** every test file in the upstream repository at that
   check-in, listed with SHA-256 in [`manifest-full.txt`](manifest-full.txt).
@@ -43,7 +43,7 @@ as window functions, common table expressions, `ALTER TABLE` or JSON.
 
 ## What fails and why
 
-All 458 failures in the full suite, grouped by cause. Each cause is in the
+All 452 failures in the full suite, grouped by cause. Each cause is in the
 engine, not the harness. The lane names come from [the plan](../docs/PLAN.md).
 
 | Records | Cause | Where | Likely fix |
@@ -52,14 +52,13 @@ engine, not the harness. The lane names come from [the plan](../docs/PLAN.md).
 | 72 | `x IN t1`, SQLite's shorthand for `x IN (SELECT * FROM t1)`, does not parse. | `evidence/in1.test` | Lane A: accept the form in the parser or rewrite it before parsing. |
 | 27 | Triggers: `CREATE TRIGGER` (13) and `DROP TRIGGER` (14) are not supported. | `evidence/slt_lang_createtrigger.test`, `slt_lang_droptrigger.test` | New feature, unassigned. |
 | 7 | `min(DISTINCT x)` or `max(DISTINCT x)` next to plain columns is rejected. | `random/groupby/slt_good_12.test` | Lane A: aggregates in `planner.rs`. |
-| 6 | The `<<` operator does not parse (2). The two rows it should insert are then missing, so 4 later `sum` and `total` queries give wrong results. | `evidence/slt_lang_aggfunc.test` | Lane A: shift operators in the parser and `expr.rs`. |
 | 6 | `INDEXED BY` and `NOT INDEXED` after a table name do not parse. | `evidence/slt_lang_aggfunc.test` | Lane A: parser; the planner can ignore the hint. |
 | 4 | Blob literals such as `X'303132'` are not supported. | `evidence/in1.test` | Lane A: a blob value type. |
 | 1 | `REINDEX` does not parse. | `evidence/slt_lang_reindex.test` | Lane A: parse it and do nothing. Index B-trees never go stale. |
 
-Those 4 wrong results are the only ones in 5.9 million records. No record
-panicked the engine or ran over the 20 million row budget.
+Every failure is an error. No record in 5.9 million gives a wrong result,
+panics the engine or runs over the 20 million row budget.
 
-The same causes make up the sample's 131 failures: 72 `x IN t1`, 27 trigger
-records, 15 recursion-limit records, 6 `<<` records, 6 `INDEXED BY`, 4 blob
+The same causes make up the sample's 125 failures: 72 `x IN t1`, 27 trigger
+records, 15 recursion-limit records, 6 `INDEXED BY`, 4 blob
 literals and 1 `REINDEX`.

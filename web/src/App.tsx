@@ -9,7 +9,7 @@ import { createEngine, type Engine, type Entry, type TableInfo } from "./engine"
 
 // Three small tables: fish to filter and look up, tanks to join them to, and
 // enough feedings to fill several B-tree pages, one of them with a note too
-// big for its leaf.
+// big for its leaf. ANALYZE counts them, so the planner's estimates are real.
 const SEED = `CREATE TABLE tank (id INTEGER PRIMARY KEY, name TEXT, litres INTEGER);
 INSERT INTO tank VALUES (1, 'reef', 300), (2, 'pond', 2000), (3, 'bowl', 4);
 CREATE TABLE fish (id INTEGER PRIMARY KEY, name TEXT, species TEXT, weight REAL, tank INTEGER);
@@ -27,13 +27,18 @@ CREATE TABLE feeding (id INTEGER PRIMARY KEY, fish INTEGER, grams REAL, note TEX
 INSERT INTO feeding (fish, grams, note)
   SELECT a.id, b.id * 0.5, 'flakes from ' || c.name FROM fish a, fish b, fish c;
 UPDATE feeding SET note = replace(replace(replace('xxxxxxxx', 'x', 'yyyyyyyy'), 'y', 'zzzzzzzz'), 'z', 'krill ')
-  WHERE id = 100;`;
+  WHERE id = 100;
+CREATE INDEX feeding_fish ON feeding (fish);
+ANALYZE;`;
 
 const EXAMPLES: Record<string, string> = {
   index: "SELECT name, weight\nFROM fish\nWHERE species = 'koi' AND weight > 1;",
   scan: "SELECT name, weight\nFROM fish\nWHERE weight IS NULL OR weight < 0.25;",
   rowid: "SELECT id, fish, grams\nFROM feeding\nWHERE id BETWEEN 200 AND 220;",
   join: "SELECT fish.name, tank.name\nFROM fish JOIN tank ON fish.tank = tank.id;",
+  "join order":
+    "SELECT tank.name, fish.name, feeding.grams\nFROM feeding\n  JOIN fish ON feeding.fish = fish.id\n  JOIN tank ON fish.tank = tank.id\nWHERE tank.name = 'reef' AND feeding.grams > 3.5;",
+  "sorted by index": "SELECT id, fish, grams\nFROM feeding\nORDER BY id\nLIMIT 5;",
   "left join":
     "SELECT tank.name, fish.name\nFROM tank LEFT JOIN fish\n  ON fish.tank = tank.id AND fish.weight > 2;",
   correlated:

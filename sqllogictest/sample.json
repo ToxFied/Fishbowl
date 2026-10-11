@@ -8,19 +8,19 @@
   },
   "totals": {
     "records": {
-      "passed": 129217,
-      "failed": 131
+      "passed": 129223,
+      "failed": 125
     },
     "statements": {
-      "passed": 11910,
-      "failed": 30
+      "passed": 11912,
+      "failed": 28
     },
     "queries": {
-      "passed": 117307,
-      "failed": 101
+      "passed": 117311,
+      "failed": 97
     },
     "skipped": 14153,
-    "pass_rate": 99.89,
+    "pass_rate": 99.9,
     "query_pass_rate": 99.91
   },
   "files": [
@@ -53,15 +53,15 @@
     {
       "path": "evidence/slt_lang_aggfunc.test",
       "statements": {
-        "passed": 11,
-        "failed": 2
+        "passed": 13,
+        "failed": 0
       },
       "queries": {
-        "passed": 57,
-        "failed": 10
+        "passed": 61,
+        "failed": 6
       },
       "skipped": 0,
-      "pass_rate": 85.0
+      "pass_rate": 92.5
     },
     {
       "path": "evidence/slt_lang_createtrigger.test",
@@ -432,16 +432,6 @@
       "reason": "unsupported: literal X'303132'",
       "count": 4,
       "example": "evidence/in1.test:296: not supported yet: literal X'303132'"
-    },
-    {
-      "reason": "wrong result",
-      "count": 4,
-      "example": "evidence/slt_lang_aggfunc.test:480: expected [], got [8.000]"
-    },
-    {
-      "reason": "parse error: No infix parser for token ShiftLeft",
-      "count": 2,
-      "example": "evidence/slt_lang_aggfunc.test:470: parse error: sql parser error: No infix parser for token ShiftLeft at Line: 1, Column: 24"
     },
     {
       "reason": "parse error: Expected: an SQL statement",

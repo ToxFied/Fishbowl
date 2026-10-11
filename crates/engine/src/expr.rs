@@ -27,7 +27,7 @@ pub trait Env {
 
 /// The environment outside a query, where no expression has a subquery or an
 /// outer column. The planner makes sure of that.
-struct NoEnv;
+pub struct NoEnv;
 
 impl Env for NoEnv {
     fn outer(&self, _: usize, _: usize) -> Result<Value> {
@@ -58,6 +58,10 @@ pub enum BinaryOp {
     Divide,
     Remainder,
     Concat,
+    BitAnd,
+    BitOr,
+    ShiftLeft,
+    ShiftRight,
     Eq,
     NotEq,
     Lt,
@@ -93,6 +97,7 @@ pub enum UnaryOp {
     Negate,
     Plus,
     Not,
+    BitNot,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -584,6 +589,7 @@ fn eval_unary(op: UnaryOp, v: Value) -> Value {
             .map_or(Value::Real(-(i as f64)), Value::Integer),
         (UnaryOp::Negate, Value::Real(f)) => Value::Real(-f),
         (UnaryOp::Negate, Value::Text(s)) => eval_unary(UnaryOp::Negate, numeric_prefix(&s)),
+        (UnaryOp::BitNot, v) => Value::Integer(!to_integer(&v)),
     }
 }
 
@@ -616,6 +622,30 @@ fn eval_binary(op: BinaryOp, l: Value, r: Value) -> Value {
             compare(l, None, r, None).map_or(Value::Null, |ord| bool_value(op.holds(ord)))
         }
         Add | Subtract | Multiply | Divide | Remainder => arithmetic(op, l, r),
+        BitAnd | BitOr | ShiftLeft | ShiftRight => {
+            Value::Integer(bitwise(op, to_integer(&l), to_integer(&r)))
+        }
+    }
+}
+
+/// `&`, `|`, `<<` and `>>` on two integers, as SQLite computes them. Both
+/// sides were read as integers first, so the answer is always an integer.
+/// A negative shift goes the other way, and a shift of 64 or more leaves
+/// only the sign: `-8 >> 64` is -1, `1 << 64` is 0. Bits shifted past the
+/// top are lost, so `1 << 63` is the smallest integer.
+fn bitwise(op: BinaryOp, a: i64, b: i64) -> i64 {
+    let (left, by) = match op {
+        BinaryOp::BitAnd => return a & b,
+        BinaryOp::BitOr => return a | b,
+        BinaryOp::ShiftLeft => (b >= 0, b.unsigned_abs()),
+        _ => (b < 0, b.unsigned_abs()),
+    };
+    match (left, u32::try_from(by).ok().filter(|&by| by < 64)) {
+        (true, Some(by)) => a << by,
+        // `>>` on a signed integer copies the sign bit in from the top.
+        (false, Some(by)) => a >> by,
+        (true, None) => 0,
+        (false, None) => a >> 63,
     }
 }
 
@@ -706,6 +736,10 @@ impl fmt::Display for BinaryOp {
             BinaryOp::Divide => "/",
             BinaryOp::Remainder => "%",
             BinaryOp::Concat => "||",
+            BinaryOp::BitAnd => "&",
+            BinaryOp::BitOr => "|",
+            BinaryOp::ShiftLeft => "<<",
+            BinaryOp::ShiftRight => ">>",
             BinaryOp::Eq => "=",
             BinaryOp::NotEq => "<>",
             BinaryOp::Lt => "<",
@@ -748,6 +782,10 @@ impl fmt::Display for Expr {
                 op: UnaryOp::Plus,
                 expr,
             } => write!(f, "+{expr}"),
+            Expr::Unary {
+                op: UnaryOp::BitNot,
+                expr,
+            } => write!(f, "~{expr}"),
             Expr::Binary { op, left, right } => write!(f, "({left} {op} {right})"),
             Expr::IsNull { expr, negated } => write!(f, "{expr} IS {}NULL", not(*negated)),
             Expr::Is {

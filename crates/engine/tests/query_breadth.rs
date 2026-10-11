@@ -235,6 +235,41 @@ fn case_between_in_cast_and_functions() {
 }
 
 #[test]
+fn bit_operators_match_sqlite() {
+    let mut db = Database::new();
+    // Shifts past the top, negative shifts, shifts of 64 or more, and
+    // operands read as integers the way SQLite reads them.
+    assert_eq!(
+        rows(
+            &mut db,
+            "SELECT 1<<63, 1<<64, 1<<-1, 8>>-2, -8>>1, -8>>64, -8>>63, -1>>100,
+                    5<<-100, -5<<-100, 3<<62, 2.9<<1, -2.9<<1, '12abc'<<1, 'abc'>>1,
+                    '1e3'|0, 1e30|0, -1e30|0, NULL<<1, 1<<NULL, 6&3, 6|3, ~5, ~-1, ~NULL,
+                    ~2.5, ~'7x', '9999999999999999999999'|0, typeof(2.0|0)"
+        ),
+        [
+            "-9223372036854775808|0|0|32|-4|-1|-1|-1|0|-1|-4611686018427387904|4|-4|24|0|1|\
+          9223372036854775807|-9223372036854775808|NULL|NULL|2|7|-6|0|NULL|-3|-8|\
+          9223372036854775807|integer"
+        ]
+    );
+    // One shared precedence for & | << >>, read left to right, between + and
+    // the comparisons. ~ binds tighter than everything else.
+    assert_eq!(
+        rows(
+            &mut db,
+            "SELECT 4|6&3, 6&3|4, ~1*2, 1+2<<1, 1<<2+1, 1<2<<1, 5&1=1, 1 || 2 << 1,
+                    ~1 || 'x', 1<<63>>63, 2 * 3 & 5"
+        ),
+        ["2|6|-4|6|8|1|1|24|-2x|-1|4"]
+    );
+    assert_eq!(
+        db.execute("SELECT 1 ^ 2").unwrap_err(),
+        Error::Parse("unrecognized token: \"^\"".into())
+    );
+}
+
+#[test]
 fn plan_shows_every_step_in_order() {
     let mut db = setup();
     let plan = query(

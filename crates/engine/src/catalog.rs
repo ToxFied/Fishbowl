@@ -82,12 +82,30 @@ pub struct View {
     pub query: Box<ast::Query>,
 }
 
+/// What `ANALYZE` counted in one table, the way SQLite's `sqlite_stat1`
+/// records it. The planner uses these instead of its fixed guesses.
+#[derive(Debug, Clone, PartialEq, Serialize)]
+pub struct TableStats {
+    pub rows: u64,
+    /// Per column, how many different values it holds (NULL counts as one).
+    pub distinct: Vec<u64>,
+    /// Per index, by lowercase name: for each k, how many rows on average
+    /// share the same values in the index's first k columns. The first
+    /// entry is for k = 1.
+    pub indexes: BTreeMap<String, Vec<f64>>,
+}
+
 /// Tables and views keyed by lowercase name, so lookups ignore case like
 /// SQLite does. A table and a view cannot share a name.
+///
+/// The statistics live here too, so a rolled-back `ANALYZE` is undone with
+/// the rest of the transaction. They are kept in memory only: a reopened
+/// database has none until `ANALYZE` runs again.
 #[derive(Debug, Default, Clone)]
 pub struct Catalog {
     tables: BTreeMap<String, TableSchema>,
     views: BTreeMap<String, View>,
+    stats: BTreeMap<String, TableStats>,
 }
 
 impl Catalog {
@@ -127,7 +145,17 @@ impl Catalog {
     }
 
     pub fn remove_table(&mut self, name: &str) -> Option<TableSchema> {
+        self.stats.remove(&name.to_ascii_lowercase());
         self.tables.remove(&name.to_ascii_lowercase())
+    }
+
+    /// What the last `ANALYZE` of this table found, if it ran.
+    pub fn stats(&self, table: &str) -> Option<&TableStats> {
+        self.stats.get(&table.to_ascii_lowercase())
+    }
+
+    pub fn set_stats(&mut self, table: &str, stats: TableStats) {
+        self.stats.insert(table.to_ascii_lowercase(), stats);
     }
 
     pub fn table(&self, name: &str) -> Result<&TableSchema> {
@@ -164,13 +192,20 @@ impl Catalog {
 
     /// Removes an index and returns it with the name of its table.
     pub fn remove_index(&mut self, name: &str) -> Option<(String, IndexSchema)> {
-        self.tables.values_mut().find_map(|table| {
-            let i = table
-                .indexes
-                .iter()
-                .position(|index| index.name.eq_ignore_ascii_case(name))?;
-            Some((table.name.clone(), table.indexes.remove(i)))
-        })
+        self.tables
+            .values_mut()
+            .find_map(|table| {
+                let i = table
+                    .indexes
+                    .iter()
+                    .position(|index| index.name.eq_ignore_ascii_case(name))?;
+                Some((table.name.clone(), table.indexes.remove(i)))
+            })
+            .inspect(|(table, _)| {
+                if let Some(stats) = self.stats.get_mut(&table.to_ascii_lowercase()) {
+                    stats.indexes.remove(&name.to_ascii_lowercase());
+                }
+            })
     }
 
     /// Finds an index by name, with its table.

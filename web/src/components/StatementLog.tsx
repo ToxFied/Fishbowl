@@ -22,6 +22,8 @@ function summary(entry: Entry): string {
       return `created ${result.index}`;
     case "drop_index":
       return `dropped ${result.index}`;
+    case "analyze":
+      return `analyzed ${result.tables.join(", ")}`;
     case "begin":
     case "commit":
     case "rollback":

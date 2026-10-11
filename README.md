@@ -34,8 +34,8 @@ suite, at check-in
 
 | Corpus | Files | Records run | Failed | Skipped | Pass rate | Queries only |
 | --- | ---: | ---: | ---: | ---: | ---: | ---: |
-| Full suite | 622 | 5,939,879 | 458 | 1,480,834 | **99.99%** | 99.99% |
-| 29-file sample | 29 | 129,348 | 131 | 14,153 | **99.89%** | 99.91% |
+| Full suite | 622 | 5,939,879 | 452 | 1,480,834 | **99.99%** | 99.99% |
+| 29-file sample | 29 | 129,348 | 125 | 14,153 | **99.90%** | 99.91% |
 
 The full suite is every test file in the repository at that check-in, and
 gives the headline number. The sample is the fast check CI runs on every push.
@@ -60,19 +60,22 @@ Queries can join tables, nest subqueries (correlated ones too), combine
 results with `UNION`, `INTERSECT` and `EXCEPT`, and read views, along with
 sorting, grouping and aggregates. `INSERT`, `UPDATE` and `DELETE` write to
 B-trees on 4 KiB pages. `PRIMARY KEY`, `UNIQUE` and `CREATE INDEX` are
-enforced on every write, and a condition on an indexed column reads the index
-instead of the whole table. `BEGIN`, `COMMIT` and `ROLLBACK` group changes
-into transactions, which commit through a write-ahead log. Anything else is
-rejected with "not supported yet" rather than answered wrongly.
+enforced on every write. A cost-based planner, using SQLite's cost model and
+statistics from `ANALYZE`, chooses between a full scan and each index, orders
+joins, looks up matching rows by index inside a join, and lets an index stand
+in for a sort. It keeps the plans it turned down, with their costs, for the
+UI. `BEGIN`, `COMMIT` and `ROLLBACK` group changes into transactions, which
+commit through a write-ahead log. Anything else is rejected with "not
+supported yet" rather than answered wrongly.
 
 | Part | State |
 | --- | --- |
 | Parse, plan, execute pipeline | Joins, subqueries, compound SELECTs, views, sorting, grouping, aggregates |
 | Storage | Pager, buffer pool and B+tree tables on 4 KiB pages (M3) |
-| Indexes and constraints | `PRIMARY KEY`, `UNIQUE`, `CREATE INDEX`, IndexScan chosen by a simple rule (M4) |
-| Cost-based planner | In progress (M5) |
+| Indexes and constraints | `PRIMARY KEY`, `UNIQUE`, `CREATE INDEX` (M4) |
+| Cost-based planner | `ANALYZE`, SQLite's cost model, composite and covering indexes, index lookups in joins, join order search, rejected plans shown (M5) |
 | Transactions and crash recovery | `BEGIN`/`COMMIT`/`ROLLBACK`, write-ahead log, checkpoints, recovery on open, crash test (M6) |
-| Browser UI | Row-by-row trace playback, why this plan, B-tree page viewer with live splits (M7) |
+| Browser UI | Row-by-row trace playback, why this plan with the plans turned down, B-tree page viewer with live splits (M7, M5) |
 | Proof | Full sqllogictest suite, CI workflow, case study (M8) |
 
 ## Run it
@@ -86,23 +89,32 @@ cargo test --workspace
 
 # SQL shell
 cargo run -p fishbowl-cli -- -c "
-  CREATE TABLE fish (id INTEGER, name TEXT);
-  INSERT INTO fish VALUES (1, 'goldie'), (2, 'nemo');
-  SELECT name FROM fish WHERE id > 1;"
+  CREATE TABLE fish (id INTEGER PRIMARY KEY, name TEXT, species TEXT);
+  INSERT INTO fish VALUES (1, 'goldie', 'goldfish'), (2, 'nemo', 'clownfish'),
+                          (3, 'koko', 'koi'), (4, 'pearl', 'koi');
+  CREATE INDEX fish_species ON fish (species);
+  ANALYZE;
+  SELECT name FROM fish WHERE species = 'koi';"
 ```
 
 ```text
 name
-----
-nemo
-(1 row)
+-----
+koko
+pearl
+(2 rows)
 
 plan:
-Project name  [rows=1]
-  Filter (id > 1)  [rows=1]
-    SeqScan fish  [rows=2]
-      why: fish has no index, so every row is read
+Project name  [rows=2]
+  Filter (species = 'koi')  [rows=2]
+    SeqScan fish  [rows=4]
+      why: reading all 4 rows of fish is the cheapest way here
+      estimate: rows=4 cost=12
+      rejected: IndexScan fish USING INDEX fish_species (species = 'koi')  [rows=2 cost=13]
 ```
+
+On four rows, reading them all is cheaper than finding two through the
+index. On a big table the index wins.
 
 ```bash
 # Browser UI at http://localhost:5173

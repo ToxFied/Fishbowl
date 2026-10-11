@@ -60,15 +60,15 @@ Five independent checks, each aimed at a different way to be wrong.
 
 | Corpus | Files | Records run | Failed | Skipped | Pass rate |
 | --- | ---: | ---: | ---: | ---: | ---: |
-| Full suite | 622 | 5,939,879 | 458 | 1,480,834 | 99.99% |
-| 29-file sample | 29 | 129,348 | 131 | 14,153 | 99.89% |
+| Full suite | 622 | 5,939,879 | 452 | 1,480,834 | 99.99% |
+| 29-file sample | 29 | 129,348 | 125 | 14,153 | 99.90% |
 
 Both are SQLite's sqllogictest at check-in `ab599cbdd0` (2026-10-07). The
 full suite is every test file in the repository at that check-in. Skipped
 records are ones the file marks as not applying to SQLite (`onlyif mysql` and
 the like); they count neither as run nor as passed. Across 5.9 million
-records there are 4 wrong answers, all caused by an earlier unsupported
-`1<<63`, and no engine panics.
+records there are no wrong answers and no engine panics; every failure is
+an error on SQL Fishbowl does not support yet.
 
 A pass rate is only worth quoting if it is hard to inflate. The rules:
 
@@ -212,7 +212,7 @@ are small, not because the engine is.
   full for every left row instead of looking matches up by index. Milestone
   M5 adds statistics and costs.
 - **Unsupported SQL:** triggers, common table expressions, window functions,
-  `ALTER TABLE`, blob literals, `<<`, RIGHT and FULL joins, `USING`,
+  `ALTER TABLE`, blob literals, RIGHT and FULL joins, `USING`,
   `NATURAL`, savepoints, `AUTOINCREMENT`, `WITHOUT ROWID`, partial and
   expression indexes. [`RESULTS.md`](../sqllogictest/RESULTS.md) lists every
   remaining suite failure by cause.

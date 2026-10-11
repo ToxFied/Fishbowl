@@ -73,6 +73,21 @@ SELECT a / 2 FROM t WHERE a = 3
 }
 
 #[test]
+fn large_reals_keep_sixteen_significant_digits_like_sqlite() {
+    // Expected values are what sqlite3's printf('%.3f', ...) writes.
+    let result = run("\
+query RRRR nosort
+SELECT 9223372036854775807.0, -123456789012345.67, 12345678901234.5678, 99999999999999.9999
+----
+9223372036854776000.000
+-123456789012345.700
+12345678901234.570
+100000000000000.000
+");
+    assert_eq!(result.queries, queries(1, 0));
+}
+
+#[test]
 fn hashed_results_compare_count_and_md5() {
     let result = run("\
 hash-threshold 2
@@ -127,6 +142,24 @@ SELECT a FROM t WHERE a > 1
 ");
     assert_eq!(result.queries, queries(0, 1));
     assert_eq!(result.failures[0].reason, "wrong column count");
+}
+
+#[test]
+fn an_error_while_running_reads_as_no_rows_like_sqlites_runner() {
+    let result = run("\
+query I nosort
+SELECT sum(a) FROM (SELECT 9223372036854775807 AS a UNION ALL SELECT 1)
+----
+
+query I nosort
+WITH c AS (SELECT a FROM t) SELECT a FROM c
+----
+");
+    assert_eq!(result.queries, queries(1, 1));
+    assert_eq!(
+        result.failures[0].reason,
+        "unsupported: WITH (common table expressions)"
+    );
 }
 
 #[test]

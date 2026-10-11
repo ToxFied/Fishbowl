@@ -24,7 +24,7 @@ use std::rc::Rc;
 use crate::access;
 use crate::error::{Error, Result, unsupported};
 use crate::expr::{Accumulator, AggregateCall, Env, Expr, RowKey, SubqueryKind};
-use crate::plan::{JoinKind, PlanNode, PlanProfile, SetOp, SortKey, Subquery};
+use crate::plan::{Choice, JoinKind, PlanNode, PlanProfile, SetOp, SortKey, Subquery};
 use crate::storage::{Row, Storage, TableScan};
 use crate::trace::{EventKind, MAX_SCAN_ROWIDS, MAX_SCAN_ROWS, Recorder, ScanRows, Trace};
 use crate::value::{Affinity, Value};
@@ -102,7 +102,13 @@ enum State {
     Scan {
         scan: TableScan,
     },
-    IndexScan(access::Scan),
+    /// An IndexScan starts on its first call, when its lookup's values can
+    /// be worked out. `left` is the join's current left row, which they
+    /// may read.
+    IndexScan {
+        scan: Option<access::Scan>,
+        left: Row,
+    },
     OneRow {
         done: bool,
     },
@@ -139,9 +145,10 @@ impl State {
             PlanNode::SeqScan { table, .. } => State::Scan {
                 scan: TableScan::new(table),
             },
-            PlanNode::IndexScan { table, access, .. } => {
-                State::IndexScan(access::Scan::new(table, access))
-            }
+            PlanNode::IndexScan { .. } => State::IndexScan {
+                scan: None,
+                left: Vec::new(),
+            },
             PlanNode::OneRow => State::OneRow { done: false },
             PlanNode::Filter { .. } | PlanNode::Project { .. } | PlanNode::SubqueryScan { .. } => {
                 State::None
@@ -207,22 +214,30 @@ impl<'p> Operator<'p> {
     /// Starts this step and its inputs over from the first row. Row counts
     /// keep adding up, so the plan shows the total work of every run.
     fn rewind(&mut self) {
+        self.rewind_for(&[]);
+    }
+
+    /// Starts over for a join's left row, which a lookup below may read.
+    fn rewind_for(&mut self, left: &[Value]) {
         self.state = State::start(self.node);
+        if let State::IndexScan { left: row, .. } = &mut self.state {
+            *row = left.to_vec();
+        }
         for child in self.input.iter_mut().chain(self.right.iter_mut()) {
-            child.rewind();
+            child.rewind_for(left);
         }
     }
 
     /// Starts a join's right side over for the next left row. A Materialize
     /// step that has read its input already returns its rows again from
-    /// memory; anything else starts over.
-    fn replay(&mut self) {
+    /// memory; anything else starts over, and a lookup uses the new row.
+    fn replay(&mut self, left: &[Value]) {
         match &mut self.state {
             State::Materialized {
                 rows: Some(_),
                 next,
             } => *next = 0,
-            _ => self.rewind(),
+            _ => self.rewind_for(left),
         }
     }
 
@@ -250,7 +265,14 @@ impl<'p> Operator<'p> {
             (PlanNode::SeqScan { .. }, State::Scan { scan }) => {
                 Ok(read(&mut self.rowid, scan.next_entry(ctx.storage)?))
             }
-            (PlanNode::IndexScan { .. }, State::IndexScan(scan)) => {
+            (PlanNode::IndexScan { table, access, .. }, State::IndexScan { scan, left }) => {
+                let scan = match scan {
+                    Some(scan) => scan,
+                    None => {
+                        let mut env = StepEnv { ctx, subqueries };
+                        scan.insert(access::Scan::start(table, access, left, &mut env)?)
+                    }
+                };
                 Ok(read(&mut self.rowid, scan.next_entry(ctx.storage)?))
             }
             (PlanNode::OneRow, State::OneRow { done }) => {
@@ -357,7 +379,7 @@ impl<'p> Operator<'p> {
                             };
                             *left_width = row.len();
                             *matched = false;
-                            right.replay();
+                            right.replay(&row);
                             pair.insert(row)
                         }
                     };
@@ -436,6 +458,13 @@ impl<'p> Operator<'p> {
             operator: self.node.operator(),
             detail: self.node.detail(),
             reason: self.node.reason().map(str::to_string),
+            choice: self.node.why().and_then(|why| {
+                Some(Box::new(Choice {
+                    plan: why.plan.clone(),
+                    estimate: why.estimate?,
+                    rejected: why.rejected.clone(),
+                }))
+            }),
             rows_out: self.rows_out,
             children,
         }
@@ -534,6 +563,7 @@ impl<'p> SubqueryOp<'p> {
             operator: "Subquery",
             detail,
             reason: Some(reason.into()),
+            choice: None,
             // How many times it ran.
             rows_out: self.runs,
             children: vec![self.root.profile()],
