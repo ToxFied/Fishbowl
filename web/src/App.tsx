@@ -24,7 +24,10 @@ const EXAMPLES: Record<string, string> = {
     "SELECT species, count(*), avg(weight)\nFROM fish\nGROUP BY species\nHAVING count(*) > 1\nORDER BY 2 DESC;",
   heaviest: "SELECT name, weight\nFROM fish\nORDER BY weight DESC\nLIMIT 3;",
   expressions: "SELECT 7 / 2, 7 % 2, 7.0 / 2, 'gold' || 'fish', NULL + 1;",
-  error: "SELECT a.name, b.name\nFROM fish AS a, fish AS b;",
+  join: "SELECT a.name, b.name, a.species\nFROM fish AS a JOIN fish AS b\n  ON a.species = b.species AND a.id < b.id;",
+  correlated:
+    "SELECT name, species, weight\nFROM fish AS f\nWHERE weight = (\n  SELECT max(weight) FROM fish WHERE species = f.species\n);",
+  error: "WITH heavy AS (SELECT * FROM fish WHERE weight > 1)\nSELECT name FROM heavy;",
 };
 
 const START = EXAMPLES.filter ?? "";

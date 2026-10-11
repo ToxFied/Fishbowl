@@ -6,6 +6,7 @@ use serde::Serialize;
 
 use crate::catalog::TableSchema;
 use crate::expr::{AggregateCall, Expr};
+use crate::value::Affinity;
 
 /// What a statement will do, decided before any row is touched.
 #[derive(Debug, Clone)]
@@ -34,13 +35,70 @@ pub enum Plan {
         table: String,
         if_exists: bool,
     },
+    CreateView {
+        view: crate::catalog::View,
+        if_not_exists: bool,
+    },
+    DropView {
+        view: String,
+        if_exists: bool,
+    },
     Query(QueryPlan),
 }
 
 #[derive(Debug, Clone)]
 pub struct QueryPlan {
     pub columns: Vec<String>,
+    /// The affinity each result column brings to a comparison, as
+    /// [`Expr::affinity`] gives it. A view or a subquery passes it on.
+    pub affinities: Vec<Option<Affinity>>,
     pub root: PlanNode,
+}
+
+/// A SELECT inside an expression.
+#[derive(Debug, Clone)]
+pub struct Subquery {
+    pub plan: QueryPlan,
+    /// Whether it reads a column of an enclosing query. A correlated
+    /// subquery runs again for every row; any other runs once.
+    pub correlated: bool,
+    /// The SQL text, for display.
+    pub sql: String,
+}
+
+/// Two subqueries are the same expression when they are the same SQL.
+impl PartialEq for Subquery {
+    fn eq(&self, other: &Self) -> bool {
+        self.sql == other.sql
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum JoinKind {
+    /// Inner and cross joins: only pairs that meet the condition.
+    Inner,
+    /// LEFT JOIN: also every left row that matched nothing, padded with NULLs.
+    Left,
+}
+
+/// How a compound SELECT combines its two sides.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum SetOp {
+    UnionAll,
+    Union,
+    Intersect,
+    Except,
+}
+
+impl SetOp {
+    pub fn keyword(self) -> &'static str {
+        match self {
+            SetOp::UnionAll => "UNION ALL",
+            SetOp::Union => "UNION",
+            SetOp::Intersect => "INTERSECT",
+            SetOp::Except => "EXCEPT",
+        }
+    }
 }
 
 /// One step in a query plan. Each step pulls rows from its input.
@@ -91,6 +149,32 @@ pub enum PlanNode {
         limit: Expr,
         offset: Option<Expr>,
     },
+    /// For each row from `left`, reads every row of `right` again and passes
+    /// on the joined pairs where `condition` holds. Each output row is the
+    /// left row followed by the right row.
+    NestedLoopJoin {
+        left: Box<PlanNode>,
+        right: Box<PlanNode>,
+        kind: JoinKind,
+        condition: Option<Expr>,
+        /// Columns in a right row, for the NULLs of an unmatched LEFT JOIN row.
+        right_width: usize,
+        reason: String,
+    },
+    /// Combines the rows of two queries. UNION ALL passes on both inputs in
+    /// turn; the others drop duplicate rows and return the rest sorted, the
+    /// way SQLite's temporary index returns them.
+    Compound {
+        op: SetOp,
+        left: Box<PlanNode>,
+        right: Box<PlanNode>,
+    },
+    /// The rows of a view or a subquery in FROM, under the name the outer
+    /// query uses for them.
+    SubqueryScan { input: Box<PlanNode>, name: String },
+    /// Reads all its input once and keeps the rows in memory, so a join can
+    /// read its right side again for every left row without redoing the work.
+    Materialize { input: Box<PlanNode> },
 }
 
 /// One ORDER BY term.
@@ -135,13 +219,24 @@ impl PlanNode {
             PlanNode::Sort { .. } => "Sort",
             PlanNode::Distinct { .. } => "Distinct",
             PlanNode::Limit { .. } => "Limit",
+            PlanNode::NestedLoopJoin { .. } => "NestedLoopJoin",
+            PlanNode::Compound { op, .. } => match op {
+                SetOp::UnionAll => "UnionAll",
+                SetOp::Union => "Union",
+                SetOp::Intersect => "Intersect",
+                SetOp::Except => "Except",
+            },
+            PlanNode::SubqueryScan { .. } => "SubqueryScan",
+            PlanNode::Materialize { .. } => "Materialize",
         }
     }
 
     pub fn detail(&self) -> String {
         match self {
             PlanNode::SeqScan { table, .. } => table.clone(),
-            PlanNode::OneRow | PlanNode::Distinct { .. } => String::new(),
+            PlanNode::OneRow | PlanNode::Distinct { .. } | PlanNode::Materialize { .. } => {
+                String::new()
+            }
             PlanNode::Filter { predicate, .. } => predicate.to_string(),
             PlanNode::Project { exprs, .. } => joined(exprs),
             PlanNode::Aggregate {
@@ -160,13 +255,25 @@ impl PlanNode {
                 Some(offset) => format!("{limit} OFFSET {offset}"),
                 None => limit.to_string(),
             },
+            PlanNode::NestedLoopJoin {
+                kind, condition, ..
+            } => match (kind, condition) {
+                (JoinKind::Inner, None) => "CROSS".into(),
+                (JoinKind::Inner, Some(c)) => format!("INNER ON {c}"),
+                (JoinKind::Left, None) => "LEFT".into(),
+                (JoinKind::Left, Some(c)) => format!("LEFT ON {c}"),
+            },
+            PlanNode::Compound { .. } => String::new(),
+            PlanNode::SubqueryScan { name, .. } => name.clone(),
         }
     }
 
     /// Why the planner chose this step, when there was a choice to explain.
     pub fn reason(&self) -> Option<&str> {
         match self {
-            PlanNode::SeqScan { reason, .. } | PlanNode::Sort { reason, .. } => Some(reason),
+            PlanNode::SeqScan { reason, .. }
+            | PlanNode::Sort { reason, .. }
+            | PlanNode::NestedLoopJoin { reason, .. } => Some(reason),
             _ => None,
         }
     }
@@ -179,7 +286,40 @@ impl PlanNode {
             | PlanNode::Aggregate { input, .. }
             | PlanNode::Sort { input, .. }
             | PlanNode::Distinct { input }
-            | PlanNode::Limit { input, .. } => vec![input],
+            | PlanNode::Limit { input, .. }
+            | PlanNode::SubqueryScan { input, .. }
+            | PlanNode::Materialize { input } => vec![input],
+            PlanNode::NestedLoopJoin { left, right, .. }
+            | PlanNode::Compound { left, right, .. } => {
+                vec![left, right]
+            }
+        }
+    }
+
+    /// The expressions this step evaluates, where the executor looks for
+    /// subqueries to run.
+    pub fn exprs(&self) -> Vec<&Expr> {
+        match self {
+            PlanNode::Filter { predicate, .. } => vec![predicate],
+            PlanNode::Project { exprs, .. } => exprs.iter().collect(),
+            PlanNode::Aggregate {
+                group_by,
+                aggregates,
+                ..
+            } => group_by
+                .iter()
+                .map(|k| &k.expr)
+                .chain(aggregates.iter().flat_map(|a| &a.args))
+                .collect(),
+            PlanNode::Sort { keys, .. } => keys.iter().map(|k| &k.expr).collect(),
+            PlanNode::Limit { limit, offset, .. } => std::iter::once(limit).chain(offset).collect(),
+            PlanNode::NestedLoopJoin { condition, .. } => condition.iter().collect(),
+            PlanNode::SeqScan { .. }
+            | PlanNode::OneRow
+            | PlanNode::Distinct { .. }
+            | PlanNode::Compound { .. }
+            | PlanNode::SubqueryScan { .. }
+            | PlanNode::Materialize { .. } => vec![],
         }
     }
 }

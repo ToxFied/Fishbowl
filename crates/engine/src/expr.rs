@@ -6,12 +6,49 @@ mod functions;
 
 use std::cmp::Ordering;
 use std::fmt;
+use std::rc::Rc;
 
 pub use aggregate::{Accumulator, AggregateCall, AggregateFunc};
 pub use functions::{ScalarFunc, is_sqlite_function};
 
-use crate::error::Result;
+use crate::error::{Result, unsupported};
+use crate::plan::Subquery;
 use crate::value::{Affinity, Value, numeric_prefix};
+
+/// What an expression can reach beyond its own row: the rows of the queries
+/// it is nested in, and the executor, which runs its subqueries.
+pub trait Env {
+    /// Column `index` of the row being processed `depth` queries out.
+    fn outer(&self, depth: usize, index: usize) -> Result<Value>;
+    /// Runs a subquery for `row` and returns its first column: every row
+    /// when `all_rows` is set, otherwise at most the first.
+    fn subquery(&mut self, query: &Subquery, row: &[Value], all_rows: bool) -> Result<Rc<[Value]>>;
+}
+
+/// The environment outside a query, where no expression has a subquery or an
+/// outer column. The planner makes sure of that.
+struct NoEnv;
+
+impl Env for NoEnv {
+    fn outer(&self, _: usize, _: usize) -> Result<Value> {
+        unsupported("a column of an enclosing query here")
+    }
+
+    fn subquery(&mut self, _: &Subquery, _: &[Value], _: bool) -> Result<Rc<[Value]>> {
+        unsupported("a subquery here")
+    }
+}
+
+/// How a subquery's rows become one value.
+#[derive(Debug, Clone, PartialEq)]
+pub enum SubqueryKind {
+    /// `(SELECT ...)`: the first column of the first row, or NULL.
+    Scalar,
+    /// `[NOT] EXISTS (SELECT ...)`: whether there is any row.
+    Exists { negated: bool },
+    /// `expr [NOT] IN (SELECT ...)`.
+    In { expr: Box<Expr>, negated: bool },
+}
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum BinaryOp {
@@ -126,23 +163,40 @@ pub enum Expr {
         func: ScalarFunc,
         args: Vec<Expr>,
     },
+    /// A column of an enclosing query's row, read by a correlated subquery.
+    /// `depth` counts queries outward: 1 is the query just outside.
+    OuterColumn {
+        depth: usize,
+        index: usize,
+        name: String,
+        affinity: Affinity,
+    },
+    Subquery {
+        kind: SubqueryKind,
+        query: Box<Subquery>,
+    },
 }
 
 impl Expr {
+    /// Evaluates an expression that has no subqueries or outer columns.
     pub fn eval(&self, row: &[Value]) -> Result<Value> {
+        self.eval_with(row, &mut NoEnv)
+    }
+
+    pub fn eval_with(&self, row: &[Value], env: &mut dyn Env) -> Result<Value> {
         Ok(match self {
             Expr::Literal(v) => v.clone(),
             Expr::Column { index, .. } => row.get(*index).cloned().unwrap_or(Value::Null),
-            Expr::Unary { op, expr } => eval_unary(*op, expr.eval(row)?),
+            Expr::Unary { op, expr } => eval_unary(*op, expr.eval_with(row, env)?),
             Expr::Binary { op, left, right } => {
-                let l = left.eval(row)?;
+                let l = left.eval_with(row, env)?;
                 // AND and OR can skip the right side when the left decides it.
                 match (op, l.truthiness()) {
                     (BinaryOp::And, Some(false)) => return Ok(Value::Integer(0)),
                     (BinaryOp::Or, Some(true)) => return Ok(Value::Integer(1)),
                     _ => {}
                 }
-                let r = right.eval(row)?;
+                let r = right.eval_with(row, env)?;
                 if op.is_comparison() {
                     compare(l, left.affinity(), r, right.affinity())
                         .map_or(Value::Null, |ord| bool_value(op.holds(ord)))
@@ -150,13 +204,15 @@ impl Expr {
                     eval_binary(*op, l, r)
                 }
             }
-            Expr::IsNull { expr, negated } => bool_value(expr.eval(row)?.is_null() != *negated),
+            Expr::IsNull { expr, negated } => {
+                bool_value(expr.eval_with(row, env)?.is_null() != *negated)
+            }
             Expr::Is {
                 left,
                 right,
                 distinct,
             } => {
-                let (l, r) = (left.eval(row)?, right.eval(row)?);
+                let (l, r) = (left.eval_with(row, env)?, right.eval_with(row, env)?);
                 let same = match (l.is_null(), r.is_null()) {
                     (true, true) => true,
                     (true, false) | (false, true) => false,
@@ -168,19 +224,24 @@ impl Expr {
                 expr,
                 truth,
                 negated,
-            } => bool_value((expr.eval(row)?.truthiness() == Some(*truth)) != *negated),
+            } => bool_value((expr.eval_with(row, env)?.truthiness() == Some(*truth)) != *negated),
             Expr::Between {
                 expr,
                 low,
                 high,
                 negated,
             } => {
-                let v = expr.eval(row)?;
+                let v = expr.eval_with(row, env)?;
                 let affinity = expr.affinity();
-                let above = compare(v.clone(), affinity, low.eval(row)?, low.affinity())
-                    .map(Ordering::is_ge);
-                let below =
-                    compare(v, affinity, high.eval(row)?, high.affinity()).map(Ordering::is_le);
+                let above = compare(
+                    v.clone(),
+                    affinity,
+                    low.eval_with(row, env)?,
+                    low.affinity(),
+                )
+                .map(Ordering::is_ge);
+                let below = compare(v, affinity, high.eval_with(row, env)?, high.affinity())
+                    .map(Ordering::is_le);
                 let inside = match (above, below) {
                     (Some(false), _) | (_, Some(false)) => Some(false),
                     (Some(true), Some(true)) => Some(true),
@@ -192,18 +253,19 @@ impl Expr {
                 expr,
                 list,
                 negated,
-            } => eval_in_list(expr, list, row)?.map_or(Value::Null, |b| bool_value(b != *negated)),
+            } => eval_in_list(expr, list, row, env)?
+                .map_or(Value::Null, |b| bool_value(b != *negated)),
             Expr::Case {
                 operand,
                 branches,
                 otherwise,
             } => {
                 let base = match operand {
-                    Some(operand) => Some((operand.eval(row)?, operand.affinity())),
+                    Some(operand) => Some((operand.eval_with(row, env)?, operand.affinity())),
                     None => None,
                 };
                 for (when, then) in branches {
-                    let w = when.eval(row)?;
+                    let w = when.eval_with(row, env)?;
                     let matched = match &base {
                         Some((b, affinity)) => {
                             compare(b.clone(), *affinity, w, when.affinity())
@@ -212,16 +274,34 @@ impl Expr {
                         None => w.truthiness() == Some(true),
                     };
                     if matched {
-                        return then.eval(row);
+                        return then.eval_with(row, env);
                     }
                 }
                 match otherwise {
-                    Some(e) => e.eval(row)?,
+                    Some(e) => e.eval_with(row, env)?,
                     None => Value::Null,
                 }
             }
-            Expr::Cast { expr, affinity, .. } => cast(expr.eval(row)?, *affinity),
-            Expr::Function { func, args } => func.eval(args, row)?,
+            Expr::Cast { expr, affinity, .. } => cast(expr.eval_with(row, env)?, *affinity),
+            Expr::Function { func, args } => func.eval(args, row, env)?,
+            Expr::OuterColumn { depth, index, .. } => env.outer(*depth, *index)?,
+            Expr::Subquery { kind, query } => match kind {
+                SubqueryKind::Scalar => {
+                    let values = env.subquery(query, row, false)?;
+                    values.first().cloned().unwrap_or(Value::Null)
+                }
+                SubqueryKind::Exists { negated } => {
+                    let values = env.subquery(query, row, false)?;
+                    bool_value(values.is_empty() == *negated)
+                }
+                SubqueryKind::In { expr, negated } => {
+                    let v = expr.eval_with(row, env)?;
+                    let values = env.subquery(query, row, true)?;
+                    let affinity = query.plan.affinities.first().copied().flatten();
+                    in_values(v, expr.affinity(), &values, affinity)
+                        .map_or(Value::Null, |b| bool_value(b != *negated))
+                }
+            },
         })
     }
 
@@ -230,16 +310,29 @@ impl Expr {
     /// See <https://www.sqlite.org/datatype3.html#affinity_of_expressions>.
     pub fn affinity(&self) -> Option<Affinity> {
         match self {
-            Expr::Column { affinity, .. } | Expr::Cast { affinity, .. } => Some(*affinity),
+            Expr::Column { affinity, .. }
+            | Expr::OuterColumn { affinity, .. }
+            | Expr::Cast { affinity, .. } => Some(*affinity),
+            // A scalar subquery has the affinity of its result column.
+            Expr::Subquery {
+                kind: SubqueryKind::Scalar,
+                query,
+            } => query.plan.affinities.first().copied().flatten(),
             _ => None,
         }
     }
 
-    /// Calls `f` on this expression and every expression inside it.
-    pub fn walk(&self, f: &mut impl FnMut(&Expr)) {
+    /// Calls `f` on this expression and every expression inside it. It does
+    /// not enter a subquery's plan.
+    pub fn walk<'e>(&'e self, f: &mut impl FnMut(&'e Expr)) {
         f(self);
         match self {
-            Expr::Literal(_) | Expr::Column { .. } => {}
+            Expr::Literal(_) | Expr::Column { .. } | Expr::OuterColumn { .. } => {}
+            Expr::Subquery { kind, .. } => {
+                if let SubqueryKind::In { expr, .. } = kind {
+                    expr.walk(f);
+                }
+            }
             Expr::Unary { expr, .. }
             | Expr::IsNull { expr, .. }
             | Expr::IsTruth { expr, .. }
@@ -272,6 +365,53 @@ impl Expr {
                 otherwise.iter().for_each(|e| e.walk(f));
             }
             Expr::Function { args, .. } => args.iter().for_each(|e| e.walk(f)),
+        }
+    }
+}
+
+impl Expr {
+    /// Moves every column reference `by` positions to the left, for an
+    /// expression that moves to a step whose rows hold fewer columns.
+    pub fn shift_columns(&mut self, by: usize) {
+        match self {
+            Expr::Column { index, .. } => *index -= by,
+            Expr::Literal(_) | Expr::OuterColumn { .. } => {}
+            Expr::Unary { expr, .. }
+            | Expr::IsNull { expr, .. }
+            | Expr::IsTruth { expr, .. }
+            | Expr::Cast { expr, .. } => expr.shift_columns(by),
+            Expr::Binary { left, right, .. } | Expr::Is { left, right, .. } => {
+                left.shift_columns(by);
+                right.shift_columns(by);
+            }
+            Expr::Between {
+                expr, low, high, ..
+            } => {
+                for e in [expr, low, high] {
+                    e.shift_columns(by);
+                }
+            }
+            Expr::InList { expr, list, .. } => {
+                expr.shift_columns(by);
+                list.iter_mut().for_each(|e| e.shift_columns(by));
+            }
+            Expr::Case {
+                operand,
+                branches,
+                otherwise,
+            } => {
+                for e in operand.iter_mut().chain(otherwise.iter_mut()) {
+                    e.shift_columns(by);
+                }
+                for (when, then) in branches {
+                    when.shift_columns(by);
+                    then.shift_columns(by);
+                }
+            }
+            Expr::Function { args, .. } => args.iter_mut().for_each(|e| e.shift_columns(by)),
+            // A subquery reads this query's columns as outer columns, which
+            // point into the whole row; the planner never moves one.
+            Expr::Subquery { .. } => unreachable!("expressions with subqueries stay in place"),
         }
     }
 }
@@ -320,19 +460,24 @@ pub fn compare(
 /// `x IN (list)` as three-valued logic. The list values have no affinity of
 /// their own, so `x`'s affinity decides: SQLite treats `x IN (a, b)` as
 /// `x = +a OR x = +b`.
-fn eval_in_list(expr: &Expr, list: &[Expr], row: &[Value]) -> Result<Option<bool>> {
+fn eval_in_list(
+    expr: &Expr,
+    list: &[Expr],
+    row: &[Value],
+    env: &mut dyn Env,
+) -> Result<Option<bool>> {
     // An empty list contains nothing, not even NULL.
     if list.is_empty() {
         return Ok(Some(false));
     }
-    let v = expr.eval(row)?;
+    let v = expr.eval_with(row, env)?;
     if v.is_null() {
         return Ok(None);
     }
     let affinity = expr.affinity();
     let mut saw_null = false;
     for item in list {
-        match compare(v.clone(), affinity, item.eval(row)?, None) {
+        match compare(v.clone(), affinity, item.eval_with(row, env)?, None) {
             Some(Ordering::Equal) => return Ok(Some(true)),
             None => saw_null = true,
             Some(_) => {}
@@ -340,6 +485,32 @@ fn eval_in_list(expr: &Expr, list: &[Expr], row: &[Value]) -> Result<Option<bool
     }
     // Not found, but a NULL in the list might have been equal: unknown.
     Ok(if saw_null { None } else { Some(false) })
+}
+
+/// `x IN (SELECT y ...)` as three-valued logic. Unlike a list, the subquery's
+/// column has an affinity, and `x = y` decides as it would in a comparison.
+fn in_values(
+    v: Value,
+    affinity: Option<Affinity>,
+    values: &[Value],
+    values_affinity: Option<Affinity>,
+) -> Option<bool> {
+    // No rows contain nothing, not even NULL.
+    if values.is_empty() {
+        return Some(false);
+    }
+    if v.is_null() {
+        return None;
+    }
+    let mut saw_null = false;
+    for value in values {
+        match compare(v.clone(), affinity, value.clone(), values_affinity) {
+            Some(Ordering::Equal) => return Some(true),
+            None => saw_null = true,
+            Some(_) => {}
+        }
+    }
+    if saw_null { None } else { Some(false) }
 }
 
 /// `CAST(v AS type)`, where the type has already been reduced to an affinity.
@@ -634,6 +805,16 @@ impl fmt::Display for Expr {
                 comma_list(f, args)?;
                 f.write_str(")")
             }
+            Expr::OuterColumn { name, .. } => f.write_str(name),
+            Expr::Subquery { kind, query } => match kind {
+                SubqueryKind::Scalar => write!(f, "({})", query.sql),
+                SubqueryKind::Exists { negated } => {
+                    write!(f, "{}EXISTS ({})", not(*negated), query.sql)
+                }
+                SubqueryKind::In { expr, negated } => {
+                    write!(f, "{expr} {}IN ({})", not(*negated), query.sql)
+                }
+            },
         }
     }
 }

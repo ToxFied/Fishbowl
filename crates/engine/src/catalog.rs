@@ -1,8 +1,9 @@
-//! The catalog: what tables exist and what columns they have.
+//! The catalog: what tables and views exist and what columns they have.
 
 use std::collections::BTreeMap;
 
 use serde::Serialize;
+use sqlparser::ast;
 
 use crate::error::{Error, Result};
 use crate::value::Affinity;
@@ -30,23 +31,54 @@ impl TableSchema {
     }
 }
 
-/// Tables keyed by lowercase name, so lookups ignore case like SQLite does.
+/// A view: a named SELECT, planned again each time a query uses it.
+#[derive(Debug, Clone)]
+pub struct View {
+    pub name: String,
+    /// Column names from `CREATE VIEW v(a, b)`. Empty means the SELECT's own.
+    pub columns: Vec<String>,
+    pub query: Box<ast::Query>,
+}
+
+/// Tables and views keyed by lowercase name, so lookups ignore case like
+/// SQLite does. A table and a view cannot share a name.
 #[derive(Debug, Default)]
 pub struct Catalog {
     tables: BTreeMap<String, TableSchema>,
+    views: BTreeMap<String, View>,
 }
 
 impl Catalog {
     pub fn add_table(&mut self, schema: TableSchema) -> Result<()> {
-        let key = schema.name.to_ascii_lowercase();
-        if self.tables.contains_key(&key) {
-            return Err(Error::Catalog(format!(
-                "table {} already exists",
-                schema.name
-            )));
-        }
-        self.tables.insert(key, schema);
+        self.check_name_free(&schema.name)?;
+        self.tables.insert(schema.name.to_ascii_lowercase(), schema);
         Ok(())
+    }
+
+    pub fn add_view(&mut self, view: View) -> Result<()> {
+        self.check_name_free(&view.name)?;
+        self.views.insert(view.name.to_ascii_lowercase(), view);
+        Ok(())
+    }
+
+    fn check_name_free(&self, name: &str) -> Result<()> {
+        let key = name.to_ascii_lowercase();
+        let kind = if self.tables.contains_key(&key) {
+            "table"
+        } else if self.views.contains_key(&key) {
+            "view"
+        } else {
+            return Ok(());
+        };
+        Err(Error::Catalog(format!("{kind} {name} already exists")))
+    }
+
+    pub fn remove_view(&mut self, name: &str) -> Option<View> {
+        self.views.remove(&name.to_ascii_lowercase())
+    }
+
+    pub fn view(&self, name: &str) -> Option<&View> {
+        self.views.get(&name.to_ascii_lowercase())
     }
 
     pub fn remove_table(&mut self, name: &str) -> Option<TableSchema> {

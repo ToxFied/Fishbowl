@@ -81,6 +81,8 @@ fn run(db: &mut Database, sql: &str) -> ExitCode {
             Ok(StatementResult::Update { table, rows }) => println!("updated {rows} in {table}"),
             Ok(StatementResult::Delete { table, rows }) => println!("deleted {rows} from {table}"),
             Ok(StatementResult::DropTable { table }) => println!("dropped table {table}"),
+            Ok(StatementResult::CreateView { view }) => println!("created view {view}"),
+            Ok(StatementResult::DropView { view }) => println!("dropped view {view}"),
             Ok(StatementResult::Query(result)) => print_query(&result),
             Err(e) => {
                 eprintln!("error: {e}\n  in: {}", entry.sql);

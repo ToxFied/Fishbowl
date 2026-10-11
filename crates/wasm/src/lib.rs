@@ -94,7 +94,8 @@ mod tests {
         let out: Value = serde_json::from_str(&fishbowl.run(
 "CREATE TABLE t(a INTEGER); INSERT INTO t VALUES (1), (2); SELECT a FROM t WHERE a > 1; \
              UPDATE t SET a = 3 WHERE a = 2; DELETE FROM t WHERE a = 1; \
-             CREATE TABLE gone(x); DROP TABLE gone; SELECT b FROM t",
+             CREATE TABLE gone(x); DROP TABLE gone; \
+             CREATE VIEW v AS SELECT a FROM t; DROP VIEW v; SELECT b FROM t",
         ))
         .unwrap();
 
@@ -128,8 +129,17 @@ mod tests {
             json!({"kind": "drop_table", "table": "gone"})
         );
 
-        assert_eq!(statements[7]["status"], "error");
-        assert_eq!(statements[7]["message"], "no such column: b");
+        assert_eq!(
+            statements[7]["result"],
+            json!({"kind": "create_view", "view": "v"})
+        );
+        assert_eq!(
+            statements[8]["result"],
+            json!({"kind": "drop_view", "view": "v"})
+        );
+
+        assert_eq!(statements[9]["status"], "error");
+        assert_eq!(statements[9]["message"], "no such column: b");
         assert_eq!(out["tables"].as_array().unwrap().len(), 1);
         assert_eq!(out["tables"][0]["name"], "t");
         assert_eq!(out["tables"][0]["row_count"], 1);

@@ -28,6 +28,8 @@ export type StatementResult =
   | { kind: "update"; table: string; rows: number }
   | { kind: "delete"; table: string; rows: number }
   | { kind: "drop_table"; table: string }
+  | { kind: "create_view"; view: string }
+  | { kind: "drop_view"; view: string }
   | QueryResult;
 
 export type Entry =

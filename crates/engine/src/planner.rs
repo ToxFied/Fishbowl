@@ -4,21 +4,37 @@
 //! "column 0 > 1", checked against the catalog. Anything Fishbowl does not
 //! implement yet is rejected here with [`Error::Unsupported`], never ignored.
 
+use std::cell::RefCell;
+
 use sqlparser::ast;
 
-use crate::catalog::{Catalog, Column, TableSchema};
+use crate::catalog::{Catalog, Column, TableSchema, View};
 use crate::error::{Error, Result, unsupported};
 use crate::expr::{
-    AggregateCall, AggregateFunc, BinaryOp, Expr, ScalarFunc, UnaryOp, is_sqlite_function,
+    AggregateCall, AggregateFunc, BinaryOp, Expr, ScalarFunc, SubqueryKind, UnaryOp,
+    is_sqlite_function,
 };
-use crate::plan::{Plan, PlanNode, QueryPlan, SortKey};
+use crate::plan::{JoinKind, Plan, PlanNode, QueryPlan, SetOp, SortKey, Subquery};
 use crate::value::{Affinity, Value};
 
 pub fn plan_statement(catalog: &Catalog, stmt: &ast::Statement) -> Result<Plan> {
     match stmt {
         ast::Statement::CreateTable(create) => plan_create_table(create),
         ast::Statement::Insert(insert) => plan_insert(catalog, insert),
-        ast::Statement::Query(query) => plan_query(catalog, query).map(Plan::Query),
+        ast::Statement::Query(query) => {
+            plan_query(&Planner::new(catalog), query, None).map(Plan::Query)
+        }
+        ast::Statement::CreateView(create) => plan_create_view(create),
+        ast::Statement::Drop {
+            object_type: ast::ObjectType::View,
+            if_exists,
+            names,
+            cascade: false,
+            restrict: false,
+            purge: false,
+            temporary: false,
+            ..
+        } => plan_drop_view(catalog, *if_exists, names),
         ast::Statement::Update(update) => plan_update(catalog, update),
         ast::Statement::Delete(delete) => plan_delete(catalog, delete),
         ast::Statement::Drop {
@@ -148,12 +164,80 @@ fn plan_drop_table(catalog: &Catalog, if_exists: bool, names: &[ast::ObjectName]
         return unsupported("DROP TABLE of several tables");
     };
     let name = object_name(name)?;
+    if catalog.view(&name).is_some() {
+        return Err(Error::Catalog(format!(
+            "use DROP VIEW to delete view {name}"
+        )));
+    }
     let table = match catalog.table(&name) {
         Ok(schema) => schema.name.clone(),
         Err(_) if if_exists => name,
         Err(e) => return Err(e),
     };
     Ok(Plan::DropTable { table, if_exists })
+}
+
+fn plan_create_view(create: &ast::CreateView) -> Result<Plan> {
+    if create.or_alter
+        || create.or_replace
+        || create.materialized
+        || create.secure
+        || create.options != ast::CreateTableOptions::None
+        || !create.cluster_by.is_empty()
+        || create.comment.is_some()
+        || create.with_no_schema_binding
+        || create.copy_grants
+        || create.to.is_some()
+        || create.params.is_some()
+    {
+        return unsupported("this CREATE VIEW option");
+    }
+    let mut columns = Vec::new();
+    for column in &create.columns {
+        if column.data_type.is_some() || column.options.is_some() {
+            return unsupported("a type or option on a view column");
+        }
+        columns.push(column.name.value.clone());
+    }
+    // Like SQLite, the SELECT is checked when a query uses the view, not now.
+    // A TEMP view behaves like any other: Fishbowl does not save views yet.
+    Ok(Plan::CreateView {
+        view: View {
+            name: object_name(&create.name)?,
+            columns,
+            query: create.query.clone(),
+        },
+        if_not_exists: create.if_not_exists,
+    })
+}
+
+fn plan_drop_view(catalog: &Catalog, if_exists: bool, names: &[ast::ObjectName]) -> Result<Plan> {
+    let [name] = names else {
+        return unsupported("DROP VIEW of several views");
+    };
+    let name = object_name(name)?;
+    let view = match catalog.view(&name) {
+        Some(view) => view.name.clone(),
+        None if catalog.table(&name).is_ok() => {
+            return Err(Error::Catalog(format!(
+                "use DROP TABLE to delete table {name}"
+            )));
+        }
+        None if if_exists => name,
+        None => return Err(Error::Catalog(format!("no such view: {name}"))),
+    };
+    Ok(Plan::DropView { view, if_exists })
+}
+
+/// The table an INSERT, UPDATE or DELETE writes to. A view cannot be written.
+fn writable_table<'a>(catalog: &'a Catalog, name: &ast::ObjectName) -> Result<&'a TableSchema> {
+    let name = object_name(name)?;
+    if catalog.view(&name).is_some() {
+        return Err(Error::Catalog(format!(
+            "cannot modify {name} because it is a view"
+        )));
+    }
+    catalog.table(&name)
 }
 
 /// The one table an UPDATE or DELETE changes, and the names its expressions
@@ -174,11 +258,9 @@ fn dml_target<'a>(
     else {
         return unsupported("UPDATE or DELETE of a subquery or table function");
     };
-    let schema = catalog.table(&object_name(name)?)?;
-    let scope = Scope {
-        table: Some(schema),
-        alias: alias.as_ref().map(|a| a.name.value.clone()),
-    };
+    let schema = writable_table(catalog, name)?;
+    let mut scope = Scope::new(None);
+    scope.add_table(schema, alias.as_ref());
     Ok((schema, scope))
 }
 
@@ -189,7 +271,7 @@ fn plan_insert(catalog: &Catalog, insert: &ast::Insert) -> Result<Plan> {
     let ast::TableObject::TableName(table_name) = &insert.table else {
         return unsupported("INSERT INTO a table function");
     };
-    let schema = catalog.table(&object_name(table_name)?)?;
+    let schema = writable_table(catalog, table_name)?;
     let targets = if insert.columns.is_empty() {
         (0..schema.columns.len()).collect()
     } else {
@@ -211,7 +293,7 @@ fn plan_insert(catalog: &Catalog, insert: &ast::Insert) -> Result<Plan> {
         return unsupported("INSERT ... SELECT");
     };
     // VALUES rows are constants: there is no table in scope to reference.
-    let scope = Scope::empty();
+    let scope = Scope::new(None);
     let mut binder = Binder::without_items(&scope);
     let mut rows = Vec::new();
     for row in &values.rows {
@@ -236,7 +318,25 @@ fn plan_insert(catalog: &Catalog, insert: &ast::Insert) -> Result<Plan> {
     })
 }
 
-fn plan_query(catalog: &Catalog, query: &ast::Query) -> Result<QueryPlan> {
+/// What planning a query needs besides its syntax tree: the catalog, and the
+/// views being expanded, to catch a view defined in terms of itself.
+struct Planner<'c> {
+    catalog: &'c Catalog,
+    views: RefCell<Vec<String>>,
+}
+
+impl<'c> Planner<'c> {
+    fn new(catalog: &'c Catalog) -> Self {
+        Planner {
+            catalog,
+            views: RefCell::new(Vec::new()),
+        }
+    }
+}
+
+/// Plans a query. `outer` holds the names of the queries it is nested in,
+/// for a subquery that reads their columns.
+fn plan_query(cx: &Planner, query: &ast::Query, outer: Option<&Scope>) -> Result<QueryPlan> {
     if query.with.is_some() {
         return unsupported("WITH (common table expressions)");
     }
@@ -249,33 +349,56 @@ fn plan_query(catalog: &Catalog, query: &ast::Query) -> Result<QueryPlan> {
     {
         return unsupported("this query clause");
     }
-    let select = match query.body.as_ref() {
-        ast::SetExpr::Select(select) => select,
-        ast::SetExpr::SetOperation { .. } => return unsupported("compound SELECT (UNION etc.)"),
+    let order_by = query.order_by.as_ref();
+    let mut plan = match query.body.as_ref() {
+        ast::SetExpr::Select(select) => plan_select(cx, select, order_by, outer)?,
+        ast::SetExpr::SetOperation { .. } => plan_compound(cx, &query.body, order_by, outer)?,
         ast::SetExpr::Query(_) => return unsupported("parenthesized SELECT"),
         ast::SetExpr::Values(_) => return unsupported("VALUES as a query"),
         _ => return unsupported("this kind of query"),
     };
+    if let Some((limit, offset)) = limit_clause(query)? {
+        // LIMIT and OFFSET are constants: no table is in scope.
+        let scope = Scope::new(None);
+        let mut constants = Binder::without_items(&scope);
+        plan.root = PlanNode::Limit {
+            input: Box::new(plan.root),
+            limit: constants.bind(limit, Ctx::CONSTANT)?,
+            offset: match offset {
+                Some(offset) => Some(constants.bind(offset, Ctx::CONSTANT)?),
+                None => None,
+            },
+        };
+    }
+    Ok(plan)
+}
+
+fn plan_select(
+    cx: &Planner,
+    select: &ast::Select,
+    order_by: Option<&ast::OrderBy>,
+    outer: Option<&Scope>,
+) -> Result<QueryPlan> {
     let distinct = select_is_distinct(select)?;
     let group_by_terms = match &select.group_by {
         ast::GroupByExpr::Expressions(terms, modifiers) if modifiers.is_empty() => terms,
         _ => return unsupported("GROUP BY ALL or GROUP BY modifiers"),
     };
 
-    let (scope, mut root) = plan_from(catalog, &select.from)?;
+    let (scope, from) = plan_from(cx, &select.from, outer)?;
     let items = select_items(&scope, &select.projection)?;
     let mut binder = Binder {
         scope: &scope,
         items: &items,
         aggregates: Vec::new(),
+        cx: Some(cx),
     };
 
-    if let Some(predicate) = &select.selection {
-        root = PlanNode::Filter {
-            input: Box::new(root),
-            predicate: binder.bind(predicate, Ctx::ROW)?,
-        };
-    }
+    let predicate = match &select.selection {
+        Some(predicate) => Some(binder.bind(predicate, Ctx::ROW)?),
+        None => None,
+    };
+    let mut root = join_tree(from, &mut binder, predicate)?;
 
     // Binding the result columns finds any aggregates, which is what makes
     // this an aggregate query.
@@ -294,7 +417,7 @@ fn plan_query(catalog: &Catalog, query: &ast::Query) -> Result<QueryPlan> {
     let output = if is_aggregate { Ctx::GROUPED } else { Ctx::ROW };
 
     // ORDER BY before HAVING, so aggregates are numbered in SQLite's order.
-    let sort_keys = match &query.order_by {
+    let sort_keys = match order_by {
         Some(order_by) => binder.sort_keys(order_by, output)?,
         None => Vec::new(),
     };
@@ -302,7 +425,6 @@ fn plan_query(catalog: &Catalog, query: &ast::Query) -> Result<QueryPlan> {
         Some(having) => Some(binder.bind(having, output)?),
         None => None,
     };
-
     if is_aggregate {
         // Grouping sorts rows by the GROUP BY values. When ORDER BY has as
         // many terms, SQLite sorts each GROUP BY term in the direction of the
@@ -371,6 +493,7 @@ fn plan_query(catalog: &Catalog, query: &ast::Query) -> Result<QueryPlan> {
                 .into(),
         };
     }
+    let affinities = exprs.iter().map(Expr::affinity).collect();
     root = PlanNode::Project {
         input: Box::new(root),
         exprs,
@@ -380,26 +503,181 @@ fn plan_query(catalog: &Catalog, query: &ast::Query) -> Result<QueryPlan> {
             input: Box::new(root),
         };
     }
-    if let Some((limit, offset)) = limit_clause(query)? {
-        // LIMIT and OFFSET are constants: no table is in scope.
-        let scope = Scope::empty();
-        let mut constants = Binder::without_items(&scope);
-        root = PlanNode::Limit {
-            input: Box::new(root),
-            limit: constants.bind(limit, Ctx::CONSTANT)?,
-            offset: match offset {
-                Some(offset) => Some(constants.bind(offset, Ctx::CONSTANT)?),
-                None => None,
-            },
-        };
-    }
-
     Ok(QueryPlan {
         columns: items.into_iter().map(|item| item.name).collect(),
+        affinities,
         root,
     })
 }
 
+/// Plans `a UNION b EXCEPT c ...`. SQLite gives every operator the same
+/// precedence and works left to right: `(a UNION b) EXCEPT c`. The parser
+/// gives INTERSECT a higher one, so the tree is flattened and rebuilt.
+fn plan_compound(
+    cx: &Planner,
+    body: &ast::SetExpr,
+    order_by: Option<&ast::OrderBy>,
+    outer: Option<&Scope>,
+) -> Result<QueryPlan> {
+    let mut selects = Vec::new();
+    let mut ops = Vec::new();
+    flatten_compound(body, &mut selects, &mut ops)?;
+    let mut arms = selects
+        .iter()
+        .map(|select| plan_select(cx, select, None, outer));
+    let first = arms
+        .next()
+        .expect("a compound SELECT has at least two sides")?;
+    let mut root = first.root;
+    for (op, arm) in ops.into_iter().zip(arms) {
+        let arm = arm?;
+        if arm.columns.len() != first.columns.len() {
+            return Err(Error::Parse(format!(
+                "SELECTs to the left and right of {} do not have the same number of result columns",
+                op.keyword()
+            )));
+        }
+        root = PlanNode::Compound {
+            op,
+            left: Box::new(root),
+            right: Box::new(arm.root),
+        };
+    }
+    if let Some(order_by) = order_by {
+        root = PlanNode::Sort {
+            input: Box::new(root),
+            keys: compound_sort_keys(cx, order_by, &selects, &first.columns, outer)?,
+            reason: "no index returns rows in this order, so all of them are read and sorted"
+                .into(),
+        };
+    }
+    Ok(QueryPlan {
+        columns: first.columns,
+        affinities: first.affinities,
+        root,
+    })
+}
+
+fn flatten_compound<'q>(
+    body: &'q ast::SetExpr,
+    selects: &mut Vec<&'q ast::Select>,
+    ops: &mut Vec<SetOp>,
+) -> Result<()> {
+    match body {
+        ast::SetExpr::Select(select) => selects.push(select),
+        ast::SetExpr::SetOperation {
+            left,
+            op,
+            set_quantifier,
+            right,
+        } => {
+            use ast::{SetOperator as O, SetQuantifier as Q};
+            flatten_compound(left, selects, ops)?;
+            ops.push(match (op, set_quantifier) {
+                (O::Union, Q::All) => SetOp::UnionAll,
+                (O::Union, Q::None | Q::Distinct) => SetOp::Union,
+                (O::Intersect, Q::None) => SetOp::Intersect,
+                (O::Except, Q::None) => SetOp::Except,
+                _ => return unsupported(format!("{op} {set_quantifier}")),
+            });
+            flatten_compound(right, selects, ops)?;
+        }
+        ast::SetExpr::Query(_) => return unsupported("parenthesized SELECT"),
+        ast::SetExpr::Values(_) => return unsupported("VALUES as a query"),
+        _ => return unsupported("this kind of query"),
+    }
+    Ok(())
+}
+
+/// ORDER BY on a compound SELECT sorts by result columns. A term picks one by
+/// position, by an `AS` name, or by being the same expression as one of the
+/// columns, trying each SELECT from the left, as SQLite does.
+fn compound_sort_keys(
+    cx: &Planner,
+    order_by: &ast::OrderBy,
+    selects: &[&ast::Select],
+    columns: &[String],
+    outer: Option<&Scope>,
+) -> Result<Vec<SortKey>> {
+    let mut keys = Vec::new();
+    for (i, term) in order_by_terms(order_by)?.iter().enumerate() {
+        let (descending, nulls_first) = sort_direction(term)?;
+        let position = match folded_integer(&term.expr) {
+            Some(n) => match usize::try_from(n)
+                .ok()
+                .filter(|n| (1..=columns.len()).contains(n))
+            {
+                Some(n) => n - 1,
+                None => {
+                    return Err(Error::Parse(format!(
+                        "{} ORDER BY term out of range - should be between 1 and {}",
+                        ordinal(i + 1),
+                        columns.len()
+                    )));
+                }
+            },
+            None => {
+                let mut found = None;
+                for select in selects {
+                    found = matching_column(cx, select, &term.expr, outer)?;
+                    if found.is_some() {
+                        break;
+                    }
+                }
+                found.ok_or_else(|| {
+                    Error::Parse(format!(
+                        "{} ORDER BY term does not match any column in the result set",
+                        ordinal(i + 1)
+                    ))
+                })?
+            }
+        };
+        keys.push(SortKey {
+            expr: Expr::Column {
+                index: position,
+                name: columns[position].clone(),
+                affinity: Affinity::Blob,
+            },
+            descending,
+            nulls_first,
+        });
+    }
+    Ok(keys)
+}
+
+/// The result column of `select` that `term` names or repeats, if any.
+fn matching_column(
+    cx: &Planner,
+    select: &ast::Select,
+    term: &ast::Expr,
+    outer: Option<&Scope>,
+) -> Result<Option<usize>> {
+    let (scope, _) = plan_from(cx, &select.from, outer)?;
+    let items = select_items(&scope, &select.projection)?;
+    if let ast::Expr::Identifier(ident) = term
+        && let Some(i) = items
+            .iter()
+            .position(|item| item.is_alias && item.name.eq_ignore_ascii_case(&ident.value))
+    {
+        return Ok(Some(i));
+    }
+    let mut binder = Binder {
+        scope: &scope,
+        items: &[],
+        aggregates: Vec::new(),
+        cx: Some(cx),
+    };
+    // A term that does not even bind here cannot match this SELECT.
+    let Ok(term) = binder.bind(term, Ctx::GROUPED) else {
+        return Ok(None);
+    };
+    for (i, item) in items.iter().enumerate() {
+        if binder.bind_item(item, Ctx::GROUPED)? == term {
+            return Ok(Some(i));
+        }
+    }
+    Ok(None)
+}
 /// Whether the SELECT has DISTINCT, after rejecting every part of a SELECT
 /// that Fishbowl does not handle.
 fn select_is_distinct(select: &ast::Select) -> Result<bool> {
@@ -429,38 +707,392 @@ fn select_is_distinct(select: &ast::Select) -> Result<bool> {
     }
 }
 
-fn plan_from<'c>(
-    catalog: &'c Catalog,
-    from: &[ast::TableWithJoins],
-) -> Result<(Scope<'c>, PlanNode)> {
-    match from {
-        [] => Ok((Scope::empty(), PlanNode::OneRow)),
-        [from] => {
-            if !from.joins.is_empty() {
-                return unsupported("JOIN");
-            }
-            let ast::TableFactor::Table {
-                name,
-                alias,
-                args: None,
-                ..
-            } = &from.relation
-            else {
-                return unsupported("subquery or table function in FROM");
-            };
-            let schema = catalog.table(&object_name(name)?)?;
-            let scope = Scope {
-                table: Some(schema),
-                alias: alias.as_ref().map(|a| a.name.value.clone()),
-            };
-            let scan = PlanNode::SeqScan {
-                table: schema.name.clone(),
-                reason: format!("{} has no index, so every row is read", schema.name),
-            };
-            Ok((scope, scan))
-        }
-        _ => unsupported("JOIN (more than one table in FROM)"),
+/// One table, view or subquery in FROM, planned, and how it joins the ones
+/// before it.
+struct FromItem<'q> {
+    node: PlanNode,
+    name: String,
+    kind: JoinKind,
+    /// The ON condition, bound once every table in FROM is in scope.
+    on: Option<&'q ast::Expr>,
+}
+
+/// Plans each table in FROM and puts their columns in one scope, in order.
+/// A row of the join is a row of each table, one after the other.
+fn plan_from<'q, 's>(
+    cx: &Planner,
+    from: &'q [ast::TableWithJoins],
+    outer: Option<&'s Scope<'s>>,
+) -> Result<(Scope<'s>, Vec<FromItem<'q>>)> {
+    let mut scope = Scope::new(outer);
+    let mut items = Vec::new();
+    for table in from {
+        // A comma between tables is a join with no condition.
+        add_joins(cx, table, JoinKind::Inner, None, &mut scope, &mut items)?;
     }
+    Ok((scope, items))
+}
+
+/// Adds `a JOIN b ON ... JOIN c ...` to FROM, joined to what is there with
+/// `kind` and `on`.
+fn add_joins<'q>(
+    cx: &Planner,
+    table: &'q ast::TableWithJoins,
+    kind: JoinKind,
+    on: Option<&'q ast::Expr>,
+    scope: &mut Scope,
+    items: &mut Vec<FromItem<'q>>,
+) -> Result<()> {
+    add_relation(cx, &table.relation, kind, on, scope, items)?;
+    for join in &table.joins {
+        let (kind, on) = join_kind(join)?;
+        add_relation(cx, &join.relation, kind, on, scope, items)?;
+    }
+    Ok(())
+}
+
+fn join_kind(join: &ast::Join) -> Result<(JoinKind, Option<&ast::Expr>)> {
+    use ast::JoinOperator as J;
+    if join.global {
+        return unsupported("GLOBAL JOIN");
+    }
+    let (kind, constraint) = match &join.join_operator {
+        J::Join(c) | J::Inner(c) | J::CrossJoin(c) => (JoinKind::Inner, c),
+        J::Left(c) | J::LeftOuter(c) => (JoinKind::Left, c),
+        J::Right(_) | J::RightOuter(_) => return unsupported("RIGHT JOIN"),
+        J::FullOuter(_) => return unsupported("FULL JOIN"),
+        _ => return unsupported("this kind of JOIN"),
+    };
+    match constraint {
+        ast::JoinConstraint::On(e) => Ok((kind, Some(e))),
+        ast::JoinConstraint::None => Ok((kind, None)),
+        ast::JoinConstraint::Using(_) => unsupported("JOIN ... USING"),
+        ast::JoinConstraint::Natural => unsupported("NATURAL JOIN"),
+    }
+}
+
+/// Adds one table, view or subquery to FROM. A join in parentheses is added
+/// table by table, where that keeps its meaning: first in FROM, after a
+/// comma, or when every join in it is an inner join.
+fn add_relation<'q>(
+    cx: &Planner,
+    factor: &'q ast::TableFactor,
+    kind: JoinKind,
+    on: Option<&'q ast::Expr>,
+    scope: &mut Scope,
+    items: &mut Vec<FromItem<'q>>,
+) -> Result<()> {
+    if let ast::TableFactor::NestedJoin {
+        table_with_joins,
+        alias: None,
+    } = factor
+    {
+        let all_inner = table_with_joins
+            .joins
+            .iter()
+            .all(|j| join_kind(j).is_ok_and(|(kind, _)| kind == JoinKind::Inner));
+        let flat = items.is_empty() || kind == JoinKind::Inner && (on.is_none() || all_inner);
+        if !flat {
+            return unsupported("a join in parentheses after LEFT JOIN or before ON");
+        }
+        return add_joins(cx, table_with_joins, kind, on, scope, items);
+    }
+    let (node, name) = plan_table(cx, factor, scope)?;
+    items.push(FromItem {
+        node,
+        name,
+        kind,
+        on,
+    });
+    Ok(())
+}
+
+/// Plans one table, view or subquery in FROM and adds its columns to `scope`.
+/// Returns the plan and the name it goes by.
+fn plan_table(
+    cx: &Planner,
+    factor: &ast::TableFactor,
+    scope: &mut Scope,
+) -> Result<(PlanNode, String)> {
+    match factor {
+        ast::TableFactor::Table {
+            name,
+            alias,
+            args: None,
+            ..
+        } => {
+            let name = object_name(name)?;
+            if let Some(view) = cx.catalog.view(&name) {
+                return plan_view(cx, view, alias.as_ref(), scope);
+            }
+            let schema = cx.catalog.table(&name)?;
+            let name = scope.add_table(schema, alias.as_ref());
+            Ok((scan(schema), name))
+        }
+        ast::TableFactor::Derived {
+            lateral: false,
+            subquery,
+            alias,
+            sample: None,
+        } => {
+            if alias.as_ref().is_some_and(|a| !a.columns.is_empty()) {
+                return unsupported("column names after a subquery's alias");
+            }
+            // A subquery in FROM sees the same enclosing queries as this one,
+            // but not the other tables in this FROM.
+            let plan = plan_query(cx, subquery, scope.parent)?;
+            let alias = alias.as_ref().map(|a| a.name.value.clone());
+            let name = alias.clone().unwrap_or_else(|| "subquery".into());
+            scope.add_query(alias, &plan.columns, &plan.affinities);
+            let node = PlanNode::SubqueryScan {
+                input: Box::new(plan.root),
+                name: name.clone(),
+            };
+            Ok((node, name))
+        }
+        _ => unsupported("subquery or table function in FROM"),
+    }
+}
+
+/// A view in FROM is planned like a subquery, from its stored SELECT.
+fn plan_view(
+    cx: &Planner,
+    view: &View,
+    alias: Option<&ast::TableAlias>,
+    scope: &mut Scope,
+) -> Result<(PlanNode, String)> {
+    if alias.is_some_and(|a| !a.columns.is_empty()) {
+        return unsupported("column names after a view's alias");
+    }
+    if cx
+        .views
+        .borrow()
+        .iter()
+        .any(|v| v.eq_ignore_ascii_case(&view.name))
+    {
+        return Err(Error::Catalog(format!(
+            "view {} is circularly defined",
+            view.name
+        )));
+    }
+    // A view cannot see the columns of the query that uses it.
+    cx.views.borrow_mut().push(view.name.clone());
+    let plan = plan_query(cx, &view.query, None);
+    cx.views.borrow_mut().pop();
+    let plan = plan?;
+    let columns = if view.columns.is_empty() {
+        plan.columns
+    } else if view.columns.len() == plan.columns.len() {
+        view.columns.clone()
+    } else {
+        return Err(Error::Catalog(format!(
+            "expected {} columns for '{}' but got {}",
+            view.columns.len(),
+            view.name,
+            plan.columns.len()
+        )));
+    };
+    let name = alias.map_or_else(|| view.name.clone(), |a| a.name.value.clone());
+    scope.add_query(Some(name.clone()), &columns, &plan.affinities);
+    let node = PlanNode::SubqueryScan {
+        input: Box::new(plan.root),
+        name: name.clone(),
+    };
+    Ok((node, name))
+}
+
+/// How the rows of a table are read.
+fn scan(schema: &TableSchema) -> PlanNode {
+    PlanNode::SeqScan {
+        table: schema.name.clone(),
+        reason: format!("{} has no index, so every row is read", schema.name),
+    }
+}
+
+/// Joins the FROM items left to right with nested loops, and places every
+/// condition from WHERE and ON as low in the tree as it can go: on the table
+/// it reads, or at the first join where all the columns it reads are there.
+/// A condition then drops rows before they are joined, instead of after.
+///
+/// A LEFT JOIN's ON condition stays on its join, unless it reads only the
+/// right table: dropping left rows would lose the ones that should come out
+/// padded with NULLs. For the same reason a WHERE condition that reads a LEFT
+/// JOIN's table waits until after that join.
+fn join_tree(
+    from: Vec<FromItem>,
+    binder: &mut Binder,
+    predicate: Option<Expr>,
+) -> Result<PlanNode> {
+    let scope = binder.scope;
+    let tables = &scope.tables;
+    if from.is_empty() {
+        return Ok(with_filter(
+            PlanNode::OneRow,
+            predicate.into_iter().collect(),
+        ));
+    }
+    if from.len() == 1 {
+        let first = from.into_iter().next().expect("checked above");
+        return Ok(with_filter(first.node, predicate.into_iter().collect()));
+    }
+
+    // Where each table's columns end in a joined row.
+    let ends: Vec<usize> = tables.iter().map(|t| t.offset + t.columns.len()).collect();
+    let n = from.len();
+    // Per table: conditions on its rows alone, conditions on its join, and
+    // filters after its join.
+    let mut own: Vec<Vec<Expr>> = vec![Vec::new(); n];
+    let mut on_join: Vec<Vec<Expr>> = vec![Vec::new(); n];
+    let mut after: Vec<Vec<Expr>> = vec![Vec::new(); n];
+    let reads_only = |e: &Expr, k: usize| {
+        !has_subquery(e)
+            && columns_read(e).next().is_some()
+            && columns_read(e).all(|c| (tables[k].offset..ends[k]).contains(&c))
+    };
+
+    let mut conjuncts = Vec::new();
+    for (k, item) in from.iter().enumerate() {
+        let Some(on) = item.on else { continue };
+        let on = binder.bind(on, Ctx::ON)?;
+        match item.kind {
+            JoinKind::Left if columns_read(&on).any(|c| c >= ends[k]) => {
+                return Err(Error::Parse(
+                    "ON clause references tables to its right".into(),
+                ));
+            }
+            JoinKind::Left => {
+                for part in split_and(on) {
+                    let target = if reads_only(&part, k) {
+                        &mut own
+                    } else {
+                        &mut on_join
+                    };
+                    target[k].push(part);
+                }
+            }
+            // An inner join's ON condition means the same as one in WHERE.
+            JoinKind::Inner => conjuncts.extend(split_and(on)),
+        }
+    }
+    conjuncts.extend(predicate.into_iter().flat_map(split_and));
+    for conjunct in conjuncts {
+        // A subquery may read any column of the row, so it waits for all.
+        let level = if has_subquery(&conjunct) {
+            n - 1
+        } else {
+            columns_read(&conjunct)
+                .map(|c| ends.iter().position(|&end| c < end).unwrap_or(n - 1))
+                .max()
+                .unwrap_or(0)
+        };
+        let target =
+            if level == 0 || reads_only(&conjunct, level) && from[level].kind == JoinKind::Inner {
+                &mut own
+            } else if from[level].kind == JoinKind::Left {
+                &mut after
+            } else {
+                &mut on_join
+            };
+        target[level].push(conjunct);
+    }
+
+    let mut root = None;
+    for (k, item) in from.into_iter().enumerate() {
+        // The table's own conditions see only its row, so their columns
+        // move to where the table's columns start.
+        let mut filters = std::mem::take(&mut own[k]);
+        filters
+            .iter_mut()
+            .for_each(|e| e.shift_columns(tables[k].offset));
+        let node = with_filter(item.node, filters);
+        let joined = match root {
+            None => node,
+            Some(left) => PlanNode::NestedLoopJoin {
+                left: Box::new(left),
+                right: Box::new(PlanNode::Materialize {
+                    input: Box::new(node),
+                }),
+                kind: item.kind,
+                condition: and_all(std::mem::take(&mut on_join[k])),
+                right_width: tables[k].columns.len(),
+                reason: format!(
+                    "no index can find the matching rows of {}, so each left row is checked against all of them",
+                    item.name
+                ),
+            },
+        };
+        root = Some(with_filter(joined, std::mem::take(&mut after[k])));
+    }
+    Ok(root.expect("FROM has a first table"))
+}
+
+fn with_filter(input: PlanNode, conjuncts: Vec<Expr>) -> PlanNode {
+    match and_all(conjuncts) {
+        Some(predicate) => PlanNode::Filter {
+            input: Box::new(input),
+            predicate,
+        },
+        None => input,
+    }
+}
+
+/// `a AND b AND c` as its parts.
+fn split_and(expr: Expr) -> Vec<Expr> {
+    match expr {
+        Expr::Binary {
+            op: BinaryOp::And,
+            left,
+            right,
+        } => {
+            let mut parts = split_and(*left);
+            parts.extend(split_and(*right));
+            parts
+        }
+        other => vec![other],
+    }
+}
+
+fn and_all(conjuncts: Vec<Expr>) -> Option<Expr> {
+    conjuncts.into_iter().reduce(|left, right| Expr::Binary {
+        op: BinaryOp::And,
+        left: Box::new(left),
+        right: Box::new(right),
+    })
+}
+
+/// The row positions an expression reads, not counting outer columns.
+fn columns_read(expr: &Expr) -> impl Iterator<Item = usize> {
+    let mut columns = Vec::new();
+    expr.walk(&mut |e| {
+        if let Expr::Column { index, .. } = e {
+            columns.push(*index);
+        }
+    });
+    columns.into_iter()
+}
+
+fn has_subquery(expr: &Expr) -> bool {
+    let mut found = false;
+    expr.walk(&mut |e| found |= matches!(e, Expr::Subquery { .. }));
+    found
+}
+
+/// Whether a plan reads a column of a query outside it. `nesting` counts the
+/// subqueries entered on the way down.
+fn reads_outside(node: &PlanNode, nesting: usize) -> bool {
+    let mut found = false;
+    for expr in node.exprs() {
+        expr.walk(&mut |e| match e {
+            Expr::OuterColumn { depth, .. } => found |= *depth > nesting,
+            Expr::Subquery { query, .. } => found |= reads_outside(&query.plan.root, nesting + 1),
+            _ => {}
+        });
+    }
+    found
+        || node
+            .children()
+            .iter()
+            .any(|child| reads_outside(child, nesting))
 }
 
 /// The `LIMIT` and `OFFSET` expressions, if any.
@@ -515,7 +1147,8 @@ struct Item<'q> {
 
 enum Source<'q> {
     Expr(&'q ast::Expr),
-    Column(usize),
+    /// A table column, already bound.
+    Column(Expr),
 }
 
 fn select_items<'q>(scope: &Scope, projection: &'q [ast::SelectItem]) -> Result<Vec<Item<'q>>> {
@@ -561,71 +1194,164 @@ fn check_wildcard_options(options: &ast::WildcardAdditionalOptions) -> Result<()
     Ok(())
 }
 
-/// The names visible to an expression: at most one table for now.
+/// The names visible to an expression: the tables in FROM, and through
+/// `parent`, those of the queries this one is nested in.
 struct Scope<'a> {
-    table: Option<&'a TableSchema>,
-    alias: Option<String>,
+    tables: Vec<ScopeTable>,
+    parent: Option<&'a Scope<'a>>,
+}
+
+/// One table, view or subquery in FROM.
+struct ScopeTable {
+    /// The alias, or else the table or view name. A subquery in FROM without
+    /// an alias has none, so no qualified name reaches its columns.
+    name: Option<String>,
+    columns: Vec<(String, Affinity)>,
+    /// Where its columns start in a joined row.
+    offset: usize,
+}
+
+impl ScopeTable {
+    fn matches(&self, qualifier: &str) -> bool {
+        self.name
+            .as_ref()
+            .is_some_and(|n| n.eq_ignore_ascii_case(qualifier))
+    }
 }
 
 impl<'a> Scope<'a> {
-    fn empty() -> Self {
+    fn new(parent: Option<&'a Scope<'a>>) -> Self {
         Scope {
-            table: None,
-            alias: None,
+            tables: Vec::new(),
+            parent,
         }
     }
 
     /// Columns in one input row.
     fn width(&self) -> usize {
-        self.table.map_or(0, |t| t.columns.len())
+        self.tables.last().map_or(0, |t| t.offset + t.columns.len())
     }
 
-    fn matches_qualifier(&self, qualifier: &str) -> bool {
-        match (self.table, &self.alias) {
-            (_, Some(alias)) => alias.eq_ignore_ascii_case(qualifier),
-            (Some(table), None) => table.name.eq_ignore_ascii_case(qualifier),
-            (None, None) => false,
+    /// Adds a table under its alias or name, and returns that name.
+    fn add_table(&mut self, schema: &TableSchema, alias: Option<&ast::TableAlias>) -> String {
+        let name = alias.map_or_else(|| schema.name.clone(), |a| a.name.value.clone());
+        self.tables.push(ScopeTable {
+            name: Some(name.clone()),
+            columns: schema
+                .columns
+                .iter()
+                .map(|c| (c.name.clone(), c.affinity))
+                .collect(),
+            offset: self.width(),
+        });
+        name
+    }
+
+    /// Adds the result of a view or a subquery. Repeated names get a `:1`,
+    /// `:2` suffix as in SQLite, so each column can be named. A column
+    /// computed by an expression has no affinity; Fishbowl uses BLOB, which
+    /// differs from SQLite only when compared with a TEXT column.
+    fn add_query(
+        &mut self,
+        name: Option<String>,
+        names: &[String],
+        affinities: &[Option<Affinity>],
+    ) {
+        let mut columns: Vec<(String, Affinity)> = Vec::new();
+        for (column, affinity) in names.iter().zip(affinities) {
+            let mut unique = column.clone();
+            let mut n = 0;
+            while columns.iter().any(|(c, _)| c.eq_ignore_ascii_case(&unique)) {
+                n += 1;
+                unique = format!("{column}:{n}");
+            }
+            columns.push((unique, affinity.unwrap_or(Affinity::Blob)));
         }
+        self.tables.push(ScopeTable {
+            name,
+            columns,
+            offset: self.width(),
+        });
     }
 
-    fn column_expr(table: &TableSchema, index: usize) -> Expr {
-        let column = &table.columns[index];
-        Expr::Column {
-            index,
-            name: column.name.clone(),
-            affinity: column.affinity,
-        }
+    /// Finds a column among this query's own tables. `Ok(None)` means none
+    /// of them has it.
+    fn local_column(&self, qualifier: Option<&str>, name: &str) -> Result<Option<Expr>> {
+        let qualify = self.tables.len() > 1;
+        Ok(self
+            .find_column(qualifier, name)?
+            .map(|(table, i)| column_expr(table, i, qualify)))
     }
 
-    fn column(&self, qualifier: Option<&str>, name: &str) -> Result<Expr> {
-        let found = self
-            .table
-            .filter(|_| qualifier.is_none_or(|q| self.matches_qualifier(q)));
-        match found.and_then(|t| Some((t, t.column_index(name)?))) {
-            Some((table, index)) => Ok(Self::column_expr(table, index)),
-            None => {
-                let full = qualifier.map_or(name.to_string(), |q| format!("{q}.{name}"));
-                Err(Error::Catalog(format!("no such column: {full}")))
+    fn find_column(
+        &self,
+        qualifier: Option<&str>,
+        name: &str,
+    ) -> Result<Option<(&ScopeTable, usize)>> {
+        let mut found = None;
+        for table in &self.tables {
+            if qualifier.is_some_and(|q| !table.matches(q)) {
+                continue;
+            }
+            if let Some(i) = table
+                .columns
+                .iter()
+                .position(|(c, _)| c.eq_ignore_ascii_case(name))
+            {
+                if found.is_some() {
+                    return Err(Error::Catalog(format!(
+                        "ambiguous column name: {}",
+                        qualified(qualifier, name)
+                    )));
+                }
+                found = Some((table, i));
             }
         }
+        Ok(found)
     }
 
     fn expand_wildcard(&self, qualifier: Option<&str>, items: &mut Vec<Item>) -> Result<()> {
-        let table = match (self.table, qualifier) {
-            (Some(t), None) => t,
-            (Some(t), Some(q)) if self.matches_qualifier(q) => t,
-            (_, Some(q)) => return Err(Error::Catalog(format!("no such table: {q}"))),
-            (None, None) => return Err(Error::Catalog("no tables specified".into())),
-        };
-        for (index, column) in table.columns.iter().enumerate() {
-            items.push(Item {
-                name: column.name.clone(),
-                is_alias: false,
-                source: Source::Column(index),
-            });
+        if self.tables.is_empty() && qualifier.is_none() {
+            return Err(Error::Catalog("no tables specified".into()));
         }
-        Ok(())
+        let mut matched = false;
+        for table in &self.tables {
+            if qualifier.is_some_and(|q| !table.matches(q)) {
+                continue;
+            }
+            matched = true;
+            for (i, (column, _)) in table.columns.iter().enumerate() {
+                items.push(Item {
+                    name: column.clone(),
+                    is_alias: false,
+                    source: Source::Column(column_expr(table, i, self.tables.len() > 1)),
+                });
+            }
+        }
+        match qualifier {
+            Some(q) if !matched => Err(Error::Catalog(format!("no such table: {q}"))),
+            _ => Ok(()),
+        }
     }
+}
+
+/// Column `i` of a table in scope. `qualify` names its table too, for the
+/// plan display, when there is more than one it could be from.
+fn column_expr(table: &ScopeTable, i: usize, qualify: bool) -> Expr {
+    let (column, affinity) = &table.columns[i];
+    let name = match &table.name {
+        Some(t) if qualify => format!("{t}.{column}"),
+        _ => column.clone(),
+    };
+    Expr::Column {
+        index: table.offset + i,
+        name,
+        affinity: *affinity,
+    }
+}
+
+fn qualified(qualifier: Option<&str>, name: &str) -> String {
+    qualifier.map_or(name.to_string(), |q| format!("{q}.{name}"))
 }
 
 /// What an aggregate call means where it appears.
@@ -668,6 +1394,8 @@ impl Ctx {
         aggregates: Aggregates::Misuse,
         aliases: false,
     };
+    /// The ON condition of a join.
+    const ON: Ctx = Ctx::CONSTANT;
 
     fn without_aliases(self) -> Ctx {
         Ctx {
@@ -690,6 +1418,8 @@ struct Binder<'a> {
     items: &'a [Item<'a>],
     /// Each distinct aggregate call, in the order SQLite numbers them.
     aggregates: Vec<AggregateCall>,
+    /// What subqueries are planned with. Without it they are not allowed.
+    cx: Option<&'a Planner<'a>>,
 }
 
 impl<'a> Binder<'a> {
@@ -700,47 +1430,25 @@ impl<'a> Binder<'a> {
             scope,
             items: &[],
             aggregates: Vec::new(),
+            cx: None,
         }
     }
 
     fn bind_item(&mut self, item: &Item, ctx: Ctx) -> Result<Expr> {
-        match item.source {
+        match &item.source {
             Source::Expr(e) => self.bind(e, ctx),
-            Source::Column(index) => {
-                Ok(self
-                    .scope
-                    .column(None, &item.name)
-                    .unwrap_or_else(|_| Expr::Column {
-                        index,
-                        name: item.name.clone(),
-                        affinity: Affinity::Blob,
-                    }))
-            }
+            Source::Column(column) => Ok(column.clone()),
         }
     }
 
     fn sort_keys(&mut self, order_by: &ast::OrderBy, ctx: Ctx) -> Result<Vec<SortKey>> {
-        if order_by.interpolate.is_some() {
-            return unsupported("ORDER BY ... INTERPOLATE");
-        }
-        let ast::OrderByKind::Expressions(terms) = &order_by.kind else {
-            return unsupported("ORDER BY ALL");
-        };
         let mut keys = Vec::new();
-        for (i, term) in terms.iter().enumerate() {
-            if term.with_fill.is_some() {
-                return unsupported("ORDER BY ... WITH FILL");
-            }
-            let descending = match &term.options.sort {
-                None | Some(ast::OrderBySort::Asc) => false,
-                Some(ast::OrderBySort::Desc) => true,
-                Some(ast::OrderBySort::Using(_)) => return unsupported("ORDER BY ... USING"),
-            };
+        for (i, term) in order_by_terms(order_by)?.iter().enumerate() {
+            let (descending, nulls_first) = sort_direction(term)?;
             keys.push(SortKey {
                 expr: self.result_term(&term.expr, i, Clause::OrderBy, ctx)?,
                 descending,
-                // NULL is the smallest value: first ascending, last descending.
-                nulls_first: term.options.nulls_first.unwrap_or(!descending),
+                nulls_first,
             });
         }
         Ok(keys)
@@ -783,10 +1491,13 @@ impl<'a> Binder<'a> {
         self.bind(term, ctx)
     }
 
+    /// Resolves a name: first this query's tables, then its result column
+    /// aliases, then the tables of each enclosing query, innermost first.
     fn identifier(&mut self, qualifier: Option<&str>, name: &str, ctx: Ctx) -> Result<Expr> {
-        let column = self.scope.column(qualifier, name);
-        if column.is_err()
-            && qualifier.is_none()
+        if let Some(column) = self.scope.local_column(qualifier, name)? {
+            return Ok(column);
+        }
+        if qualifier.is_none()
             && ctx.aliases
             && let Some(item) = find_alias(self.items, name)
         {
@@ -794,7 +1505,58 @@ impl<'a> Binder<'a> {
             // out cycles like `SELECT b AS a, a AS b`.
             return self.bind_item(item, ctx.without_aliases());
         }
-        column
+        let mut depth = 0;
+        let mut scope = self.scope;
+        while let Some(parent) = scope.parent {
+            depth += 1;
+            if let Some((table, i)) = parent.find_column(qualifier, name)? {
+                // An outer column always shows its table, to tell it apart.
+                let Expr::Column {
+                    index,
+                    name,
+                    affinity,
+                } = column_expr(table, i, true)
+                else {
+                    unreachable!("column_expr makes a column")
+                };
+                return Ok(Expr::OuterColumn {
+                    depth,
+                    index,
+                    name,
+                    affinity,
+                });
+            }
+            scope = parent;
+        }
+        Err(Error::Catalog(format!(
+            "no such column: {}",
+            qualified(qualifier, name)
+        )))
+    }
+
+    /// Plans a subquery inside an expression, with this query's names in
+    /// reach.
+    fn subquery(&mut self, query: &ast::Query, kind: SubqueryKind) -> Result<Expr> {
+        let Some(cx) = self.cx else {
+            return unsupported("subquery outside SELECT");
+        };
+        let plan = plan_query(cx, query, Some(self.scope))?;
+        let one_column = matches!(kind, SubqueryKind::Exists { .. }) || plan.columns.len() == 1;
+        if !one_column {
+            return Err(Error::Parse(format!(
+                "sub-select returns {} columns - expected 1",
+                plan.columns.len()
+            )));
+        }
+        let correlated = reads_outside(&plan.root, 0);
+        Ok(Expr::Subquery {
+            kind,
+            query: Box::new(Subquery {
+                plan,
+                correlated,
+                sql: query.to_string(),
+            }),
+        })
     }
 
     fn bind(&mut self, expr: &ast::Expr, ctx: Ctx) -> Result<Expr> {
@@ -923,6 +1685,21 @@ impl<'a> Binder<'a> {
                 }
             }
             ast::Expr::Function(func) => self.function(func, ctx)?,
+            ast::Expr::Subquery(query) => self.subquery(query, SubqueryKind::Scalar)?,
+            ast::Expr::Exists { subquery, negated } => {
+                self.subquery(subquery, SubqueryKind::Exists { negated: *negated })?
+            }
+            ast::Expr::InSubquery {
+                expr,
+                subquery,
+                negated,
+            } => {
+                let kind = SubqueryKind::In {
+                    expr: boxed(self.bind(expr, ctx)?),
+                    negated: *negated,
+                };
+                self.subquery(subquery, kind)?
+            }
             // `substr(x, 2, 3)` gets its own syntax node in the parser.
             ast::Expr::Substring {
                 expr,
@@ -1036,6 +1813,19 @@ impl<'a> Binder<'a> {
                     .map(|e| self.bind(e, inner))
                     .collect::<Result<_>>()?,
             };
+            // SQLite computes `max(t.a)` in the query that owns `t` when the
+            // arguments read only an enclosing query's columns.
+            let (mut own, mut outer) = (false, false);
+            for arg in &call.args {
+                arg.walk(&mut |e| match e {
+                    Expr::Column { .. } => own = true,
+                    Expr::OuterColumn { .. } => outer = true,
+                    _ => {}
+                });
+            }
+            if outer && !own {
+                return unsupported("an aggregate of an enclosing query's columns");
+            }
             // The same call twice is computed once, as in SQLite.
             let index = match self.aggregates.iter().position(|a| *a == call) {
                 Some(index) => index,
@@ -1073,6 +1863,30 @@ impl<'a> Binder<'a> {
         }
         Err(Error::Catalog(format!("no such function: {name}")))
     }
+}
+
+fn order_by_terms(order_by: &ast::OrderBy) -> Result<&[ast::OrderByExpr]> {
+    if order_by.interpolate.is_some() {
+        return unsupported("ORDER BY ... INTERPOLATE");
+    }
+    match &order_by.kind {
+        ast::OrderByKind::Expressions(terms) => Ok(terms),
+        ast::OrderByKind::All(_) => unsupported("ORDER BY ALL"),
+    }
+}
+
+/// Whether an ORDER BY term is descending, and whether NULLs come first.
+fn sort_direction(term: &ast::OrderByExpr) -> Result<(bool, bool)> {
+    if term.with_fill.is_some() {
+        return unsupported("ORDER BY ... WITH FILL");
+    }
+    let descending = match &term.options.sort {
+        None | Some(ast::OrderBySort::Asc) => false,
+        Some(ast::OrderBySort::Desc) => true,
+        Some(ast::OrderBySort::Using(_)) => return unsupported("ORDER BY ... USING"),
+    };
+    // NULL is the smallest value: first ascending, last descending.
+    Ok((descending, term.options.nulls_first.unwrap_or(!descending)))
 }
 
 fn find_alias<'i>(items: &'i [Item<'i>], name: &str) -> Option<&'i Item<'i>> {
@@ -1289,9 +2103,6 @@ fn object_name(name: &ast::ObjectName) -> Result<String> {
 /// "function call". The sqllogictest report groups failures by this label.
 fn expr_kind(expr: &ast::Expr) -> String {
     match expr {
-        ast::Expr::InSubquery { .. } => "IN (subquery)".into(),
-        ast::Expr::Subquery(_) => "scalar subquery".into(),
-        ast::Expr::Exists { .. } => "EXISTS".into(),
         ast::Expr::Cast { .. } => "this kind of CAST".into(),
         ast::Expr::Substring { .. } | ast::Expr::Trim { .. } => {
             "SUBSTRING or TRIM with FROM".into()

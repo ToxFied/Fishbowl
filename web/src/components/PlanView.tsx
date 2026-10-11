@@ -13,6 +13,18 @@ const OPERATORS: Record<string, string> = {
   Distinct: "Passes on each row only the first time it sees it. NULL counts as equal to NULL here.",
   Limit:
     "Skips the OFFSET rows, passes on rows until it has enough, then stops asking its input for more.",
+  NestedLoopJoin:
+    "For each row from its first input, reads all of its second input again and passes on the pairs that meet the condition. A LEFT join also passes on unmatched left rows, padded with NULLs.",
+  Materialize:
+    "Reads its input once and keeps the rows, so the join above can read them again for every left row without scanning the table again.",
+  Subquery:
+    "A query inside an expression. Its count is how many times it ran: once if it reads nothing from the outer row, once per row if it does.",
+  SubqueryScan:
+    "Passes on the rows of a view or a subquery in FROM, under the name the query uses.",
+  Union: "Reads both inputs and returns each distinct row once, sorted.",
+  UnionAll: "Passes on every row of its first input, then every row of its second.",
+  Intersect: "Returns the distinct rows that appear in both inputs, sorted.",
+  Except: "Returns the distinct rows of its first input that are not in its second, sorted.",
 };
 
 interface Line {
@@ -30,9 +42,11 @@ function runOrder(node: PlanProfile): PlanProfile[] {
   return [...node.children.flatMap(runOrder), node];
 }
 
+/** Rows that flowed in. A subquery hands a step values, not rows. */
 function rowsIn(node: PlanProfile): number | null {
-  if (node.children.length === 0) return null;
-  return node.children.reduce((sum, child) => sum + child.rows_out, 0);
+  const inputs = node.children.filter((child) => child.operator !== "Subquery");
+  if (inputs.length === 0) return null;
+  return inputs.reduce((sum, child) => sum + child.rows_out, 0);
 }
 
 export function PlanView({ plan }: { plan: PlanProfile }) {

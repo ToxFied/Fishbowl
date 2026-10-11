@@ -14,6 +14,10 @@ function summary(entry: Entry): string {
       return `deleted ${result.rows}`;
     case "drop_table":
       return `dropped ${result.table}`;
+    case "create_view":
+      return `created view ${result.view}`;
+    case "drop_view":
+      return `dropped view ${result.view}`;
     case "query":
       return `${result.rows.length} ${result.rows.length === 1 ? "row" : "rows"}`;
   }

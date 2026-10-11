@@ -6,7 +6,7 @@
 use crate::error::{Error, Result};
 use crate::value::Value;
 
-use super::{Expr, to_integer};
+use super::{Env, Expr, to_integer};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ScalarFunc {
@@ -95,14 +95,14 @@ impl ScalarFunc {
         }
     }
 
-    pub(super) fn eval(self, args: &[Expr], row: &[Value]) -> Result<Value> {
+    pub(super) fn eval(self, args: &[Expr], row: &[Value], env: &mut dyn Env) -> Result<Value> {
         use ScalarFunc::*;
         // These evaluate only the arguments they need, as SQLite does, so an
         // error in an unused argument never surfaces.
         match self {
             Coalesce | IfNull => {
                 for arg in args {
-                    let v = arg.eval(row)?;
+                    let v = arg.eval_with(row, env)?;
                     if !v.is_null() {
                         return Ok(v);
                     }
@@ -110,17 +110,18 @@ impl ScalarFunc {
                 return Ok(Value::Null);
             }
             Iif => {
-                return if args[0].eval(row)?.truthiness() == Some(true) {
-                    args[1].eval(row)
+                return if args[0].eval_with(row, env)?.truthiness() == Some(true) {
+                    args[1].eval_with(row, env)
                 } else {
-                    args.get(2).map_or(Ok(Value::Null), |e| e.eval(row))
+                    args.get(2)
+                        .map_or(Ok(Value::Null), |e| e.eval_with(row, env))
                 };
             }
             _ => {}
         }
         let values = args
             .iter()
-            .map(|a| a.eval(row))
+            .map(|a| a.eval_with(row, env))
             .collect::<Result<Vec<_>>>()?;
         self.call(&values)
     }

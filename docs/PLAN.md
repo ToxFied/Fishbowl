@@ -46,10 +46,10 @@ pass rate is the project's headline claim.
 | Module | What it does |
 | --- | --- |
 | `value.rs` | SQL values, SQLite type affinity, comparison and number formatting |
-| `catalog.rs` | Table schemas |
+| `catalog.rs` | Table schemas and views |
 | `planner.rs` | Syntax tree to plan, name resolution, loud rejection of unsupported SQL |
 | `plan.rs` | Plan nodes and the profiled plan tree the UI draws |
-| `expr.rs` | Bound expressions and their evaluation (three-valued logic, arithmetic) |
+| `expr.rs` | Bound expressions and their evaluation (three-valued logic, arithmetic, subqueries through an `Env`) |
 | `exec.rs` | Iterator-model executor with per-step row counts and a row budget |
 | `storage/` | Page store (file or memory), pager and buffer pool, row encoding, B+tree tables, schema table |
 | `lib.rs` | `Database`: runs statements, makes INSERT all-or-nothing |
@@ -86,7 +86,7 @@ Workspace, in-memory engine slice (CREATE TABLE, INSERT, SELECT with WHERE),
 CLI, WebAssembly build, UI with plan tree and step-through, sqllogictest harness
 with a pinned 29-file corpus. Baseline: **11.90%** of records.
 
-After M1 and M3: **31.06%**.
+After M1 and M3: **31.06%**. After M2: **40.78%**.
 
 ### M1. Query breadth
 
@@ -98,10 +98,16 @@ Aggregate, Distinct. These are the top failure reasons after "no such table".
 Files: `planner.rs`, `expr.rs`, `exec.rs`, `plan.rs` (new nodes),
 `docs/learn/`.
 
-### M2. Joins, subqueries and compound queries
+### M2. Joins, subqueries and compound queries (done)
 
 Several tables in `FROM`, `JOIN ... ON`, nested-loop join, scalar, `IN` and
 `EXISTS` subqueries, `UNION`/`INTERSECT`/`EXCEPT`. Depends on M1 (same files).
+
+Done: inner, cross and LEFT joins with conditions pushed down to the table
+they read; NestedLoopJoin and Materialize steps; scalar, `IN` and `EXISTS`
+subqueries, correlated ones included, drawn under the step that runs them;
+subqueries in FROM; compound SELECTs, left to right as in SQLite; `CREATE
+VIEW` and `DROP VIEW`.
 
 ### M3. Storage engine
 
@@ -181,3 +187,11 @@ Shared seams to coordinate:
   can leave a mix of old and new pages until the write-ahead log lands (M6).
 - The browser build is about 700 KB gzipped, mostly `sqlparser`. `wasm-opt` and
   trimming dialects are possible later.
+- Views live in the catalog only: they are not saved to the database file, so
+  a reopened file has no views. Saving them needs a schema-table entry (M4's
+  files).
+- Tables join in FROM order. Two 8-table joins in `select4.test` exceed the row
+  budget for that reason; join ordering is M5.
+- `INSERT ... SELECT`, RIGHT and FULL joins, `USING`, `NATURAL`, subqueries in
+  `UPDATE`/`DELETE`, and an aggregate of only an enclosing query's columns are
+  rejected as "not supported yet".

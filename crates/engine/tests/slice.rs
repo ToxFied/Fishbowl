@@ -86,7 +86,7 @@ fn failed_insert_changes_nothing() {
 fn unsupported_sql_is_rejected_not_ignored() {
     let mut db = setup();
     for sql in [
-        "SELECT id FROM fish, fish AS other",
+        "SELECT fish.id FROM fish RIGHT JOIN fish AS other ON 1",
         "SELECT printf('%d', id) FROM fish",
         "CREATE TABLE p(a INTEGER PRIMARY KEY)",
     ] {

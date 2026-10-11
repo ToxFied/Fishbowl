@@ -40,6 +40,8 @@ pub enum StatementResult {
     Update { table: String, rows: u64 },
     Delete { table: String, rows: u64 },
     DropTable { table: String },
+    CreateView { view: String },
+    DropView { view: String },
     Query(QueryResult),
 }
 
@@ -200,6 +202,22 @@ impl Database {
                 self.storage.drop_table(&table)?;
                 self.catalog.remove_table(&table);
                 StatementResult::DropTable { table }
+            }
+            // Views live only in the catalog: they hold no rows, and are not
+            // saved to the database file yet.
+            Plan::CreateView {
+                view,
+                if_not_exists,
+            } => {
+                let name = view.name.clone();
+                if !(if_not_exists && self.catalog.view(&name).is_some()) {
+                    self.catalog.add_view(view)?;
+                }
+                return Ok(StatementResult::CreateView { view: name });
+            }
+            Plan::DropView { view, .. } => {
+                self.catalog.remove_view(&view);
+                return Ok(StatementResult::DropView { view });
             }
             Plan::Query(query) => {
                 let mut ctx = ExecContext::new(&self.storage, self.row_budget);
