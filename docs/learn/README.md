@@ -33,3 +33,5 @@ code where the idea lives. Every milestone adds notes for what it touched.
 | [Crash recovery](crash-recovery.md) | M6 |
 | [Durability: when is a write safe?](durability.md) | M6 |
 | [The crash test](crash-harness.md) | M6 |
+| [The execution trace](execution-trace.md) | M7 |
+| [Reading the page viewer](page-viewer.md) | M7 |

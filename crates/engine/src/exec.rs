@@ -10,6 +10,10 @@
 //! input over ([`Operator::rewind`]), which is how a nested-loop join reads
 //! its right side once per left row. Subqueries are small plans of their own,
 //! run by the step whose expression contains them.
+//!
+//! When the context carries a [`Recorder`], every step also reports what it
+//! did with each row: passed it on, dropped it, or ran a subquery for it.
+//! See `trace.rs`.
 
 use std::cmp::Ordering;
 use std::collections::btree_map::Entry;
@@ -22,6 +26,7 @@ use crate::error::{Error, Result, unsupported};
 use crate::expr::{Accumulator, AggregateCall, Env, Expr, RowKey, SubqueryKind};
 use crate::plan::{JoinKind, PlanNode, PlanProfile, SetOp, SortKey, Subquery};
 use crate::storage::{Row, Storage, TableScan};
+use crate::trace::{EventKind, MAX_SCAN_ROWIDS, MAX_SCAN_ROWS, Recorder, ScanRows, Trace};
 use crate::value::{Affinity, Value};
 
 /// Shared state for one statement: where rows live and how much work is left.
@@ -32,6 +37,8 @@ pub struct ExecContext<'a> {
     /// The rows that enclosing queries are working on, innermost last, for
     /// correlated subqueries to read.
     outer: Vec<Row>,
+    /// Set only while tracing, so an untraced query copies no rows.
+    trace: Option<Recorder>,
 }
 
 impl<'a> ExecContext<'a> {
@@ -41,6 +48,23 @@ impl<'a> ExecContext<'a> {
             budget,
             rows_processed: 0,
             outer: Vec::new(),
+            trace: None,
+        }
+    }
+
+    /// Records up to `limit` events of the next query run in this context.
+    pub fn start_trace(&mut self, limit: usize) {
+        self.trace = Some(Recorder::new(limit));
+    }
+
+    /// The trace of the query run since [`ExecContext::start_trace`], if any.
+    pub fn take_trace(&mut self) -> Option<Trace> {
+        self.trace.take().map(Recorder::finish)
+    }
+
+    fn record(&mut self, step: usize, kind: EventKind, row: &[Value], rowid: Option<i64>) {
+        if let Some(recorder) = &mut self.trace {
+            recorder.record(step, kind, row, rowid);
         }
     }
 
@@ -58,6 +82,8 @@ impl<'a> ExecContext<'a> {
 /// A plan node that is running: the node, its inputs, its cursor state and a
 /// count of the rows it has produced.
 struct Operator<'p> {
+    /// Pre-order position in the plan, the id the profile and trace use.
+    id: usize,
     node: &'p PlanNode,
     input: Option<Box<Operator<'p>>>,
     /// The second input of a join or a compound SELECT.
@@ -66,6 +92,8 @@ struct Operator<'p> {
     subqueries: Vec<SubqueryOp<'p>>,
     state: State,
     rows_out: u64,
+    /// The rowid of the row a scan just read, for the trace.
+    rowid: Option<i64>,
 }
 
 enum State {
@@ -144,27 +172,35 @@ impl State {
 }
 
 impl<'p> Operator<'p> {
-    fn build(node: &'p PlanNode) -> Operator<'p> {
-        let mut children = node
-            .children()
-            .into_iter()
-            .map(|child| Box::new(Operator::build(child)));
-        let (input, right) = (children.next(), children.next());
+    /// Builds the running tree, numbering steps in pre-order: a step, its
+    /// inputs, then its subqueries.
+    fn build(node: &'p PlanNode, next_id: &mut usize) -> Operator<'p> {
+        let id = *next_id;
+        *next_id += 1;
+        let mut children = node.children().into_iter();
+        let input = children
+            .next()
+            .map(|c| Box::new(Operator::build(c, next_id)));
+        let right = children
+            .next()
+            .map(|c| Box::new(Operator::build(c, next_id)));
         let mut subqueries = Vec::new();
         for expr in node.exprs() {
             expr.walk(&mut |e| {
                 if let Expr::Subquery { kind, query } = e {
-                    subqueries.push(SubqueryOp::new(kind, query));
+                    subqueries.push(SubqueryOp::new(kind, query, next_id));
                 }
             });
         }
         Operator {
+            id,
             node,
             input,
             right,
             subqueries,
             state: State::start(node),
             rows_out: 0,
+            rowid: None,
         }
     }
 
@@ -192,19 +228,31 @@ impl<'p> Operator<'p> {
 
     fn next(&mut self, ctx: &mut ExecContext) -> Result<Option<Row>> {
         let row = self.produce(ctx)?;
-        if row.is_some() {
+        if let Some(row) = &row {
             ctx.charge()?;
             self.rows_out += 1;
+            ctx.record(self.id, EventKind::Out, row, self.rowid.take());
         }
         Ok(row)
     }
 
     fn produce(&mut self, ctx: &mut ExecContext) -> Result<Option<Row>> {
+        let id = self.id;
         let input = &mut self.input;
         let subqueries = &mut self.subqueries;
+        let read = |rowid: &mut Option<i64>, entry: Option<(i64, Row)>| {
+            entry.map(|(found, row)| {
+                *rowid = Some(found);
+                row
+            })
+        };
         match (self.node, &mut self.state) {
-            (PlanNode::SeqScan { .. }, State::Scan { scan }) => scan.next(ctx.storage),
-            (PlanNode::IndexScan { .. }, State::IndexScan(scan)) => scan.next(ctx.storage),
+            (PlanNode::SeqScan { .. }, State::Scan { scan }) => {
+                Ok(read(&mut self.rowid, scan.next_entry(ctx.storage)?))
+            }
+            (PlanNode::IndexScan { .. }, State::IndexScan(scan)) => {
+                Ok(read(&mut self.rowid, scan.next_entry(ctx.storage)?))
+            }
             (PlanNode::OneRow, State::OneRow { done }) => {
                 let first = !*done;
                 *done = true;
@@ -215,6 +263,7 @@ impl<'p> Operator<'p> {
                     if evaluate(predicate, &row, ctx, subqueries)?.truthiness() == Some(true) {
                         return Ok(Some(row));
                     }
+                    ctx.record(id, EventKind::Drop, &row, None);
                 }
                 Ok(None)
             }
@@ -256,6 +305,7 @@ impl<'p> Operator<'p> {
                     if seen.insert(RowKey(row.clone())) {
                         return Ok(Some(row));
                     }
+                    ctx.record(id, EventKind::Drop, &row, None);
                 }
                 Ok(None)
             }
@@ -269,8 +319,9 @@ impl<'p> Operator<'p> {
                         None => 0,
                     };
                     for _ in 0..skip {
-                        if pull(input, ctx)?.is_none() {
-                            break;
+                        match pull(input, ctx)? {
+                            Some(row) => ctx.record(id, EventKind::Drop, &row, None),
+                            None => break,
                         }
                     }
                 }
@@ -326,6 +377,7 @@ impl<'p> Operator<'p> {
                                 *matched = true;
                                 return Ok(Some(row.clone()));
                             }
+                            ctx.record(id, EventKind::Drop, row, None);
                         }
                         // The right side has run out for this left row.
                         None => {
@@ -371,18 +423,16 @@ impl<'p> Operator<'p> {
         }
     }
 
-    fn profile(&self, next_id: &mut usize) -> PlanProfile {
-        let id = *next_id;
-        *next_id += 1;
+    fn profile(&self) -> PlanProfile {
         let mut children: Vec<PlanProfile> = self
             .input
             .iter()
             .chain(&self.right)
-            .map(|i| i.profile(next_id))
+            .map(|i| i.profile())
             .collect();
-        children.extend(self.subqueries.iter().map(|s| s.profile(next_id)));
+        children.extend(self.subqueries.iter().map(SubqueryOp::profile));
         PlanProfile {
-            id,
+            id: self.id,
             operator: self.node.operator(),
             detail: self.node.detail(),
             reason: self.node.reason().map(str::to_string),
@@ -390,10 +440,24 @@ impl<'p> Operator<'p> {
             children,
         }
     }
+
+    /// Every scan step below and including this one, with its table.
+    fn scans<'s>(&'s self, out: &mut Vec<(usize, &'s str)>) {
+        if let PlanNode::SeqScan { table, .. } | PlanNode::IndexScan { table, .. } = self.node {
+            out.push((self.id, table));
+        }
+        for child in self.input.iter().chain(&self.right) {
+            child.scans(out);
+        }
+        for subquery in &self.subqueries {
+            subquery.root.scans(out);
+        }
+    }
 }
 
 /// A subquery inside one step's expressions, with its own running plan.
 struct SubqueryOp<'p> {
+    id: usize,
     query: &'p Subquery,
     /// "scalar", "EXISTS" or "IN", for the plan tree.
     kind: &'static str,
@@ -404,15 +468,18 @@ struct SubqueryOp<'p> {
 }
 
 impl<'p> SubqueryOp<'p> {
-    fn new(kind: &SubqueryKind, query: &'p Subquery) -> Self {
+    fn new(kind: &SubqueryKind, query: &'p Subquery, next_id: &mut usize) -> Self {
+        let id = *next_id;
+        *next_id += 1;
         SubqueryOp {
+            id,
             query,
             kind: match kind {
                 SubqueryKind::Scalar => "scalar",
                 SubqueryKind::Exists { .. } => "EXISTS",
                 SubqueryKind::In { .. } => "IN",
             },
-            root: Operator::build(&query.plan.root),
+            root: Operator::build(&query.plan.root, next_id),
             cached: None,
             runs: 0,
         }
@@ -421,12 +488,14 @@ impl<'p> SubqueryOp<'p> {
     /// The first column of the subquery's rows, run for the outer `row`.
     fn run(&mut self, ctx: &mut ExecContext, row: &[Value], all_rows: bool) -> Result<Rc<[Value]>> {
         if let Some(values) = &self.cached {
+            ctx.record(self.id, EventKind::Reuse, row, None);
             return Ok(Rc::clone(values));
         }
         if self.runs > 0 {
             self.root.rewind();
         }
         self.runs += 1;
+        ctx.record(self.id, EventKind::Run, row, None);
         ctx.outer.push(row.to_vec());
         let values = self.read(ctx, all_rows);
         ctx.outer.pop();
@@ -448,9 +517,7 @@ impl<'p> SubqueryOp<'p> {
         Ok(values)
     }
 
-    fn profile(&self, next_id: &mut usize) -> PlanProfile {
-        let id = *next_id;
-        *next_id += 1;
+    fn profile(&self) -> PlanProfile {
         let (detail, reason) = if self.query.correlated {
             (
                 format!("{}, correlated", self.kind),
@@ -463,13 +530,13 @@ impl<'p> SubqueryOp<'p> {
             )
         };
         PlanProfile {
-            id,
+            id: self.id,
             operator: "Subquery",
             detail,
             reason: Some(reason.into()),
             // How many times it ran.
             rows_out: self.runs,
-            children: vec![self.root.profile(next_id)],
+            children: vec![self.root.profile()],
         }
     }
 }
@@ -689,11 +756,43 @@ fn aggregate(
 /// Runs a query plan to completion and returns its rows plus the plan tree
 /// annotated with how many rows each step produced.
 pub fn run_query(ctx: &mut ExecContext, root: &PlanNode) -> Result<(Vec<Row>, PlanProfile)> {
-    let mut op = Operator::build(root);
+    let mut op = Operator::build(root, &mut 0);
     let mut rows = Vec::new();
     while let Some(row) = op.next(ctx)? {
         rows.push(row);
     }
-    let profile = op.profile(&mut 0);
-    Ok((rows, profile))
+    if ctx.trace.is_some() {
+        record_scans(ctx, &op)?;
+    }
+    Ok((rows, op.profile()))
+}
+
+/// Adds every scanned table's rows to the trace, so it can show the rows a
+/// scan never read.
+fn record_scans(ctx: &mut ExecContext, op: &Operator) -> Result<()> {
+    let mut scans = Vec::new();
+    op.scans(&mut scans);
+    for (step, table) in scans {
+        let row_count = ctx.storage.row_count(table);
+        let (mut rowids, mut rows) = (Vec::new(), Vec::new());
+        if row_count <= MAX_SCAN_ROWIDS {
+            let mut scan = TableScan::new(table);
+            while let Some((rowid, row)) = scan.next_entry(ctx.storage)? {
+                rowids.push(rowid);
+                if row_count <= MAX_SCAN_ROWS {
+                    rows.push(row);
+                }
+            }
+        }
+        if let Some(recorder) = &mut ctx.trace {
+            recorder.add_scan(ScanRows {
+                step,
+                table: table.to_string(),
+                row_count,
+                rowids,
+                rows,
+            });
+        }
+    }
+    Ok(())
 }

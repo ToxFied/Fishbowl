@@ -1,7 +1,7 @@
 //! WebAssembly bindings: the browser UI talks to the engine through this.
 //!
-//! Results cross the boundary as JSON strings. That keeps the interface to two
-//! methods, and `web/src/engine.ts` holds the matching TypeScript types.
+//! Results cross the boundary as JSON strings. That keeps the interface to a
+//! few methods, and `web/src/engine.ts` holds the matching TypeScript types.
 
 use fishbowl::{Database, StatementResult, TableInfo};
 use serde::Serialize;
@@ -9,6 +9,10 @@ use wasm_bindgen::prelude::*;
 
 /// Keeps one runaway query from freezing the browser tab.
 const ROW_BUDGET: u64 = 5_000_000;
+
+/// Events kept per traced query. Far more than anyone steps through, and it
+/// keeps a big join from sending megabytes of JSON.
+const TRACE_LIMIT: usize = 5_000;
 
 #[derive(Serialize)]
 #[serde(tag = "status", rename_all = "lowercase")]
@@ -50,8 +54,10 @@ impl Fishbowl {
     }
 
     /// Runs a script and returns every statement's outcome plus the tables
-    /// that exist afterwards, as JSON.
-    pub fn run(&mut self, sql: &str) -> String {
+    /// that exist afterwards, as JSON. With `trace`, every query also
+    /// returns what each step did with each row.
+    pub fn run(&mut self, sql: &str, trace: bool) -> String {
+        self.db.set_trace(trace.then_some(TRACE_LIMIT));
         let statements = self
             .db
             .run_script(sql)
@@ -80,6 +86,16 @@ impl Fishbowl {
             .to_string()
         })
     }
+
+    /// Every page of the B-tree behind a table or an index, as JSON:
+    /// `{"tree": ...}` or `{"error": "..."}`.
+    pub fn inspect(&self, name: &str) -> String {
+        let output = match self.db.inspect_tree(name) {
+            Ok(tree) => serde_json::json!({ "tree": tree }),
+            Err(e) => serde_json::json!({ "error": e.to_string() }),
+        };
+        output.to_string()
+    }
 }
 
 #[cfg(test)]
@@ -92,7 +108,7 @@ mod tests {
     fn run_output_matches_the_typescript_contract() {
         let mut fishbowl = Fishbowl::new();
         let out: Value = serde_json::from_str(&fishbowl.run(
-"CREATE TABLE t(a INTEGER); INSERT INTO t VALUES (1), (2); SELECT a FROM t WHERE a > 1; \
+            "CREATE TABLE t(a INTEGER); INSERT INTO t VALUES (1), (2); SELECT a FROM t WHERE a > 1; \
              UPDATE t SET a = 3 WHERE a = 2; DELETE FROM t WHERE a = 1; \
              CREATE TABLE gone(x); DROP TABLE gone; \
              CREATE TABLE k(id INTEGER PRIMARY KEY, code TEXT UNIQUE); \
@@ -100,6 +116,7 @@ mod tests {
              CREATE INDEX spare ON t(a); DROP INDEX spare; \
              CREATE VIEW v AS SELECT a FROM t; DROP VIEW v; \
              BEGIN; INSERT INTO t VALUES (9); ROLLBACK; BEGIN; COMMIT; SELECT b FROM t",
+            false,
         ))
         .unwrap();
 
@@ -119,6 +136,7 @@ mod tests {
         assert_eq!(query["rows"], json!([[{"type": "integer", "text": "2"}]]));
         assert_eq!(query["plan"]["operator"], "Project");
         assert_eq!(query["plan"]["children"][0]["rows_out"], 1);
+        assert!(query.get("trace").is_none());
 
         assert_eq!(
             statements[3]["result"],
@@ -182,5 +200,56 @@ mod tests {
         assert_eq!(k["indexes"][0]["name"], "sqlite_autoindex_k_1");
         assert_eq!(k["indexes"][0]["unique"], true);
         assert_eq!(k["indexes"][0]["automatic"], true);
+    }
+
+    #[test]
+    fn traces_and_pages_match_the_typescript_contract() {
+        let mut fishbowl = Fishbowl::new();
+        fishbowl.run(
+            "CREATE TABLE t(a INTEGER); INSERT INTO t VALUES (1), (2)",
+            false,
+        );
+        let out: Value =
+            serde_json::from_str(&fishbowl.run("SELECT a FROM t WHERE a > 1", true)).unwrap();
+        let trace = &out["statements"][0]["result"]["trace"];
+        assert_eq!(trace["truncated"], false);
+        // The scan passes on both rows, the Filter drops the first.
+        assert_eq!(
+            trace["events"][0],
+            json!({"step": 2, "kind": "out", "row": [{"type": "integer", "text": "1"}], "rowid": 1})
+        );
+        assert_eq!(
+            trace["events"][1],
+            json!({"step": 1, "kind": "drop", "row": [{"type": "integer", "text": "1"}]})
+        );
+        assert_eq!(
+            trace["scans"],
+            json!([{
+                "step": 2,
+                "table": "t",
+                "row_count": 2,
+                "rowids": [1, 2],
+                "rows": [[{"type": "integer", "text": "1"}], [{"type": "integer", "text": "2"}]],
+            }])
+        );
+
+        let pages: Value = serde_json::from_str(&fishbowl.inspect("t")).unwrap();
+        let tree = &pages["tree"];
+        assert_eq!(tree["kind"], "table");
+        assert_eq!(tree["depth"], 1);
+        assert_eq!(tree["truncated"], false);
+        assert!(tree["file_pages"].is_number() && tree["free_pages"].is_number());
+        let leaf = &tree["pages"][0];
+        assert_eq!(leaf["id"], tree["root"]);
+        assert_eq!(leaf["level"], 0);
+        assert_eq!(leaf["kind"], "leaf");
+        assert!(leaf["used"].is_number());
+        assert_eq!(leaf["keys"][1], json!({"values": [], "rowid": 2}));
+        assert_eq!(leaf["children"], json!([]));
+        assert_eq!(leaf["next"], Value::Null);
+        assert_eq!(leaf["overflow"], json!([]));
+
+        let missing: Value = serde_json::from_str(&fishbowl.inspect("nope")).unwrap();
+        assert_eq!(missing["error"], "no such table: nope");
     }
 }
