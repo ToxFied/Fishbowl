@@ -619,6 +619,10 @@ fn plan_select(
     };
 
     let (mut scope, mut from) = plan_from(cx, &select.from, outer)?;
+    // The join planner keeps sets of tables in 64 bits, as SQLite does.
+    if from.len() > 64 {
+        return Err(Error::Parse("at most 64 tables in a join".into()));
+    }
     let mut alternatives = join::Alternatives::default();
     if from.len() > 1 {
         // Bind once in FROM order to weigh the join orders, then again in
