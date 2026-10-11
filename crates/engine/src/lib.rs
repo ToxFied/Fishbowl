@@ -16,6 +16,7 @@
 
 pub mod access;
 pub mod catalog;
+pub mod dialect;
 pub mod error;
 pub mod exec;
 pub mod expr;
@@ -28,7 +29,6 @@ pub mod write;
 
 use serde::Serialize;
 use sqlparser::ast;
-use sqlparser::dialect::SQLiteDialect;
 use sqlparser::parser::Parser;
 
 pub use error::{Error, Result};
@@ -38,6 +38,7 @@ pub use trace::Trace;
 pub use value::Value;
 
 use catalog::{Catalog, TableSchema};
+use dialect::FishbowlDialect;
 use exec::ExecContext;
 use plan::Plan;
 use storage::index::IndexKey;
@@ -663,5 +664,5 @@ fn ends_transaction(stmt: &ast::Statement, error: &Error) -> bool {
 }
 
 fn parse(sql: &str) -> Result<Vec<ast::Statement>> {
-    Parser::parse_sql(&SQLiteDialect {}, sql).map_err(|e| Error::Parse(e.to_string()))
+    Parser::parse_sql(&FishbowlDialect::default(), sql).map_err(|e| Error::Parse(e.to_string()))
 }

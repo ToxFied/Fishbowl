@@ -1769,6 +1769,7 @@ impl<'a> Binder<'a> {
                     ast::UnaryOperator::Minus => UnaryOp::Negate,
                     ast::UnaryOperator::Plus => UnaryOp::Plus,
                     ast::UnaryOperator::Not => UnaryOp::Not,
+                    ast::UnaryOperator::BitwiseNot => UnaryOp::BitNot,
                     other => return unsupported(format!("unary operator {other}")),
                 };
                 Expr::Unary {
@@ -2217,6 +2218,12 @@ fn binary_op(op: &ast::BinaryOperator) -> Result<BinaryOp> {
         B::Divide => BinaryOp::Divide,
         B::Modulo => BinaryOp::Remainder,
         B::StringConcat => BinaryOp::Concat,
+        B::BitwiseAnd => BinaryOp::BitAnd,
+        B::BitwiseOr => BinaryOp::BitOr,
+        B::PGBitwiseShiftLeft => BinaryOp::ShiftLeft,
+        B::PGBitwiseShiftRight => BinaryOp::ShiftRight,
+        // SQLite has no `^` operator; its tokenizer rejects the character.
+        B::BitwiseXor => return Err(Error::Parse("unrecognized token: \"^\"".into())),
         B::Eq => BinaryOp::Eq,
         B::NotEq => BinaryOp::NotEq,
         B::Lt => BinaryOp::Lt,
