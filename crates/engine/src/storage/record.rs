@@ -44,6 +44,18 @@ pub fn encode(row: &[Value]) -> Vec<u8> {
     out
 }
 
+/// The length of `encode(row)`, without building it.
+pub fn encoded_len(row: &[Value]) -> usize {
+    2 + row
+        .iter()
+        .map(|value| match value {
+            Value::Null => 1,
+            Value::Integer(_) | Value::Real(_) => 9,
+            Value::Text(s) => 5 + s.len(),
+        })
+        .sum::<usize>()
+}
+
 pub fn decode(bytes: &[u8]) -> Result<Row> {
     let mut rest = bytes;
     let count = u16::from_be_bytes(take(&mut rest)?) as usize;
@@ -128,6 +140,7 @@ mod tests {
     proptest! {
         #[test]
         fn any_row_survives_encoding(row in prop::collection::vec(value(), 0..12)) {
+            prop_assert_eq!(encoded_len(&row), encode(&row).len());
             prop_assert_eq!(decode(&encode(&row)).unwrap(), row);
         }
     }

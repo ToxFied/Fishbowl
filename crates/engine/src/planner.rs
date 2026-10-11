@@ -4,8 +4,11 @@
 //! "column 0 > 1", checked against the catalog. Anything Fishbowl does not
 //! implement yet is rejected here with [`Error::Unsupported`], never ignored.
 
+mod schema;
+
 use sqlparser::ast;
 
+use crate::access;
 use crate::catalog::{Catalog, Column, TableSchema};
 use crate::error::{Error, Result, unsupported};
 use crate::expr::{
@@ -31,6 +34,17 @@ pub fn plan_statement(catalog: &Catalog, stmt: &ast::Statement) -> Result<Plan> 
             temporary: false,
             ..
         } => plan_drop_table(catalog, *if_exists, names),
+        ast::Statement::CreateIndex(create) => schema::plan_create_index(catalog, create),
+        ast::Statement::Drop {
+            object_type: ast::ObjectType::Index,
+            if_exists,
+            names,
+            cascade: false,
+            restrict: false,
+            purge: false,
+            temporary: false,
+            table: None,
+        } => schema::plan_drop_index(*if_exists, names),
         other => unsupported(statement_kind(other)),
     }
 }
@@ -39,14 +53,15 @@ fn plan_create_table(create: &ast::CreateTable) -> Result<Plan> {
     if create.query.is_some() {
         return unsupported("CREATE TABLE ... AS SELECT");
     }
-    if !create.constraints.is_empty() {
-        return unsupported("table constraints");
+    if create.without_rowid {
+        return unsupported("WITHOUT ROWID");
     }
     if create.columns.is_empty() {
         return Err(Error::Parse("a table needs at least one column".into()));
     }
     let name = object_name(&create.name)?;
     let mut columns: Vec<Column> = Vec::new();
+    let mut keys = schema::Keys::default();
     for def in &create.columns {
         let declared_type = match def.data_type {
             ast::DataType::Unspecified => String::new(),
@@ -57,7 +72,7 @@ fn plan_create_table(create: &ast::CreateTable) -> Result<Plan> {
             match option.option {
                 ast::ColumnOption::NotNull => not_null = true,
                 ast::ColumnOption::Null => {}
-                ref other => return unsupported(format!("column constraint {other}")),
+                ref other => keys.column_option(columns.len(), &def.name.value, other)?,
             }
         }
         if columns
@@ -74,10 +89,17 @@ fn plan_create_table(create: &ast::CreateTable) -> Result<Plan> {
             affinity: Affinity::from_declared_type(&declared_type),
             declared_type,
             not_null,
+            primary_key: false,
         });
     }
+    let (rowid_alias, indexes) = keys.finish(&name, &mut columns, &create.constraints)?;
     Ok(Plan::CreateTable {
-        schema: TableSchema { name, columns },
+        schema: TableSchema {
+            name,
+            columns,
+            rowid_alias,
+            indexes,
+        },
         if_not_exists: create.if_not_exists,
     })
 }
@@ -183,9 +205,10 @@ fn dml_target<'a>(
 }
 
 fn plan_insert(catalog: &Catalog, insert: &ast::Insert) -> Result<Plan> {
-    if insert.or.is_some() || insert.on.is_some() || insert.returning.is_some() {
+    if insert.ignore || insert.on.is_some() || insert.returning.is_some() {
         return unsupported("INSERT OR / ON CONFLICT / RETURNING");
     }
+    let on_conflict = schema::on_conflict(insert.or);
     let ast::TableObject::TableName(table_name) = &insert.table else {
         return unsupported("INSERT INTO a table function");
     };
@@ -208,7 +231,20 @@ fn plan_insert(catalog: &Catalog, insert: &ast::Insert) -> Result<Plan> {
         return unsupported("INSERT without VALUES");
     };
     let ast::SetExpr::Values(values) = source.body.as_ref() else {
-        return unsupported("INSERT ... SELECT");
+        let query = plan_query(catalog, source)?;
+        if query.columns.len() != targets.len() {
+            return Err(Error::Catalog(format!(
+                "{} values for {} columns",
+                query.columns.len(),
+                targets.len()
+            )));
+        }
+        return Ok(Plan::InsertSelect {
+            table: schema.name.clone(),
+            targets,
+            query,
+            on_conflict,
+        });
     };
     // VALUES rows are constants: there is no table in scope to reference.
     let scope = Scope::empty();
@@ -233,6 +269,7 @@ fn plan_insert(catalog: &Catalog, insert: &ast::Insert) -> Result<Plan> {
         table: schema.name.clone(),
         targets,
         rows,
+        on_conflict,
     })
 }
 
@@ -276,6 +313,8 @@ fn plan_query(catalog: &Catalog, query: &ast::Query) -> Result<QueryPlan> {
             predicate: binder.bind(predicate, Ctx::ROW)?,
         };
     }
+    // An index can narrow the scan beneath the WHERE filter.
+    root = access::use_index(root, scope.table);
 
     // Binding the result columns finds any aggregates, which is what makes
     // this an aggregate query.

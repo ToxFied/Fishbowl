@@ -21,8 +21,9 @@ see it: the Sort step's input count equals the table size even when Limit asks
 for only three rows.
 
 That is also why indexes matter for ORDER BY. An index keeps rows in order
-already, so the planner can skip the Sort step entirely. Fishbowl has no
-indexes yet, so the plan says so: "no index returns rows in this order".
+already, so the planner could skip the Sort step entirely. Fishbowl has
+indexes, but its planner does not use them for ORDER BY yet (milestone 5), so
+the plan says "no index returns rows in this order".
 
 ## What order, exactly
 

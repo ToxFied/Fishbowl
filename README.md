@@ -24,12 +24,14 @@ Correctness is measured, not claimed. A harness runs SQLite's own
 
 | Corpus | Records run | Pass rate | Queries only |
 | --- | ---: | ---: | ---: |
-| 29 pinned files, sqllogictest `ab599cbdd0` | 129,348 | **31.06%** | 33.18% |
+| 29 pinned files, sqllogictest `ab599cbdd0` | 129,348 | **84.31%** | 85.48% |
 
 Single-table queries work, including sorting, grouping and aggregates, and
-`INSERT`, `UPDATE` and `DELETE` write to B-trees on 4 KiB pages. Everything
-else is rejected with "not supported yet" rather than answered wrongly. The
-biggest remaining gap is `PRIMARY KEY` tables, which wait on indexes (M4).
+`INSERT`, `UPDATE` and `DELETE` write to B-trees on 4 KiB pages. `PRIMARY KEY`,
+`UNIQUE` and `CREATE INDEX` are enforced on every write, and a `WHERE` on an
+indexed column reads the index instead of the whole table. Everything else is
+rejected with "not supported yet" rather than answered wrongly. The biggest
+remaining gaps are joins, subqueries and views (M2).
 [`RESULTS.md`](sqllogictest/RESULTS.md) breaks the failures down by reason.
 
 ## Status
@@ -38,7 +40,8 @@ biggest remaining gap is `PRIMARY KEY` tables, which wait on indexes (M4).
 | --- | --- |
 | Parse, plan, execute pipeline | Working: one table, filters, sorting, grouping, aggregates |
 | Storage | Pager, buffer pool and B+tree tables on 4 KiB pages (M3). Not crash-safe until M6 |
-| Indexes and cost-based planner | Planned (M4, M5) |
+| Indexes and constraints | `PRIMARY KEY`, `UNIQUE`, `CREATE INDEX`, IndexScan chosen by a simple rule (M4) |
+| Cost-based planner | Planned (M5) |
 | Transactions and crash recovery | Planned, write-ahead log (M6) |
 | Browser UI | Plan tree, step-through, results, schema |
 | sqllogictest harness | Pinned corpus, self-tested, deterministic report |

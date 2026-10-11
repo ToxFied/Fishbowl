@@ -7,34 +7,34 @@
   },
   "totals": {
     "records": {
-      "passed": 40185,
-      "failed": 89163
+      "passed": 109065,
+      "failed": 20283
     },
     "statements": {
-      "passed": 1227,
-      "failed": 10713
+      "passed": 8695,
+      "failed": 3245
     },
     "queries": {
-      "passed": 38958,
-      "failed": 78450
+      "passed": 100370,
+      "failed": 17038
     },
     "skipped": 14153,
-    "pass_rate": 31.06,
-    "query_pass_rate": 33.18
+    "pass_rate": 84.31,
+    "query_pass_rate": 85.48
   },
   "files": [
     {
       "path": "evidence/in1.test",
       "statements": {
-        "passed": 5,
-        "failed": 22
+        "passed": 27,
+        "failed": 0
       },
       "queries": {
         "passed": 37,
         "failed": 150
       },
       "skipped": 2,
-      "pass_rate": 19.62
+      "pass_rate": 29.9
     },
     {
       "path": "evidence/in2.test",
@@ -52,47 +52,73 @@
     {
       "path": "evidence/slt_lang_aggfunc.test",
       "statements": {
-        "passed": 9,
-        "failed": 4
+        "passed": 10,
+        "failed": 3
       },
       "queries": {
         "passed": 57,
         "failed": 10
       },
       "skipped": 0,
-      "pass_rate": 82.5
+      "pass_rate": 83.75
     },
     {
       "path": "evidence/slt_lang_createtrigger.test",
       "statements": {
-        "passed": 4,
-        "failed": 22
+        "passed": 5,
+        "failed": 21
       },
       "queries": {
         "passed": 0,
         "failed": 0
       },
       "skipped": 0,
-      "pass_rate": 15.38
+      "pass_rate": 19.23
     },
     {
       "path": "evidence/slt_lang_createview.test",
       "statements": {
-        "passed": 10,
-        "failed": 11
+        "passed": 12,
+        "failed": 9
       },
       "queries": {
         "passed": 1,
         "failed": 1
       },
       "skipped": 2,
-      "pass_rate": 47.82
+      "pass_rate": 56.52
     },
     {
       "path": "evidence/slt_lang_dropindex.test",
       "statements": {
-        "passed": 4,
-        "failed": 4
+        "passed": 8,
+        "failed": 0
+      },
+      "queries": {
+        "passed": 0,
+        "failed": 0
+      },
+      "skipped": 0,
+      "pass_rate": 100.0
+    },
+    {
+      "path": "evidence/slt_lang_droptable.test",
+      "statements": {
+        "passed": 12,
+        "failed": 0
+      },
+      "queries": {
+        "passed": 0,
+        "failed": 0
+      },
+      "skipped": 0,
+      "pass_rate": 100.0
+    },
+    {
+      "path": "evidence/slt_lang_droptrigger.test",
+      "statements": {
+        "passed": 6,
+        "failed": 6
       },
       "queries": {
         "passed": 0,
@@ -102,186 +128,160 @@
       "pass_rate": 50.0
     },
     {
-      "path": "evidence/slt_lang_droptable.test",
-      "statements": {
-        "passed": 10,
-        "failed": 2
-      },
-      "queries": {
-        "passed": 0,
-        "failed": 0
-      },
-      "skipped": 0,
-      "pass_rate": 83.33
-    },
-    {
-      "path": "evidence/slt_lang_droptrigger.test",
-      "statements": {
-        "passed": 5,
-        "failed": 7
-      },
-      "queries": {
-        "passed": 0,
-        "failed": 0
-      },
-      "skipped": 0,
-      "pass_rate": 41.66
-    },
-    {
       "path": "evidence/slt_lang_dropview.test",
       "statements": {
-        "passed": 4,
-        "failed": 7
+        "passed": 5,
+        "failed": 6
       },
       "queries": {
         "passed": 1,
         "failed": 1
       },
       "skipped": 0,
-      "pass_rate": 38.46
+      "pass_rate": 46.15
     },
     {
       "path": "evidence/slt_lang_reindex.test",
       "statements": {
-        "passed": 5,
-        "failed": 2
+        "passed": 6,
+        "failed": 1
       },
       "queries": {
         "passed": 0,
         "failed": 0
       },
       "skipped": 0,
-      "pass_rate": 71.42
+      "pass_rate": 85.71
     },
     {
       "path": "evidence/slt_lang_replace.test",
       "statements": {
-        "passed": 0,
-        "failed": 8
+        "passed": 8,
+        "failed": 0
       },
       "queries": {
-        "passed": 0,
-        "failed": 6
+        "passed": 6,
+        "failed": 0
       },
       "skipped": 0,
-      "pass_rate": 0.0
+      "pass_rate": 100.0
     },
     {
       "path": "evidence/slt_lang_update.test",
       "statements": {
-        "passed": 17,
-        "failed": 1
+        "passed": 18,
+        "failed": 0
       },
       "queries": {
         "passed": 9,
         "failed": 0
       },
       "skipped": 0,
-      "pass_rate": 96.29
+      "pass_rate": 100.0
     },
     {
       "path": "index/between/10/slt_good_0.test",
       "statements": {
-        "passed": 0,
-        "failed": 33
+        "passed": 33,
+        "failed": 0
       },
       "queries": {
-        "passed": 0,
-        "failed": 10000
+        "passed": 8690,
+        "failed": 1310
       },
       "skipped": 0,
-      "pass_rate": 0.0
+      "pass_rate": 86.94
     },
     {
       "path": "index/commute/10/slt_good_0.test",
       "statements": {
-        "passed": 0,
-        "failed": 34
+        "passed": 34,
+        "failed": 0
       },
       "queries": {
-        "passed": 0,
-        "failed": 10000
+        "passed": 9600,
+        "failed": 400
       },
       "skipped": 0,
-      "pass_rate": 0.0
+      "pass_rate": 96.01
     },
     {
       "path": "index/delete/10/slt_good_0.test",
       "statements": {
-        "passed": 0,
-        "failed": 6476
+        "passed": 6476,
+        "failed": 0
       },
       "queries": {
-        "passed": 0,
-        "failed": 4254
+        "passed": 4254,
+        "failed": 0
       },
       "skipped": 0,
-      "pass_rate": 0.0
+      "pass_rate": 100.0
     },
     {
       "path": "index/in/10/slt_good_0.test",
       "statements": {
-        "passed": 0,
-        "failed": 30
+        "passed": 30,
+        "failed": 0
       },
       "queries": {
-        "passed": 0,
-        "failed": 10005
+        "passed": 8490,
+        "failed": 1515
       },
       "skipped": 0,
-      "pass_rate": 0.0
+      "pass_rate": 84.9
     },
     {
       "path": "index/orderby/10/slt_good_0.test",
       "statements": {
-        "passed": 0,
-        "failed": 33
+        "passed": 33,
+        "failed": 0
       },
       "queries": {
-        "passed": 0,
-        "failed": 10020
+        "passed": 9660,
+        "failed": 360
       },
       "skipped": 0,
-      "pass_rate": 0.0
+      "pass_rate": 96.41
     },
     {
       "path": "index/orderby_nosort/10/slt_good_0.test",
       "statements": {
-        "passed": 0,
-        "failed": 33
+        "passed": 33,
+        "failed": 0
       },
       "queries": {
-        "passed": 0,
-        "failed": 10020
+        "passed": 9720,
+        "failed": 300
       },
       "skipped": 0,
-      "pass_rate": 0.0
+      "pass_rate": 97.01
     },
     {
       "path": "index/random/10/slt_good_0.test",
       "statements": {
-        "passed": 0,
-        "failed": 32
+        "passed": 32,
+        "failed": 0
       },
       "queries": {
-        "passed": 0,
-        "failed": 10000
+        "passed": 9970,
+        "failed": 30
       },
       "skipped": 2140,
-      "pass_rate": 0.0
+      "pass_rate": 99.7
     },
     {
       "path": "index/view/10/slt_good_1.test",
       "statements": {
-        "passed": 0,
-        "failed": 3228
+        "passed": 33,
+        "failed": 3195
       },
       "queries": {
-        "passed": 0,
-        "failed": 3907
+        "passed": 1022,
+        "failed": 2885
       },
       "skipped": 1065,
-      "pass_rate": 0.0
+      "pass_rate": 14.78
     },
     {
       "path": "random/aggregates/slt_good_0.test",
@@ -377,40 +377,40 @@
     {
       "path": "select4.test",
       "statements": {
-        "passed": 1009,
-        "failed": 16
+        "passed": 1025,
+        "failed": 0
       },
       "queries": {
         "passed": 0,
         "failed": 2832
       },
       "skipped": 0,
-      "pass_rate": 26.16
+      "pass_rate": 26.57
     },
     {
       "path": "select5.test",
       "statements": {
-        "passed": 0,
-        "failed": 704
+        "passed": 704,
+        "failed": 0
       },
       "queries": {
         "passed": 0,
         "failed": 732
       },
       "skipped": 0,
-      "pass_rate": 0.0
+      "pass_rate": 49.02
     }
   ],
   "failure_reasons": [
     {
-      "reason": "no such table",
-      "count": 71491,
-      "example": "evidence/in1.test:368: no such table: t4"
-    },
-    {
       "reason": "unsupported: JOIN (more than one table in FROM)",
       "count": 5174,
       "example": "index/random/10/slt_good_0.test:24659: not supported yet: JOIN (more than one table in FROM)"
+    },
+    {
+      "reason": "unsupported: IN (subquery)",
+      "count": 3996,
+      "example": "evidence/in1.test:75: not supported yet: IN (subquery)"
     },
     {
       "reason": "unsupported: compound SELECT (UNION etc.)",
@@ -428,14 +428,14 @@
       "example": "select1.test:94: not supported yet: scalar subquery"
     },
     {
-      "reason": "unsupported: CREATE INDEX",
-      "count": 1086,
-      "example": "evidence/slt_lang_aggfunc.test:15: not supported yet: CREATE INDEX"
-    },
-    {
       "reason": "unsupported: CREATE VIEW",
       "count": 1069,
       "example": "evidence/slt_lang_createview.test:22: not supported yet: CREATE VIEW"
+    },
+    {
+      "reason": "no such table",
+      "count": 1067,
+      "example": "evidence/slt_lang_createview.test:34: no such table: view1"
     },
     {
       "reason": "unsupported: EXISTS",
@@ -443,19 +443,9 @@
       "example": "select1.test:109: not supported yet: EXISTS"
     },
     {
-      "reason": "unsupported: column constraint PRIMARY KEY",
-      "count": 687,
-      "example": "evidence/in1.test:113: not supported yet: column constraint PRIMARY KEY"
-    },
-    {
       "reason": "unsupported: JOIN",
       "count": 611,
       "example": "index/random/10/slt_good_0.test:14219: not supported yet: JOIN"
-    },
-    {
-      "reason": "unsupported: CREATE UNIQUE",
-      "count": 580,
-      "example": "index/between/10/slt_good_0.test:60: not supported yet: CREATE UNIQUE"
     },
     {
       "reason": "wrong result",
@@ -473,11 +463,6 @@
       "example": "evidence/in1.test:70: parse error: sql parser error: Expected: (, found: t1 at Line: 1, Column: 13"
     },
     {
-      "reason": "unsupported: IN (subquery)",
-      "count": 81,
-      "example": "evidence/in1.test:75: not supported yet: IN (subquery)"
-    },
-    {
       "reason": "unsupported: DROP TRIGGER",
       "count": 14,
       "example": "evidence/slt_lang_createtrigger.test:191: not supported yet: DROP TRIGGER"
@@ -486,26 +471,6 @@
       "reason": "unsupported: CREATE TRIGGER",
       "count": 13,
       "example": "evidence/slt_lang_createtrigger.test:24: not supported yet: CREATE TRIGGER"
-    },
-    {
-      "reason": "unsupported: INSERT OR / ON CONFLICT / RETURNING",
-      "count": 5,
-      "example": "evidence/slt_lang_createview.test:98: not supported yet: INSERT OR / ON CONFLICT / RETURNING"
-    },
-    {
-      "reason": "unsupported: column constraint UNIQUE",
-      "count": 5,
-      "example": "evidence/in1.test:160: not supported yet: column constraint UNIQUE"
-    },
-    {
-      "reason": "unsupported: DROP INDEX",
-      "count": 4,
-      "example": "evidence/slt_lang_dropindex.test:23: not supported yet: DROP INDEX"
-    },
-    {
-      "reason": "unsupported: INSERT ... SELECT",
-      "count": 4,
-      "example": "evidence/in1.test:380: not supported yet: INSERT ... SELECT"
     },
     {
       "reason": "unsupported: CREATE TEMPORARY",

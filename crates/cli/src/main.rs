@@ -81,6 +81,10 @@ fn run(db: &mut Database, sql: &str) -> ExitCode {
             Ok(StatementResult::Update { table, rows }) => println!("updated {rows} in {table}"),
             Ok(StatementResult::Delete { table, rows }) => println!("deleted {rows} from {table}"),
             Ok(StatementResult::DropTable { table }) => println!("dropped table {table}"),
+            Ok(StatementResult::CreateIndex { index, table }) => {
+                println!("created index {index} on {table}")
+            }
+            Ok(StatementResult::DropIndex { index }) => println!("dropped index {index}"),
             Ok(StatementResult::Query(result)) => print_query(&result),
             Err(e) => {
                 eprintln!("error: {e}\n  in: {}", entry.sql);

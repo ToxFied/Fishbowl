@@ -4,11 +4,13 @@
 where the `WHERE` condition is true. Then they change those rows. Fishbowl
 splits that into two separate phases.
 
-1. **Find.** Scan the whole table and collect every matching row with its
-   rowid. For `UPDATE`, compute each new row from the old one and check its
-   constraints, such as `NOT NULL`.
-2. **Write.** Only then change the B-tree: replace each row under its rowid,
-   or delete it.
+1. **Find.** Scan the table and collect every matching row with its rowid.
+   When a WHERE term can use an index, the scan reads only the rows the index
+   points to, as a SELECT would (see [indexes](indexes.md)).
+2. **Write.** Only then change the B-tree, one row at a time: replace each
+   row under its rowid, or delete it, and update every index to match. For
+   `UPDATE`, each new row is computed from the old one and its constraints
+   are checked just before it is written.
 
 ## Why not change rows during the scan
 
@@ -19,18 +21,16 @@ again, until it passes 50,000. IBM engineers found this on Halloween 1976,
 hence the name. Collecting first means every row is judged once, by its old
 value.
 
-**All or nothing.** If the fifth row breaks a `NOT NULL` constraint, the
-statement fails before anything is written, so rows one to four are unchanged
-too. Without transactions (milestone 6), this is how a single statement stays
-atomic.
+**All or nothing.** If the fifth row breaks a constraint, rows one to four
+are already changed. The writer keeps an undo log and reverses them, so the
+statement leaves no trace. See [how constraints are checked](constraints.md).
 
 **The tree stays still.** Deleting rows can merge leaves and free pages. A scan
 in the middle of those leaves could find its next page freed. Changing nothing
 until the scan ends avoids the problem.
 
 The cost is memory: the matching rows are held in a list. Real databases avoid
-that with more careful cursors, and milestone 6's transactions make it
-unnecessary for atomicity.
+that with more careful cursors.
 
 ## Every value comes from the old row
 
@@ -45,4 +45,4 @@ onto the free list, and deletes its row from the schema table. The next table
 created reuses those pages.
 
 Code: `crates/engine/src/lib.rs` (`Database::update`, `Database::delete`,
-`matching_rows`).
+`matching_rows`) and `crates/engine/src/write.rs` (writing rows and indexes).

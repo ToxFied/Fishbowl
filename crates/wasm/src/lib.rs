@@ -94,7 +94,10 @@ mod tests {
         let out: Value = serde_json::from_str(&fishbowl.run(
 "CREATE TABLE t(a INTEGER); INSERT INTO t VALUES (1), (2); SELECT a FROM t WHERE a > 1; \
              UPDATE t SET a = 3 WHERE a = 2; DELETE FROM t WHERE a = 1; \
-             CREATE TABLE gone(x); DROP TABLE gone; SELECT b FROM t",
+             CREATE TABLE gone(x); DROP TABLE gone; \
+             CREATE TABLE k(id INTEGER PRIMARY KEY, code TEXT UNIQUE); \
+             CREATE INDEX t_a ON t(a DESC); SELECT a FROM t WHERE a = 3; \
+             CREATE INDEX spare ON t(a); DROP INDEX spare; SELECT b FROM t",
         ))
         .unwrap();
 
@@ -128,11 +131,42 @@ mod tests {
             json!({"kind": "drop_table", "table": "gone"})
         );
 
-        assert_eq!(statements[7]["status"], "error");
-        assert_eq!(statements[7]["message"], "no such column: b");
-        assert_eq!(out["tables"].as_array().unwrap().len(), 1);
-        assert_eq!(out["tables"][0]["name"], "t");
-        assert_eq!(out["tables"][0]["row_count"], 1);
-        assert_eq!(out["tables"][0]["columns"][0]["affinity"], "integer");
+        assert_eq!(
+            statements[8]["result"],
+            json!({"kind": "create_index", "index": "t_a", "table": "t"})
+        );
+        let scan = &statements[9]["result"]["plan"]["children"][0]["children"][0];
+        assert_eq!(scan["operator"], "IndexScan");
+        assert_eq!(scan["detail"], "t USING INDEX t_a (a = 3)");
+        assert!(scan["reason"].is_string());
+        assert_eq!(
+            statements[11]["result"],
+            json!({"kind": "drop_index", "index": "spare"})
+        );
+
+        assert_eq!(statements[12]["status"], "error");
+        assert_eq!(statements[12]["message"], "no such column: b");
+        // Tables come sorted by name.
+        let tables = out["tables"].as_array().unwrap();
+        assert_eq!(tables.len(), 2);
+        let t = &tables[1];
+        assert_eq!(t["name"], "t");
+        assert_eq!(t["row_count"], 1);
+        assert_eq!(t["columns"][0]["affinity"], "integer");
+        assert_eq!(t["columns"][0]["primary_key"], false);
+        assert_eq!(
+            t["indexes"],
+            json!([{
+                "name": "t_a",
+                "columns": [{"name": "a", "descending": true}],
+                "unique": false,
+                "automatic": false,
+            }])
+        );
+        let k = &tables[0];
+        assert_eq!(k["columns"][0]["primary_key"], true);
+        assert_eq!(k["indexes"][0]["name"], "sqlite_autoindex_k_1");
+        assert_eq!(k["indexes"][0]["unique"], true);
+        assert_eq!(k["indexes"][0]["automatic"], true);
     }
 }

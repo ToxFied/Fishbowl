@@ -24,6 +24,8 @@ export interface QueryResult {
 
 export type StatementResult =
   | { kind: "create_table"; table: string }
+  | { kind: "create_index"; index: string; table: string }
+  | { kind: "drop_index"; index: string }
   | { kind: "insert"; table: string; rows: number }
   | { kind: "update"; table: string; rows: number }
   | { kind: "delete"; table: string; rows: number }
@@ -39,11 +41,21 @@ export interface Column {
   declared_type: string;
   affinity: string;
   not_null: boolean;
+  primary_key: boolean;
+}
+
+export interface IndexInfo {
+  name: string;
+  columns: { name: string; descending: boolean }[];
+  unique: boolean;
+  /** Made by a PRIMARY KEY or UNIQUE constraint, not CREATE INDEX. */
+  automatic: boolean;
 }
 
 export interface TableInfo {
   name: string;
   columns: Column[];
+  indexes: IndexInfo[];
   row_count: number;
 }
 
