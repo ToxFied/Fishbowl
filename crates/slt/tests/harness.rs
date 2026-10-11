@@ -98,6 +98,25 @@ SELECT a FROM t WHERE a > 1
 }
 
 #[test]
+fn an_expected_hash_line_is_compared_by_hash_without_a_threshold() {
+    // select1.test and select4.test have no hash-threshold line but still
+    // list some results as hashes, as SQLite's runner allows.
+    let result = run("\
+query I rowsort
+SELECT a FROM t
+----
+3 values hashing to c0710d6b4f15dfa88f600b0e6b624077
+
+query I rowsort
+SELECT a FROM t
+----
+3 values hashing to 53c225db474ffb86c7e9459e87ebf56e
+");
+    assert_eq!(result.queries, queries(1, 1));
+    assert_eq!(result.failures[0].reason, "wrong result");
+}
+
+#[test]
 fn wrong_column_count_fails_even_if_values_match() {
     let result = run("\
 query II rowsort

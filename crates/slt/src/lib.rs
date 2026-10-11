@@ -320,7 +320,10 @@ fn check_query(
         _ => rows.into_iter().flatten().collect(),
     };
 
-    let actual = if hash_threshold > 0 && values.len() as u64 > hash_threshold {
+    // Like SQLite's runner, an expected "N values hashing to ..." line means a
+    // hash comparison even below the threshold, or in a file without one.
+    let expects_hash = matches!(expected_lines.as_slice(), [line] if is_hash_line(line));
+    let actual = if expects_hash || (hash_threshold > 0 && values.len() as u64 > hash_threshold) {
         vec![hash_values(&values)]
     } else {
         values
@@ -369,6 +372,17 @@ pub fn format_value(value: &Value, ty: &DefaultColumnType) -> String {
             }
         }
     }
+}
+
+/// Whether a line has the form "12 values hashing to <32 hex digits>".
+fn is_hash_line(line: &str) -> bool {
+    line.split_once(" values hashing to ")
+        .is_some_and(|(count, hash)| {
+            !count.is_empty()
+                && count.bytes().all(|b| b.is_ascii_digit())
+                && hash.len() == 32
+                && hash.bytes().all(|b| b.is_ascii_hexdigit())
+        })
 }
 
 /// The reference runner's hash: MD5 over every value followed by a newline.

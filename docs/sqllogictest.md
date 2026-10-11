@@ -48,7 +48,9 @@ success or an error. A `query` record runs SQL and lists the expected values.
    column type the test declares (`I` as an integer, `R` with three decimals,
    `T` as text, `NULL`, `(empty)` for an empty string). Then they are sorted by
    the sort mode, and above the `hash-threshold` they are compared by MD5 hash.
-   This logic is in `crates/slt/src/lib.rs`.
+   An expected result written as "N values hashing to ..." is compared by hash
+   whatever the threshold, as SQLite's runner does; `select1.test` and
+   `select4.test` rely on that. This logic is in `crates/slt/src/lib.rs`.
 6. **The harness is tested against itself.** `crates/slt/tests/harness.rs`
    feeds it scripts with known outcomes, including wrong answers, wrong hashes,
    wrong column counts and unsorted results, and checks that each one fails.
