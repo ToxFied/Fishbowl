@@ -193,9 +193,11 @@ fn an_index_scan_reads_only_matching_rows_and_says_which() {
 #[test]
 fn a_join_tries_every_pair_and_drops_those_that_do_not_match() {
     let mut db = database();
+    // `+tank.id` is not a plain column, so no index can find the tank: the
+    // join tries every pair, as SQLite would.
     let (result, trace) = traced(
         &mut db,
-        "SELECT fish.name, tank.name FROM fish JOIN tank ON fish.tank = tank.id",
+        "SELECT fish.name, tank.name FROM fish JOIN tank ON fish.tank = +tank.id",
     );
     let join = &result.plan.children[0];
     assert_eq!(join.operator, "NestedLoopJoin");
@@ -211,6 +213,29 @@ fn a_join_tries_every_pair_and_drops_those_that_do_not_match() {
         3
     );
     assert_eq!(events(&trace, materialize.id, &[EventKind::Out]).len(), 24);
+}
+
+#[test]
+fn a_join_looks_up_matching_rows_by_index() {
+    let mut db = database();
+    let (result, trace) = traced(
+        &mut db,
+        "SELECT fish.name, tank.name FROM fish JOIN tank ON fish.tank = tank.id",
+    );
+    let join = &result.plan.children[0];
+    assert_eq!(join.operator, "NestedLoopJoin");
+    // Each fish finds its one tank by rowid, so no pair is tried and dropped.
+    let lookup = &join.children[1];
+    assert_eq!(
+        (lookup.operator, lookup.detail.as_str()),
+        (
+            "IndexScan",
+            "tank USING INTEGER PRIMARY KEY (id = fish.tank)"
+        )
+    );
+    assert_eq!(events(&trace, join.id, &[EventKind::Out]).len(), 8);
+    assert!(events(&trace, join.id, &[EventKind::Drop]).is_empty());
+    assert_eq!(events(&trace, lookup.id, &[EventKind::Out]).len(), 8);
 }
 
 #[test]

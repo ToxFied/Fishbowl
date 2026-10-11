@@ -66,18 +66,18 @@ new index. `DROP TABLE` drops the table's indexes too.
 
 ## When a query uses an index
 
-For now the rule is simple: if a WHERE term is an equality, a range, a
-`BETWEEN` or an `IN` list on the first column of an index, and the other side
-is a constant, the plan reads that index (an **IndexScan**) instead of every
-row (a **SeqScan**). Several range terms on the same column combine, so
-`a > 5 AND a < 9` reads only from 5 to 9. The plan's "why" line says which term
-was used. Choosing by estimated cost is milestone 5.
+When a WHERE term is an equality, a range, a `BETWEEN` or an `IN` list on an
+index's leading columns, the plan can read that index (an **IndexScan**)
+instead of every row (a **SeqScan**). Several range terms on the same column
+combine, so `a > 5 AND a < 9` reads only from 5 to 9. Since M5 the planner
+weighs every index, and the full scan, by estimated cost, and the plan lists
+the ones it turned down. See [choosing an index](choosing-an-index.md).
 
 ```text
 Project pk  [rows=2]
   Filter ((col0 > 5) AND (col1 = 'x'))  [rows=2]
     IndexScan tab1 USING INDEX idx_col0 (col0 > 5)  [rows=3]
-      why: the WHERE term is a range on col0, and index idx_col0 keeps col0 in order...
+      why: index idx_col0 finds about 262,144 of the 1,048,576 rows, and each leads to its row by rowid...
 ```
 
 The Filter stays above the IndexScan with the whole WHERE clause. The index

@@ -58,6 +58,11 @@ pub enum Plan {
         name: String,
         if_exists: bool,
     },
+    /// `ANALYZE`, `ANALYZE table` or `ANALYZE index`: count rows and values
+    /// so the planner can use real sizes. These tables, or all of them.
+    Analyze {
+        tables: Option<Vec<String>>,
+    },
     /// `INSERT INTO table SELECT ...`: the query's rows, stored like VALUES.
     InsertSelect {
         table: String,
@@ -74,6 +79,60 @@ pub struct QueryPlan {
     /// [`Expr::affinity`] gives it. A view or a subquery passes it on.
     pub affinities: Vec<Option<Affinity>>,
     pub root: PlanNode,
+    /// What the planner expects the whole query to produce and cost, for a
+    /// query that reads this one in FROM.
+    pub estimate: Estimate,
+}
+
+/// The planner's guess at what a step will do.
+#[derive(Debug, Clone, Copy, PartialEq, Serialize)]
+pub struct Estimate {
+    /// Rows it will pass on.
+    pub rows: f64,
+    /// Work, in rows read: a table row read in a scan costs 3.
+    pub cost: f64,
+}
+
+/// A plan the planner considered and turned down, with its estimate.
+#[derive(Debug, Clone, PartialEq, Serialize)]
+pub struct Rejected {
+    pub plan: String,
+    pub rows: f64,
+    pub cost: f64,
+}
+
+/// What the planner weighed for one step, as the profile reports it.
+#[derive(Debug, Clone, Serialize)]
+pub struct Choice {
+    /// The plan chosen here in one line, to set beside the rejected ones.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub plan: Option<String>,
+    /// What the planner expected this step to produce and cost.
+    pub estimate: Estimate,
+    /// Plans for this step it turned down, cheapest first.
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub rejected: Vec<Rejected>,
+}
+
+/// Why a step is in the plan: a sentence, and when there was a choice of
+/// costed alternatives, the estimate for this one and the ones turned down,
+/// cheapest first.
+#[derive(Debug, Clone, Default)]
+pub struct Why {
+    pub reason: String,
+    /// The chosen plan in one line, when it is compared with others.
+    pub plan: Option<String>,
+    pub estimate: Option<Estimate>,
+    pub rejected: Vec<Rejected>,
+}
+
+impl Why {
+    pub fn new(reason: impl Into<String>) -> Why {
+        Why {
+            reason: reason.into(),
+            ..Why::default()
+        }
+    }
 }
 
 /// A SELECT inside an expression.
@@ -126,13 +185,14 @@ impl SetOp {
 #[derive(Debug, Clone)]
 pub enum PlanNode {
     /// Reads every row of a table, in storage order.
-    SeqScan { table: String, reason: String },
+    SeqScan { table: String, why: Why },
     /// Reads only the rows an index points to, in index order. A Filter
-    /// above it still checks the whole WHERE clause.
+    /// above it still checks the whole WHERE clause. In a join, the lookup
+    /// can use values from the join's current left row.
     IndexScan {
         table: String,
         access: IndexAccess,
-        reason: String,
+        why: Why,
     },
     /// Produces one empty row, for `SELECT` without `FROM`.
     OneRow,
@@ -167,7 +227,7 @@ pub enum PlanNode {
     Sort {
         input: Box<PlanNode>,
         keys: Vec<SortKey>,
-        reason: String,
+        why: Why,
     },
     /// Drops rows equal to one it has already returned.
     Distinct { input: Box<PlanNode> },
@@ -177,9 +237,10 @@ pub enum PlanNode {
         limit: Expr,
         offset: Option<Expr>,
     },
-    /// For each row from `left`, reads every row of `right` again and passes
-    /// on the joined pairs where `condition` holds. Each output row is the
-    /// left row followed by the right row.
+    /// For each row from `left`, reads `right` again and passes on the
+    /// joined pairs where `condition` holds. Each output row is the left row
+    /// followed by the right row. The right side is either a Materialize
+    /// step, replayed from memory, or a lookup that uses the left row.
     NestedLoopJoin {
         left: Box<PlanNode>,
         right: Box<PlanNode>,
@@ -187,7 +248,7 @@ pub enum PlanNode {
         condition: Option<Expr>,
         /// Columns in a right row, for the NULLs of an unmatched LEFT JOIN row.
         right_width: usize,
-        reason: String,
+        why: Why,
     },
     /// Combines the rows of two queries. UNION ALL passes on both inputs in
     /// turn; the others drop duplicate rows and return the rest sorted, the
@@ -299,14 +360,18 @@ impl PlanNode {
     }
 
     /// Why the planner chose this step, when there was a choice to explain.
-    pub fn reason(&self) -> Option<&str> {
+    pub fn why(&self) -> Option<&Why> {
         match self {
-            PlanNode::SeqScan { reason, .. }
-            | PlanNode::IndexScan { reason, .. }
-            | PlanNode::Sort { reason, .. }
-            | PlanNode::NestedLoopJoin { reason, .. } => Some(reason),
+            PlanNode::SeqScan { why, .. }
+            | PlanNode::IndexScan { why, .. }
+            | PlanNode::Sort { why, .. }
+            | PlanNode::NestedLoopJoin { why, .. } => Some(why),
             _ => None,
         }
+    }
+
+    pub fn reason(&self) -> Option<&str> {
+        self.why().map(|why| why.reason.as_str())
     }
 
     pub fn children(&self) -> Vec<&PlanNode> {
@@ -345,9 +410,9 @@ impl PlanNode {
             PlanNode::Sort { keys, .. } => keys.iter().map(|k| &k.expr).collect(),
             PlanNode::Limit { limit, offset, .. } => std::iter::once(limit).chain(offset).collect(),
             PlanNode::NestedLoopJoin { condition, .. } => condition.iter().collect(),
-            // An index lookup's values are constants, worked out when planning.
+            // A lookup's values, which may read an enclosing query's row.
+            PlanNode::IndexScan { access, .. } => access.exprs(),
             PlanNode::SeqScan { .. }
-            | PlanNode::IndexScan { .. }
             | PlanNode::OneRow
             | PlanNode::Distinct { .. }
             | PlanNode::Compound { .. }
@@ -366,9 +431,18 @@ pub struct PlanProfile {
     pub operator: &'static str,
     pub detail: String,
     pub reason: Option<String>,
+    /// The planner's estimate and the plans it turned down, for a step
+    /// where it compared costs. Its fields sit beside the others in JSON.
+    #[serde(flatten)]
+    pub choice: Option<Box<Choice>>,
     /// Rows this step passed to its parent.
     pub rows_out: u64,
     pub children: Vec<PlanProfile>,
+}
+
+/// An estimate as the CLI prints it: a whole number.
+fn round(n: f64) -> String {
+    format!("{:.0}", n.max(0.0))
 }
 
 impl PlanProfile {
@@ -392,6 +466,21 @@ impl PlanProfile {
         ));
         if let Some(reason) = &self.reason {
             out.push_str(&format!("{indent}  why: {reason}\n"));
+        }
+        if let Some(choice) = &self.choice {
+            out.push_str(&format!(
+                "{indent}  estimate: rows={} cost={}\n",
+                round(choice.estimate.rows),
+                round(choice.estimate.cost)
+            ));
+            for r in &choice.rejected {
+                out.push_str(&format!(
+                    "{indent}  rejected: {}  [rows={} cost={}]\n",
+                    r.plan,
+                    round(r.rows),
+                    round(r.cost)
+                ));
+            }
         }
         for child in &self.children {
             child.render_into(out, depth + 1);

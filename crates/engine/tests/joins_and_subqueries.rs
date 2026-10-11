@@ -158,17 +158,19 @@ fn conditions_move_down_to_the_table_they_read() {
         &mut db,
         "SELECT t1.a FROM t1, t2 WHERE t1.a = t2.a AND c = 'q' AND b IS NOT NULL",
     );
-    // t2 is read once; Materialize hands its one matching row to each t1 row.
+    // Each condition filters its own table before the join. The equality
+    // on t2 is expected to keep fewer rows, so t2 goes first, and t1 is read
+    // once into Materialize, which hands its two rows to t2's one.
     assert_eq!(
         plan_lines(&result.plan),
         [
             "Project t1.a [1]",
             "  NestedLoopJoin INNER ON (t1.a = t2.a) [1]",
-            "    Filter t1.b IS NOT NULL [2]",
-            "      SeqScan t1 [3]",
+            "    Filter (t2.c = 'q') [1]",
+            "      SeqScan t2 [3]",
             "    Materialize [2]",
-            "      Filter (t2.c = 'q') [1]",
-            "        SeqScan t2 [3]",
+            "      Filter t1.b IS NOT NULL [2]",
+            "        SeqScan t1 [3]",
         ]
     );
 }

@@ -18,7 +18,7 @@ import { WhyPanel } from "./WhyPanel";
 const OPERATORS: Record<string, string> = {
   SeqScan: "Reads every row of the table, one at a time, in storage order.",
   IndexScan:
-    "Walks down an index's B-tree to the first match, reads entries in order until the last, and fetches each row by rowid. Rows it never reaches are never read.",
+    "Walks down an index's B-tree to the first match, reads entries in order until the last, and fetches each row by rowid. Rows it never reaches are never read. In a join it looks up the matches for each left row. A covering index holds every column the query reads, so the table is not read at all.",
   Filter: "Passes on only the rows where the condition is true. NULL counts as not true.",
   Project: "Computes the output columns from each row it receives.",
   OneRow: "Produces one empty row, so a SELECT without FROM has something to compute on.",
@@ -28,7 +28,7 @@ const OPERATORS: Record<string, string> = {
   Distinct: "Passes on each row only the first time it sees it.",
   Limit: "Skips the OFFSET rows, passes on rows until it has enough, then stops asking.",
   NestedLoopJoin:
-    "For each row of its first input, reads all of its second input again and passes on the pairs that meet the condition.",
+    "For each row of its first input, reads its second input again and passes on the pairs that meet the condition. The second input is either kept in memory or looked up by index for each left row.",
   Materialize:
     "Reads its input once and keeps the rows, so the join above can replay them for every left row.",
   Subquery:

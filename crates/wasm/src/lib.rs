@@ -115,7 +115,7 @@ mod tests {
              CREATE INDEX t_a ON t(a DESC); SELECT a FROM t WHERE a = 3; \
              CREATE INDEX spare ON t(a); DROP INDEX spare; \
              CREATE VIEW v AS SELECT a FROM t; DROP VIEW v; \
-             BEGIN; INSERT INTO t VALUES (9); ROLLBACK; BEGIN; COMMIT; SELECT b FROM t",
+             BEGIN; INSERT INTO t VALUES (9); ROLLBACK; BEGIN; COMMIT; ANALYZE t; SELECT b FROM t",
             false,
         ))
         .unwrap();
@@ -157,8 +157,17 @@ mod tests {
         );
         let scan = &statements[9]["result"]["plan"]["children"][0]["children"][0];
         assert_eq!(scan["operator"], "IndexScan");
-        assert_eq!(scan["detail"], "t USING INDEX t_a (a = 3)");
+        assert_eq!(scan["detail"], "t USING COVERING INDEX t_a (a = 3)");
         assert!(scan["reason"].is_string());
+        // The planner's estimate, and the plans it turned down.
+        assert!(scan["estimate"]["rows"].is_number());
+        assert!(scan["estimate"]["cost"].is_number());
+        let rejected = &scan["rejected"][0];
+        assert_eq!(rejected["plan"], "SeqScan t");
+        assert!(rejected["rows"].is_number() && rejected["cost"].is_number());
+        // Steps with nothing to choose leave both out.
+        assert!(statements[9]["result"]["plan"].get("estimate").is_none());
+        assert!(statements[9]["result"]["plan"].get("rejected").is_none());
         assert_eq!(
             statements[11]["result"],
             json!({"kind": "drop_index", "index": "spare"})
@@ -176,8 +185,12 @@ mod tests {
         assert_eq!(statements[16]["result"], json!({"kind": "rollback"}));
         assert_eq!(statements[18]["result"], json!({"kind": "commit"}));
 
-        assert_eq!(statements[19]["status"], "error");
-        assert_eq!(statements[19]["message"], "no such column: b");
+        assert_eq!(
+            statements[19]["result"],
+            json!({"kind": "analyze", "tables": ["t"]})
+        );
+        assert_eq!(statements[20]["status"], "error");
+        assert_eq!(statements[20]["message"], "no such column: b");
         // Tables come sorted by name.
         let tables = out["tables"].as_array().unwrap();
         assert_eq!(tables.len(), 2);

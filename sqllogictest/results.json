@@ -7,12 +7,12 @@
   },
   "totals": {
     "records": {
-      "passed": 129216,
-      "failed": 132
+      "passed": 129218,
+      "failed": 130
     },
     "statements": {
-      "passed": 11909,
-      "failed": 31
+      "passed": 11911,
+      "failed": 29
     },
     "queries": {
       "passed": 117307,
@@ -52,15 +52,15 @@
     {
       "path": "evidence/slt_lang_aggfunc.test",
       "statements": {
-        "passed": 10,
-        "failed": 3
+        "passed": 12,
+        "failed": 1
       },
       "queries": {
         "passed": 57,
         "failed": 10
       },
       "skipped": 0,
-      "pass_rate": 83.75
+      "pass_rate": 86.25
     },
     {
       "path": "evidence/slt_lang_createtrigger.test",
@@ -404,7 +404,7 @@
   "failure_reasons": [
     {
       "reason": "parse error",
-      "count": 97,
+      "count": 95,
       "example": "evidence/in1.test:70: parse error: sql parser error: Expected: (, found: t1 at Line: 1, Column: 13"
     },
     {
@@ -424,8 +424,13 @@
     },
     {
       "reason": "wrong result",
-      "count": 4,
-      "example": "evidence/slt_lang_aggfunc.test:480: expected [], got [9.000]"
+      "count": 3,
+      "example": "evidence/slt_lang_aggfunc.test:484: expected [-9223372036854776000.000], got [-9223372036854775808.000]"
+    },
+    {
+      "reason": "integer overflow",
+      "count": 1,
+      "example": "evidence/slt_lang_aggfunc.test:480: integer overflow"
     }
   ]
 }

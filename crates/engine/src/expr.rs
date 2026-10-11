@@ -27,7 +27,7 @@ pub trait Env {
 
 /// The environment outside a query, where no expression has a subquery or an
 /// outer column. The planner makes sure of that.
-struct NoEnv;
+pub struct NoEnv;
 
 impl Env for NoEnv {
     fn outer(&self, _: usize, _: usize) -> Result<Value> {

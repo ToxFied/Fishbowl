@@ -4,20 +4,24 @@
 //! "column 0 > 1", checked against the catalog. Anything Fishbowl does not
 //! implement yet is rejected here with [`Error::Unsupported`], never ignored.
 
+mod cost;
+mod join;
+mod paths;
 mod schema;
 
 use std::cell::RefCell;
+use std::collections::BTreeSet;
 
 use sqlparser::ast;
 
-use crate::access;
+use crate::access::IndexAccess;
 use crate::catalog::{Catalog, Column, TableSchema, View};
 use crate::error::{Error, Result, unsupported};
 use crate::expr::{
     AggregateCall, AggregateFunc, BinaryOp, Expr, ScalarFunc, SubqueryKind, UnaryOp,
     is_sqlite_function,
 };
-use crate::plan::{JoinKind, Plan, PlanNode, QueryPlan, SetOp, SortKey, Subquery};
+use crate::plan::{Estimate, JoinKind, Plan, PlanNode, QueryPlan, SetOp, SortKey, Subquery, Why};
 use crate::value::{Affinity, Value};
 
 pub fn plan_statement(catalog: &Catalog, stmt: &ast::Statement) -> Result<Plan> {
@@ -61,8 +65,35 @@ pub fn plan_statement(catalog: &Catalog, stmt: &ast::Statement) -> Result<Plan> 
             temporary: false,
             table: None,
         } => schema::plan_drop_index(*if_exists, names),
+        ast::Statement::Analyze(analyze) => plan_analyze(catalog, analyze),
         other => unsupported(statement_kind(other)),
     }
+}
+
+/// `ANALYZE` counts every table; `ANALYZE name` the table of that name, or
+/// the table an index of that name belongs to.
+fn plan_analyze(catalog: &Catalog, analyze: &ast::Analyze) -> Result<Plan> {
+    if analyze.partitions.is_some()
+        || analyze.for_columns
+        || !analyze.columns.is_empty()
+        || analyze.cache_metadata
+        || analyze.noscan
+        || analyze.compute_statistics
+        || analyze.has_table_keyword
+    {
+        return unsupported("this ANALYZE option");
+    }
+    let Some(name) = &analyze.table_name else {
+        return Ok(Plan::Analyze { tables: None });
+    };
+    let name = object_name(name)?;
+    let table = match (catalog.table(&name), catalog.index(&name)) {
+        (Ok(table), _) | (_, Some((table, _))) => table.name.clone(),
+        (Err(e), None) => return Err(e),
+    };
+    Ok(Plan::Analyze {
+        tables: Some(vec![table]),
+    })
 }
 
 fn plan_create_table(create: &ast::CreateTable) -> Result<Plan> {
@@ -388,7 +419,7 @@ fn plan_query(cx: &Planner, query: &ast::Query, outer: Option<&Scope>) -> Result
     }
     let order_by = query.order_by.as_ref();
     let mut plan = match query.body.as_ref() {
-        ast::SetExpr::Select(select) => plan_select(cx, select, order_by, outer)?,
+        ast::SetExpr::Select(select) => plan_select(cx, select, order_by, outer, None)?,
         ast::SetExpr::SetOperation { .. } => plan_compound(cx, &query.body, order_by, outer)?,
         ast::SetExpr::Query(_) => return unsupported("parenthesized SELECT"),
         ast::SetExpr::Values(_) => return unsupported("VALUES as a query"),
@@ -410,40 +441,45 @@ fn plan_query(cx: &Planner, query: &ast::Query, outer: Option<&Scope>) -> Result
     Ok(plan)
 }
 
-fn plan_select(
-    cx: &Planner,
-    select: &ast::Select,
-    order_by: Option<&ast::OrderBy>,
-    outer: Option<&Scope>,
-) -> Result<QueryPlan> {
-    let distinct = select_is_distinct(select)?;
-    let group_by_terms = match &select.group_by {
-        ast::GroupByExpr::Expressions(terms, modifiers) if modifiers.is_empty() => terms,
-        _ => return unsupported("GROUP BY ALL or GROUP BY modifiers"),
-    };
+/// Everything a SELECT says, bound to the names in its FROM clause.
+struct Bound<'q> {
+    items: Vec<Item<'q>>,
+    predicate: Option<Expr>,
+    /// Each FROM item's ON condition.
+    on: Vec<Option<Expr>>,
+    exprs: Vec<Expr>,
+    sort_keys: Vec<SortKey>,
+    having: Option<Expr>,
+    group_by: Vec<SortKey>,
+    aggregates: Vec<AggregateCall>,
+    is_aggregate: bool,
+}
 
-    let (mut scope, mut from) = plan_from(cx, &select.from, outer)?;
-    if let Some(order) = join_order(cx, &scope, &from, select)? {
-        scope.reorder(&order);
-        let mut slots: Vec<Option<FromItem>> = from.into_iter().map(Some).collect();
-        from = order
-            .iter()
-            .map(|&k| slots[k].take().expect("each table once"))
-            .collect();
-    }
-    let items = select_items(&scope, &select.projection)?;
+/// Binds every clause of a SELECT against `scope`. The order matters:
+/// aggregates are numbered in the order SQLite finds them.
+fn bind_select<'q>(
+    cx: &Planner,
+    scope: &Scope,
+    from: &[FromItem<'q>],
+    select: &'q ast::Select,
+    order_by: Option<&ast::OrderBy>,
+    group_by_terms: &[ast::Expr],
+) -> Result<Bound<'q>> {
+    let items = select_items(scope, &select.projection)?;
     let mut binder = Binder {
-        scope: &scope,
+        scope,
         items: &items,
         aggregates: Vec::new(),
         cx: Some(cx),
     };
-
     let predicate = match &select.selection {
         Some(predicate) => Some(binder.bind(predicate, Ctx::ROW)?),
         None => None,
     };
-    let mut root = join_tree(from, &mut binder, predicate)?;
+    let on = from
+        .iter()
+        .map(|item| item.on.map(|on| binder.bind(on, Ctx::ON)).transpose())
+        .collect::<Result<Vec<_>>>()?;
 
     // Binding the result columns finds any aggregates, which is what makes
     // this an aggregate query.
@@ -470,25 +506,175 @@ fn plan_select(
         Some(having) => Some(binder.bind(having, output)?),
         None => None,
     };
-    if is_aggregate {
-        // Grouping sorts rows by the GROUP BY values. When ORDER BY has as
-        // many terms, SQLite sorts each GROUP BY term in the direction of the
-        // matching ORDER BY term, hoping to make the final sort unnecessary.
-        // That direction decides the order of rows that tie in ORDER BY.
-        let same_length = sort_keys.len() == group_by_terms.len();
-        let group_by = group_by_terms
-            .iter()
-            .enumerate()
-            .map(|(i, term)| {
-                let descending = same_length && sort_keys[i].descending;
-                Ok(SortKey {
-                    expr: binder.result_term(term, i, Clause::GroupBy, Ctx::GROUP_BY)?,
-                    descending,
-                    nulls_first: !descending,
-                })
+    // Grouping sorts rows by the GROUP BY values. When ORDER BY has as many
+    // terms, SQLite sorts each GROUP BY term in the direction of the
+    // matching ORDER BY term, hoping to make the final sort unnecessary.
+    // That direction decides the order of rows that tie in ORDER BY.
+    let same_length = sort_keys.len() == group_by_terms.len();
+    let group_by = group_by_terms
+        .iter()
+        .enumerate()
+        .map(|(i, term)| {
+            let descending = same_length && sort_keys[i].descending;
+            Ok(SortKey {
+                expr: binder.result_term(term, i, Clause::GroupBy, Ctx::GROUP_BY)?,
+                descending,
+                nulls_first: !descending,
             })
-            .collect::<Result<Vec<_>>>()?;
-        let aggregates = binder.aggregates;
+        })
+        .collect::<Result<Vec<_>>>()?;
+    let aggregates = std::mem::take(&mut binder.aggregates);
+    Ok(Bound {
+        items,
+        predicate,
+        on,
+        exprs,
+        sort_keys,
+        having,
+        group_by,
+        aggregates,
+        is_aggregate,
+    })
+}
+
+impl Bound<'_> {
+    /// Every expression the query evaluates on its FROM rows.
+    fn all_exprs(&self) -> impl Iterator<Item = &Expr> {
+        self.predicate
+            .iter()
+            .chain(self.on.iter().flatten())
+            .chain(&self.exprs)
+            .chain(self.sort_keys.iter().map(|k| &k.expr))
+            .chain(&self.having)
+            .chain(self.group_by.iter().map(|k| &k.expr))
+            .chain(self.aggregates.iter().flat_map(|a| &a.args))
+    }
+
+    /// Per FROM item, the columns of it the query reads, counting those a
+    /// subquery reads as columns of an enclosing query.
+    fn columns_used(&self, scope: &Scope) -> Vec<BTreeSet<usize>> {
+        let mut read = Vec::new();
+        for expr in self.all_exprs() {
+            read.extend(columns_read(expr));
+            outer_reads(expr, 1, &mut read);
+        }
+        let mut used = vec![BTreeSet::new(); scope.tables.len()];
+        for c in read {
+            if let Some(k) = scope
+                .tables
+                .iter()
+                .position(|t| (t.offset..t.offset + t.columns.len()).contains(&c))
+            {
+                used[k].insert(c - scope.tables[k].offset);
+            }
+        }
+        used
+    }
+}
+
+/// The columns that subqueries inside `expr` read from the query `level`
+/// levels out of them, which is the query `expr` belongs to.
+fn outer_reads(expr: &Expr, level: usize, out: &mut Vec<usize>) {
+    expr.walk(&mut |e| match e {
+        Expr::OuterColumn { depth, index, .. } if *depth == level - 1 && level > 1 => {
+            out.push(*index)
+        }
+        Expr::Subquery { query, .. } => plan_outer_reads(&query.plan.root, level, out),
+        _ => {}
+    });
+}
+
+fn plan_outer_reads(node: &PlanNode, level: usize, out: &mut Vec<usize>) {
+    for expr in node.exprs() {
+        expr.walk(&mut |e| match e {
+            Expr::OuterColumn { depth, index, .. } if *depth == level => out.push(*index),
+            Expr::Subquery { query, .. } => plan_outer_reads(&query.plan.root, level + 1, out),
+            _ => {}
+        });
+    }
+    // A subquery in FROM sees the same enclosing queries as its query.
+    for child in node.children() {
+        plan_outer_reads(child, level, out);
+    }
+}
+
+/// The order a compound SELECT reads each of its sides in: SQLite merges
+/// sorted sides, by the ORDER BY terms first and then the other columns.
+#[derive(Clone, Copy)]
+struct Merge<'a> {
+    first: &'a [usize],
+}
+
+fn plan_select(
+    cx: &Planner,
+    select: &ast::Select,
+    order_by: Option<&ast::OrderBy>,
+    outer: Option<&Scope>,
+    merge: Option<Merge>,
+) -> Result<QueryPlan> {
+    let distinct = select_is_distinct(select)?;
+    let group_by_terms = match &select.group_by {
+        ast::GroupByExpr::Expressions(terms, modifiers) if modifiers.is_empty() => terms,
+        _ => return unsupported("GROUP BY ALL or GROUP BY modifiers"),
+    };
+
+    let (mut scope, mut from) = plan_from(cx, &select.from, outer)?;
+    let mut alternatives = join::Alternatives::default();
+    if from.len() > 1 {
+        // Bind once in FROM order to weigh the join orders, then again in
+        // the order chosen, where each table's columns finally sit.
+        let bound = bind_select(cx, &scope, &from, select, order_by, group_by_terms)?;
+        check_left_join_on(&scope, &from, &bound.on)?;
+        let used = bound.columns_used(&scope);
+        let sources = sources(&scope, &from, used, true);
+        let analysis = join::Analysis::new(cx.catalog, sources, bound.on, bound.predicate);
+        let choice = analysis.choose();
+        alternatives = choice.alternatives;
+        let in_from_order = choice.order.iter().enumerate().all(|(i, &k)| i == k);
+        if !in_from_order {
+            scope.reorder(&choice.order);
+            let mut slots: Vec<Option<FromItem>> = from.into_iter().map(Some).collect();
+            from = choice
+                .order
+                .iter()
+                .map(|&k| slots[k].take().expect("each table once"))
+                .collect();
+        }
+    }
+    let bound = bind_select(cx, &scope, &from, select, order_by, group_by_terms)?;
+    let width = scope.width();
+    let wanted = wanted_order(&bound, &from, width, distinct, merge);
+    let (mut root, ordered, join_estimate) = if from.is_empty() {
+        let predicate = bound.predicate.clone().into_iter().collect();
+        let estimate = Estimate {
+            rows: 1.0,
+            cost: 0.0,
+        };
+        (with_filter(PlanNode::OneRow, predicate), false, estimate)
+    } else {
+        let used = bound.columns_used(&scope);
+        let sources = sources(&scope, &from, used, false);
+        let analysis = join::Analysis::new(
+            cx.catalog,
+            sources,
+            bound.on.clone(),
+            bound.predicate.clone(),
+        );
+        let built = analysis.build(wanted.as_ref(), alternatives)?;
+        (built.root, built.ordered, built.estimate)
+    };
+    let Bound {
+        items,
+        exprs,
+        sort_keys,
+        having,
+        group_by,
+        aggregates,
+        is_aggregate,
+        ..
+    } = bound;
+
+    if is_aggregate {
         // Plain columns come from the row the last min() or max() chose.
         let row_from = aggregates.iter().rposition(|a| a.func.is_min_max());
         if let Some(i) = row_from
@@ -497,7 +683,7 @@ fn plan_select(
             let mut reads_plain_column = false;
             let mut check = |e: &Expr| {
                 if let Expr::Column { index, .. } = e
-                    && *index < scope.width()
+                    && *index < width
                     && !group_by.iter().any(|k| k.expr == *e)
                 {
                     reads_plain_column = true;
@@ -512,10 +698,10 @@ fn plan_select(
         }
         root = PlanNode::Aggregate {
             input: Box::new(root),
-            group_by,
+            group_by: group_by.clone(),
             aggregates,
             row_from,
-            width: scope.width(),
+            width,
         };
         if let Some(predicate) = having {
             root = PlanNode::Filter {
@@ -525,18 +711,23 @@ fn plan_select(
         }
     }
 
+    let sorted_already = ordered && wanted.as_ref().is_some_and(|w| w.sorts);
     if !sort_keys.is_empty() {
         // Sorting happens before DISTINCT removes duplicates, which gives the
         // same answer only when every sort key is one of the result columns.
         if distinct && sort_keys.iter().any(|k| !exprs.contains(&k.expr)) {
             return unsupported("ORDER BY a term that is not in the SELECT DISTINCT list");
         }
-        root = PlanNode::Sort {
-            input: Box::new(root),
-            keys: sort_keys,
-            reason: "no index returns rows in this order, so all of them are read and sorted"
-                .into(),
-        };
+        if !sorted_already {
+            root = PlanNode::Sort {
+                input: Box::new(root),
+                keys: sort_keys,
+                why: Why::new(
+                    "no index returns rows in this order cheaply, so all of them are read and \
+                     sorted",
+                ),
+            };
+        }
     }
     let affinities = exprs.iter().map(Expr::affinity).collect();
     root = PlanNode::Project {
@@ -552,7 +743,155 @@ fn plan_select(
         columns: items.into_iter().map(|item| item.name).collect(),
         affinities,
         root,
+        estimate: join::query_estimate(join_estimate, is_aggregate, !group_by.is_empty()),
     })
+}
+
+/// The order a single-table query would like its rows in, when every term
+/// of it is a plain column of the table, read ascending.
+fn wanted_order(
+    bound: &Bound,
+    from: &[FromItem],
+    width: usize,
+    distinct: bool,
+    merge: Option<Merge>,
+) -> Option<paths::Wanted> {
+    let [
+        FromItem {
+            rows: Rows::Table(schema),
+            ..
+        },
+    ] = from
+    else {
+        return None;
+    };
+    let column = |e: &Expr| match e {
+        Expr::Column { index, .. } if *index < width => Some(*index),
+        _ => None,
+    };
+    let columns = |exprs: &mut dyn Iterator<Item = &Expr>| -> Option<Vec<usize>> {
+        exprs.map(column).collect()
+    };
+    let result = bound.exprs.len();
+    // Only ORDER BY gains a Sort step from rows in order. GROUP BY,
+    // DISTINCT and the sides of a compound SELECT ask for an order because
+    // SQLite reads rows in it, and the order decides which of two equal
+    // values (`2`, `2.0`) a group shows. Choosing the same path gives the
+    // same answer.
+    let wanted = |columns: Vec<usize>, any_order: bool, sorts: bool| {
+        Some(paths::Wanted {
+            columns,
+            any_order,
+            width: result,
+            sorts,
+        })
+    };
+    if bound.is_aggregate {
+        if bound.group_by.is_empty() {
+            return None;
+        }
+        let keys = columns(&mut bound.group_by.iter().map(|k| &k.expr))?;
+        return wanted(keys, true, false);
+    }
+    if !bound.sort_keys.is_empty() {
+        if bound
+            .sort_keys
+            .iter()
+            .any(|k| k.descending || !k.nulls_first)
+        {
+            return None;
+        }
+        let keys = columns(&mut bound.sort_keys.iter().map(|k| &k.expr))?;
+        return wanted(keys, false, true);
+    }
+    if let Some(merge) = merge {
+        let mut order: Vec<usize> = merge.first.to_vec();
+        order.extend((0..result).filter(|p| !merge.first.contains(p)));
+        let keys = columns(&mut order.iter().map(|&p| &bound.exprs[p]))?;
+        return wanted(keys, false, false);
+    }
+    if distinct {
+        let keys = columns(&mut bound.exprs.iter())?;
+        // DISTINCT over the rowid needs no help: every row differs.
+        if schema.rowid_alias.is_some_and(|r| keys.contains(&r)) {
+            return None;
+        }
+        return wanted(keys, true, false);
+    }
+    None
+}
+
+/// The FROM items as the join planner sees them.
+fn sources<'q>(
+    scope: &Scope,
+    from: &[FromItem<'q>],
+    used: Vec<BTreeSet<usize>>,
+    weigh_only: bool,
+) -> Vec<join::Source<'q>> {
+    from.iter()
+        .zip(&scope.tables)
+        .zip(used)
+        .map(|((item, table), used)| join::Source {
+            rows: match &item.rows {
+                Rows::Table(schema) => Rows::Table(schema),
+                // Weighing join orders needs only a subquery's estimate.
+                Rows::Query(_, estimate) if weigh_only => {
+                    Rows::Query(Box::new(PlanNode::OneRow), *estimate)
+                }
+                Rows::Query(node, estimate) => Rows::Query(node.clone(), *estimate),
+            },
+            name: item.name.clone(),
+            kind: item.kind,
+            position: table.position,
+            offset: table.offset,
+            width: table.columns.len(),
+            used,
+        })
+        .collect()
+}
+
+/// A LEFT JOIN's ON condition may read only the tables before it in FROM.
+fn check_left_join_on(scope: &Scope, from: &[FromItem], on: &[Option<Expr>]) -> Result<()> {
+    for (k, (item, on)) in from.iter().zip(on).enumerate() {
+        let end = scope.tables[k].offset + scope.tables[k].columns.len();
+        if item.kind == JoinKind::Left
+            && let Some(on) = on
+            && columns_read(on).any(|c| c >= end)
+        {
+            return Err(Error::Parse(
+                "ON clause references tables to its right".into(),
+            ));
+        }
+    }
+    Ok(())
+}
+
+/// How UPDATE and DELETE find their rows: the cheapest lookup the WHERE
+/// clause allows, reading whole rows, or every row in rowid order.
+pub fn access_for_write(
+    catalog: &Catalog,
+    schema: &TableSchema,
+    predicate: Option<&Expr>,
+) -> IndexAccess {
+    let Some(predicate) = predicate else {
+        return IndexAccess::whole_table();
+    };
+    let tables_of = |e: &Expr| (!has_subquery(e)).then_some(0);
+    let terms: Vec<paths::Term> = split_and(predicate.clone())
+        .iter()
+        .enumerate()
+        .flat_map(|(c, e)| paths::terms_of(c, e, schema, 0, &tables_of))
+        .collect();
+    let target = paths::Target {
+        sizes: cost::Sizes::new(schema, catalog.stats(&schema.name)),
+        name: &schema.name,
+        terms: &terms,
+        own: &[],
+        used: None,
+        wanted: None,
+    };
+    let paths = target.paths(0);
+    target.access(target.best(&paths))
 }
 
 /// Plans `a UNION b EXCEPT c ...`. SQLite gives every operator the same
@@ -567,13 +906,34 @@ fn plan_compound(
     let mut selects = Vec::new();
     let mut ops = Vec::new();
     flatten_compound(body, &mut selects, &mut ops)?;
+    // The first side names the columns ORDER BY can refer to.
+    let columns = plan_select(cx, selects[0], None, outer, None)?.columns;
+    let keys = match order_by {
+        Some(order_by) => compound_sort_keys(cx, order_by, &selects, &columns, outer)?,
+        None => Vec::new(),
+    };
+    // SQLite merges sorted sides unless every operator is UNION ALL and
+    // there is no ORDER BY. Each side then reads its rows in that order.
+    let positions: Option<Vec<usize>> = keys
+        .iter()
+        .map(|k| match k.expr {
+            Expr::Column { index, .. } if !k.descending && k.nulls_first => Some(index),
+            _ => None,
+        })
+        .collect();
+    let merged = !keys.is_empty() || ops.iter().any(|op| *op != SetOp::UnionAll);
+    let merge = positions
+        .as_deref()
+        .filter(|_| merged)
+        .map(|first| Merge { first });
     let mut arms = selects
         .iter()
-        .map(|select| plan_select(cx, select, None, outer));
+        .map(|select| plan_select(cx, select, None, outer, merge));
     let first = arms
         .next()
         .expect("a compound SELECT has at least two sides")?;
     let mut root = first.root;
+    let mut estimate = first.estimate;
     for (op, arm) in ops.into_iter().zip(arms) {
         let arm = arm?;
         if arm.columns.len() != first.columns.len() {
@@ -582,24 +942,26 @@ fn plan_compound(
                 op.keyword()
             )));
         }
+        estimate.rows += arm.estimate.rows;
+        estimate.cost += arm.estimate.cost;
         root = PlanNode::Compound {
             op,
             left: Box::new(root),
             right: Box::new(arm.root),
         };
     }
-    if let Some(order_by) = order_by {
+    if !keys.is_empty() {
         root = PlanNode::Sort {
             input: Box::new(root),
-            keys: compound_sort_keys(cx, order_by, &selects, &first.columns, outer)?,
-            reason: "no index returns rows in this order, so all of them are read and sorted"
-                .into(),
+            keys,
+            why: Why::new("a compound SELECT's rows are sorted once both sides are read"),
         };
     }
     Ok(QueryPlan {
         columns: first.columns,
         affinities: first.affinities,
         root,
+        estimate,
     })
 }
 
@@ -765,7 +1127,7 @@ struct FromItem<'q> {
 /// knows which conditions apply to it, so the scan can use an index.
 enum Rows<'q> {
     Table(&'q TableSchema),
-    Query(PlanNode),
+    Query(Box<PlanNode>, Estimate),
 }
 
 /// Plans each table in FROM and puts their columns in one scope, in order.
@@ -899,7 +1261,7 @@ fn plan_table<'q>(
                 input: Box::new(plan.root),
                 name: name.clone(),
             };
-            Ok((Rows::Query(node), name))
+            Ok((Rows::Query(Box::new(node), plan.estimate), name))
         }
         _ => unsupported("subquery or table function in FROM"),
     }
@@ -949,221 +1311,7 @@ fn plan_view<'q>(
         input: Box::new(plan.root),
         name: name.clone(),
     };
-    Ok((Rows::Query(node), name))
-}
-
-/// Reads a FROM item's rows and keeps those where `filters` hold. The
-/// filters read only this item, so for a table an index may narrow the scan
-/// (see [`access::use_index`]); the Filter above it still checks them all.
-fn scan(rows: Rows, filters: Vec<Expr>) -> PlanNode {
-    match rows {
-        Rows::Table(schema) => {
-            let seq_scan = PlanNode::SeqScan {
-                table: schema.name.clone(),
-                reason: format!("{} has no index, so every row is read", schema.name),
-            };
-            access::use_index(with_filter(seq_scan, filters), Some(schema))
-        }
-        Rows::Query(node) => with_filter(node, filters),
-    }
-}
-
-/// Joins the FROM items left to right with nested loops, and places every
-/// condition from WHERE and ON as low in the tree as it can go: on the table
-/// it reads, or at the first join where all the columns it reads are there.
-/// A condition then drops rows before they are joined, instead of after.
-///
-/// A LEFT JOIN's ON condition stays on its join, unless it reads only the
-/// right table: dropping left rows would lose the ones that should come out
-/// padded with NULLs. For the same reason a WHERE condition that reads a LEFT
-/// JOIN's table waits until after that join.
-fn join_tree(
-    from: Vec<FromItem>,
-    binder: &mut Binder,
-    predicate: Option<Expr>,
-) -> Result<PlanNode> {
-    let scope = binder.scope;
-    let tables = &scope.tables;
-    if from.is_empty() {
-        return Ok(with_filter(
-            PlanNode::OneRow,
-            predicate.into_iter().collect(),
-        ));
-    }
-    if from.len() == 1 {
-        let first = from.into_iter().next().expect("checked above");
-        return Ok(scan(first.rows, predicate.into_iter().collect()));
-    }
-
-    // Where each table's columns end in a joined row.
-    let ends: Vec<usize> = tables.iter().map(|t| t.offset + t.columns.len()).collect();
-    let n = from.len();
-    // Per table: conditions on its rows alone, conditions on its join, and
-    // filters after its join.
-    let mut own: Vec<Vec<Expr>> = vec![Vec::new(); n];
-    let mut on_join: Vec<Vec<Expr>> = vec![Vec::new(); n];
-    let mut after: Vec<Vec<Expr>> = vec![Vec::new(); n];
-    let reads_only = |e: &Expr, k: usize| {
-        !has_subquery(e)
-            && columns_read(e).next().is_some()
-            && columns_read(e).all(|c| (tables[k].offset..ends[k]).contains(&c))
-    };
-
-    let mut conjuncts = Vec::new();
-    for (k, item) in from.iter().enumerate() {
-        let Some(on) = item.on else { continue };
-        let on = binder.bind(on, Ctx::ON)?;
-        match item.kind {
-            JoinKind::Left if columns_read(&on).any(|c| c >= ends[k]) => {
-                return Err(Error::Parse(
-                    "ON clause references tables to its right".into(),
-                ));
-            }
-            JoinKind::Left => {
-                for part in split_and(on) {
-                    let target = if reads_only(&part, k) {
-                        &mut own
-                    } else {
-                        &mut on_join
-                    };
-                    target[k].push(part);
-                }
-            }
-            // An inner join's ON condition means the same as one in WHERE.
-            JoinKind::Inner => conjuncts.extend(split_and(on)),
-        }
-    }
-    conjuncts.extend(predicate.into_iter().flat_map(split_and));
-    for conjunct in conjuncts {
-        // A subquery may read any column of the row, so it waits for all.
-        let level = if has_subquery(&conjunct) {
-            n - 1
-        } else {
-            columns_read(&conjunct)
-                .map(|c| ends.iter().position(|&end| c < end).unwrap_or(n - 1))
-                .max()
-                .unwrap_or(0)
-        };
-        let target =
-            if level == 0 || reads_only(&conjunct, level) && from[level].kind == JoinKind::Inner {
-                &mut own
-            } else if from[level].kind == JoinKind::Left {
-                &mut after
-            } else {
-                &mut on_join
-            };
-        target[level].push(conjunct);
-    }
-
-    let mut root = None;
-    for (k, item) in from.into_iter().enumerate() {
-        // The table's own conditions see only its row, so their columns
-        // move to where the table's columns start.
-        let mut filters = std::mem::take(&mut own[k]);
-        filters
-            .iter_mut()
-            .for_each(|e| e.shift_columns(tables[k].offset));
-        let node = scan(item.rows, filters);
-        let joined = match root {
-            None => node,
-            Some(left) => PlanNode::NestedLoopJoin {
-                left: Box::new(left),
-                right: Box::new(PlanNode::Materialize {
-                    input: Box::new(node),
-                }),
-                kind: item.kind,
-                condition: and_all(std::mem::take(&mut on_join[k])),
-                right_width: tables[k].columns.len(),
-                reason: format!(
-                    "joins do not look up matching rows by index yet, so each left row is \
-                     checked against every row of {}",
-                    item.name
-                ),
-            },
-        };
-        root = Some(with_filter(joined, std::mem::take(&mut after[k])));
-    }
-    Ok(root.expect("FROM has a first table"))
-}
-
-/// The order to join inner-joined tables in, when it differs from FROM's.
-///
-/// A nested loop does the least work when each table it adds is tied to the
-/// ones before it by a condition, so the loops never pair rows that nothing
-/// links. The rule is simple: start with the first table that has a
-/// condition of its own, like `a = 6`, then keep adding a table that a
-/// condition connects to the tables so far, one with its own condition
-/// first. With no such table, take the next in FROM order. The cost-based
-/// planner (M5) will weigh real costs instead.
-///
-/// LEFT JOINs keep FROM order: moving one changes which rows it pads.
-fn join_order(
-    cx: &Planner,
-    scope: &Scope,
-    from: &[FromItem],
-    select: &ast::Select,
-) -> Result<Option<Vec<usize>>> {
-    let n = from.len();
-    if n < 2 || from.iter().any(|item| item.kind == JoinKind::Left) {
-        return Ok(None);
-    }
-    // Which tables each condition reads, bound once to find out.
-    let items = select_items(scope, &select.projection)?;
-    let mut binder = Binder {
-        scope,
-        items: &items,
-        aggregates: Vec::new(),
-        cx: Some(cx),
-    };
-    let mut conditions = Vec::new();
-    for on in from.iter().filter_map(|item| item.on) {
-        conditions.extend(split_and(binder.bind(on, Ctx::ON)?));
-    }
-    if let Some(predicate) = &select.selection {
-        conditions.extend(split_and(binder.bind(predicate, Ctx::ROW)?));
-    }
-    let table_of = |column: usize| {
-        scope
-            .tables
-            .iter()
-            .position(|t| (t.offset..t.offset + t.columns.len()).contains(&column))
-    };
-    let reads: Vec<Vec<usize>> = conditions
-        .iter()
-        .filter(|c| !has_subquery(c))
-        .map(|c| {
-            let mut tables: Vec<usize> = columns_read(c).filter_map(table_of).collect();
-            tables.sort_unstable();
-            tables.dedup();
-            tables
-        })
-        .collect();
-    let has_own = |k: usize| reads.iter().any(|r| r.as_slice() == [k]);
-
-    let mut joined: Vec<usize> = Vec::new();
-    let mut left: Vec<usize> = (0..n).collect();
-    while !left.is_empty() {
-        let connected = |k: usize| {
-            reads.iter().any(|r| {
-                r.len() > 1 && r.contains(&k) && r.iter().all(|t| *t == k || joined.contains(t))
-            })
-        };
-        let pick = if joined.is_empty() {
-            left.iter().copied().find(|&k| has_own(k))
-        } else {
-            let tied: Vec<usize> = left.iter().copied().filter(|&k| connected(k)).collect();
-            tied.iter()
-                .copied()
-                .find(|&k| has_own(k))
-                .or(tied.first().copied())
-                .or_else(|| left.iter().copied().find(|&k| has_own(k)))
-        }
-        .unwrap_or(left[0]);
-        joined.push(pick);
-        left.retain(|&k| k != pick);
-    }
-    let in_from_order = joined.iter().enumerate().all(|(i, &k)| i == k);
-    Ok((!in_from_order).then_some(joined))
+    Ok((Rows::Query(Box::new(node), plan.estimate), name))
 }
 
 fn with_filter(input: PlanNode, conjuncts: Vec<Expr>) -> PlanNode {

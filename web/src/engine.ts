@@ -6,11 +6,27 @@ export type SqlValue =
   | { type: "null"; text: null }
   | { type: "integer" | "real" | "text"; text: string };
 
+/** The planner's guess at a step's rows and work, in rows read. */
+export interface Estimate {
+  rows: number;
+  cost: number;
+}
+
+/** A plan the planner weighed and turned down. */
+export interface Rejected extends Estimate {
+  plan: string;
+}
+
 export interface PlanProfile {
   id: number;
   operator: string;
   detail: string;
   reason: string | null;
+  /** Set where the planner compared costed plans: the one it chose, in one line. */
+  plan?: string;
+  estimate?: Estimate;
+  /** The plans it turned down, cheapest first. */
+  rejected?: Rejected[];
   rows_out: number;
   children: PlanProfile[];
 }
@@ -56,6 +72,7 @@ export type StatementResult =
   | { kind: "create_table"; table: string }
   | { kind: "create_index"; index: string; table: string }
   | { kind: "drop_index"; index: string }
+  | { kind: "analyze"; tables: string[] }
   | { kind: "insert"; table: string; rows: number }
   | { kind: "update"; table: string; rows: number }
   | { kind: "delete"; table: string; rows: number }

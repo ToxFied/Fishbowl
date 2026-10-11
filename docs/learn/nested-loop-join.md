@@ -39,24 +39,27 @@ each left row.
 FROM order is not always a good loop order. In `FROM t51, t29, t31, t55` the
 loops multiply every row of t51 by every row of t29 unless a condition ties
 them together, and the test suite has joins of up to 64 tables written in
-scrambled order. So for inner joins the planner picks the order with a simple
-rule: start with a table that has a condition of its own, like `a29 = 6`,
-then keep adding a table that a condition connects to the ones already
-joined. `SELECT *` still lists columns in FROM order. With that rule all 732
-queries in `select5.test` run in under half a second. A real cost model,
-which counts rows instead of following a rule, is the cost-based planner's
-job (M5). LEFT JOINs keep FROM order, since moving one changes its answer.
+scrambled order. So the planner chooses the order by estimated cost; see
+[join ordering](join-ordering.md). `SELECT *` still lists columns in FROM
+order.
 
-## What it cannot do yet
+## Looking up instead of looping
 
-Each side of a join can already use an [index](indexes.md) for the
-conditions on that table alone: `WHERE tank.id IN (1, 2)` reads two rows of
-`tank` through its primary key. The join itself does not use one yet. An index
-on the right table's join column could replace the inner loop with a lookup:
-for each left row, jump straight to the matching right rows. Choosing that is
-also the cost-based planner's job, which is why the plan says "joins do not
-look up matching rows by index yet".
+An index on the right table's join column replaces the inner loop with a
+lookup: for each left row, jump straight to the matching right rows. In
+`fish JOIN tank ON fish.tank = tank.id`, each fish finds its tank through
+tank's INTEGER PRIMARY KEY, so the join tries 8 pairs instead of 24 and
+drops none:
 
-Code: `crates/engine/src/planner.rs` (`join_order`), `crates/engine/src/exec.rs`
-(the NestedLoopJoin and Materialize cases
-in `produce`, `Operator::replay`).
+```text
+NestedLoopJoin INNER ON (fish.tank = tank.id)  [rows=8]
+  SeqScan fish  [rows=8]
+  IndexScan tank USING INTEGER PRIMARY KEY (id = fish.tank)  [rows=8]
+```
+
+There is no Materialize step then. The lookup reads the left row's
+`fish.tank` each time it starts over. A correlated subquery works the same
+way: `WHERE i.x = o.y` looks up `o.y` for each outer row.
+
+Code: `crates/engine/src/planner/join.rs`, `crates/engine/src/exec.rs` (the
+NestedLoopJoin and Materialize cases in `produce`, `Operator::replay`).

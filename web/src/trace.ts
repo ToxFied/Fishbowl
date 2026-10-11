@@ -151,7 +151,9 @@ export function narrate(frame: Frame, steps: Step[]): string {
     case "SeqScan":
       return `SeqScan reads rowid ${event.rowid} of ${step.node.detail}`;
     case "IndexScan":
-      return `IndexScan jumps to rowid ${event.rowid}`;
+      return step.node.detail.includes("COVERING INDEX")
+        ? `IndexScan reads rowid ${event.rowid} from the index alone; columns it does not hold stay NULL`
+        : `IndexScan jumps to rowid ${event.rowid}`;
     case "Filter":
       return `Filter keeps it${toResult}`;
     case "Project":

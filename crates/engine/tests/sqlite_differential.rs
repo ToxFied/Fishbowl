@@ -245,3 +245,62 @@ proptest! {
         prop_assert_eq!(run_fishbowl(&statements), run_sqlite(&statements), "{:#?}", statements);
     }
 }
+
+/// When `2` and `2.0` fall in one group, one DISTINCT set or one side of a
+/// UNION, SQLite shows the one it reads first. So Fishbowl has to read rows
+/// in SQLite's order: through a covering index, or through an index whose
+/// order saves SQLite a sort for GROUP BY, DISTINCT or a UNION. These are
+/// the cases the random test found, one per kind of plan.
+#[test]
+fn equal_values_show_the_one_sqlite_reads_first() {
+    if !sqlite_available() {
+        return;
+    }
+    let cases: &[(&str, &[&str])] = &[
+        // A covering index on (v, w) puts w = NULL first.
+        (
+            SCHEMAS[0],
+            &[
+                "INSERT INTO t VALUES (NULL,1,2.0,2),(NULL,NULL,2,NULL)",
+                "SELECT id FROM t WHERE id = NULL UNION SELECT v FROM t WHERE id <> 3",
+                "SELECT DISTINCT v FROM t",
+            ],
+        ),
+        // A covering index, read whole although a WHERE term reads w.
+        (
+            SCHEMAS[0],
+            &[
+                "INSERT INTO t VALUES (NULL,NULL,2.0,3),(NULL,NULL,2,2.0)",
+                "SELECT v FROM t WHERE w >= 0 UNION SELECT id FROM t WHERE id = NULL",
+            ],
+        ),
+        // GROUP BY v reads the (v, w) index rather than the range on u.
+        (
+            SCHEMAS[0],
+            &[
+                "INSERT INTO t VALUES (0,3,2.0,NULL),(1,2,2,NULL)",
+                "SELECT v AS k, count(*) AS n FROM t WHERE u >= '1' GROUP BY 1",
+            ],
+        ),
+        // A UNION side reads index i_v rather than the range on w.
+        (
+            SCHEMAS[2],
+            &[
+                "CREATE INDEX i_v ON t(v)",
+                "INSERT INTO t VALUES (NULL,NULL,2,2),(NULL,NULL,2.0,0)",
+                "SELECT v FROM t WHERE w < 'a' UNION SELECT id FROM t WHERE id = NULL",
+            ],
+        ),
+    ];
+    for (schema, body) in cases {
+        let statements: Vec<String> = std::iter::once(*schema)
+            .chain(body.iter().copied())
+            .map(str::to_string)
+            .collect();
+        assert_eq!(
+            run_fishbowl(&statements),
+            run_sqlite(&statements),
+            "{statements:#?}"
+        );
+    }
+}

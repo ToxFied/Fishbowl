@@ -46,12 +46,16 @@ pass rate is the project's headline claim.
 | Module | What it does |
 | --- | --- |
 | `value.rs` | SQL values, SQLite type affinity, comparison and number formatting |
-| `catalog.rs` | Table schemas and views |
+| `catalog.rs` | Table schemas, views, and the statistics `ANALYZE` gathers |
+| `dialect.rs` | The SQL dialect: `sqlparser`'s SQLite dialect plus `<<`, `>>` and SQLite's operator precedence |
 | `planner.rs` | Syntax tree to plan, name resolution, loud rejection of unsupported SQL |
+| `planner/cost.rs` | The cost model: SQLite's weights and its size guesses before `ANALYZE` |
+| `planner/paths.rs` | Every way to read one table (scan, rowid, each index prefix, covering index), costed |
+| `planner/join.rs` | Join order search, where each condition goes, and the plans turned down |
 | `plan.rs` | Plan nodes and the profiled plan tree the UI draws |
 | `expr.rs` | Bound expressions and their evaluation (three-valued logic, arithmetic, subqueries through an `Env`) |
 | `planner/schema.rs` | `PRIMARY KEY` and `UNIQUE` in `CREATE TABLE`, `CREATE INDEX`, `DROP INDEX` |
-| `access.rs` | Access paths: when to use an index, and the IndexScan that reads one |
+| `access.rs` | Running an IndexScan: multi-column lookups, values from a join's left row, covering indexes |
 | `exec.rs` | Iterator-model executor with per-step row counts, a row budget and an optional row-level trace |
 | `trace.rs` | Trace events (passed on, dropped, subquery run) and the recorder that collects them |
 | `write.rs` | Row writes: rowids, index maintenance, constraint checks, undo on failure |
@@ -74,6 +78,11 @@ pass rate is the project's headline claim.
 | One B-tree implementation, generic over its key (M4) | Tables use the rowid, indexes use (values, rowid). Splits, merges and their property tests serve both. |
 | IndexScan keeps the Filter above it (M4) | The index only narrows rows down and the Filter decides them, so a loose bound costs speed, never correctness. |
 | Constraints checked row by row with an undo log (M4) | Matches SQLite's order of checks exactly, and a failed statement still leaves no trace. |
+| Statistics only from `ANALYZE`, SQLite's guesses before (M5) | A plan depends only on the SQL and the schema until `ANALYZE` runs, as in SQLite. Stable plans mean stable answers, since read order decides which of `2` and `2.0` a group shows. Writes pay nothing. |
+| Cost model copied from SQLite (M5) | Same weights, same guesses, same order of trying plans, so Fishbowl reads rows in SQLite's order, which decides answers where equal values differ in how they print. |
+| GROUP BY, DISTINCT and UNION ask for an ordered read (M5) | Fishbowl gains no speed from it, but SQLite reads that way, and the first row read is the one a group shows. |
+| Join order by dynamic programming, then a beam of 16 (M5) | Exact up to 8 tables; past that, SQLite-style "N best paths" keeps 64-table joins fast to plan. |
+| Index lookups in joins replace Materialize (M5) | The right side restarts for each left row with that row's values, so a correlated subquery gets index lookups the same way. |
 | Write-ahead log for crash safety (M6) | Recovery is "replay committed frames", which is simple to reason about and to animate. SQLite's WAL mode, minus its multi-process index. |
 | No steal: uncommitted pages stay in memory (M6) | Nothing uncommitted ever reaches a file, so recovery only redoes. The cost: one transaction's changes must fit in RAM. |
 | Truncate the log after each checkpoint (M6) | Old frames can never be mistaken for new ones, with no extra header sync. |
@@ -104,7 +113,11 @@ with a pinned 29-file corpus. Baseline: **11.90%** of records.
 After M1 and M3: **31.06%**. After M4: **84.31%**. After M2 on top of M4:
 **99.89%**, with 4 wrong results left (the `1<<63` rows in
 `slt_lang_aggfunc.test`: `<<` is not supported, so those rows are missing).
-M6 left the report unchanged.
+M6 left the report unchanged. With M5 and the bit operators, the `1<<63`
+rows insert and the engine computes SQLite's values. Three records still
+differ only in how the harness prints a real that large (SQLite's `printf`
+keeps 16 significant digits), and one in how it treats a query that fails;
+both are harness fixes for M8.
 
 ### M1. Query breadth
 
@@ -153,12 +166,25 @@ Done. Also shipped: `INTEGER PRIMARY KEY` as the rowid, `DROP INDEX`,
 finding rows through an index, `Database::integrity_check`, and a differential
 test against the system `sqlite3`.
 
-### M5. Cost-based planner
+### M5. Cost-based planner (done)
 
 Table statistics, a cost model, a choice between a full scan and each usable
 index, join ordering (replacing M2's connect-the-conditions rule), and index
 lookups inside a join. The planner keeps the rejected plans and their costs so
 the UI can show the chosen plan beside the alternatives. Depends on M2 and M4.
+
+Done: `ANALYZE` (statistics in the catalog, SQLite's guesses until it runs);
+SQLite's cost model; lookups on the longest usable prefix of each index,
+`IN` lists included; covering indexes, which skip the table; an index or the
+rowid standing in for ORDER BY's Sort, so `LIMIT` stops early; index lookups
+inside joins and correlated subqueries, with values from the left or outer
+row; join order by cost, LEFT JOINs included; UPDATE and DELETE costed the
+same way; the plans turned down, shown under "why this plan" and in the CLI.
+Also fixed: `2` versus `2.0` in groups (see
+[why 2 and 2.0 matter](learn/equal-values.md)), and the bit operators
+`&`, `|`, `<<`, `>>` and `~`. The corpus report is unchanged except for the
+bit operators; every corpus record and every differential test gives the same
+result with the old planner and the new one, the 2 versus 2.0 cases aside.
 
 ### M6. Transactions and crash recovery (done)
 
@@ -191,7 +217,7 @@ and correlated subqueries run by run; the reason for each choice and the rows
 an index never touched next to what a full scan would read; a B-tree page
 viewer (`storage/inspect.rs`) that shows splits and merges as rows are
 inserted and deleted; and a first screen that is already playing a query.
-Waiting on other milestones: rejected plans with their costs (M5) and the WAL
+The plans turned down, with their costs, came with M5. Still waiting: the WAL
 viewer (M6).
 
 ### M8. Proof and presentation
@@ -228,8 +254,13 @@ Shared seams to coordinate:
 
 ## Known gaps
 
-- An IndexScan uses only an index's first column, one index per query, and
-  never for `OR` or `ORDER BY`. Choosing better is M5's cost model.
+- A table is read through one index at a time, never through two at once,
+  and never for an `OR` of conditions. Index entries are not read backwards,
+  so `ORDER BY ... DESC` always sorts.
+- Statistics live in memory. Reopening a database file forgets them until
+  `ANALYZE` runs again.
+- A join with no usable index replays its right side from memory for every
+  left row. There is no hash join, and no automatic index as in SQLite.
 - Index entries are limited to 512 bytes, so a long text value in an indexed
   column is rejected with "not supported yet".
 - `AUTOINCREMENT`, `WITHOUT ROWID`, partial and expression indexes, `UPDATE OR`
@@ -248,8 +279,6 @@ Shared seams to coordinate:
 - The browser download is about 1 MB gzipped (engine 921 KB, UI 84 KB),
   plus 141 KB of fonts. Most of the engine is `sqlparser`. `wasm-opt` and
   trimming dialects are possible later.
-- A join reads its right side in full for every left row (from memory, after
-  Materialize). It does not look matching rows up by index yet; that is M5.
 - RIGHT and FULL joins, `USING`, `NATURAL`, subqueries in `UPDATE`/`DELETE`,
   and an aggregate of only an enclosing query's columns are rejected as "not
   supported yet".

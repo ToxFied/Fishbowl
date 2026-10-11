@@ -43,12 +43,15 @@ plan as it can:
 ```text
 Project t1.a
   NestedLoopJoin INNER ON (t1.a = t2.a)     reads both tables
-    Filter t1.b IS NOT NULL                 reads only t1
-      SeqScan t1
+    Filter (t2.c = 'q')                     reads only t2
+      SeqScan t2
     Materialize
-      Filter (t2.c = 'q')                   reads only t2
-        SeqScan t2
+      Filter t1.b IS NOT NULL               reads only t1
+        SeqScan t1
 ```
+
+t2 comes first because its condition is expected to keep fewer rows. Which
+table goes first is [join ordering](join-ordering.md).
 
 A condition that reads one table filters that table before the join, so fewer
 rows are paired up. A condition that reads two tables waits for the join where
@@ -59,4 +62,5 @@ has to see the NULLs.
 
 How the pairs are made is the [nested-loop join](nested-loop-join.md).
 
-Code: `crates/engine/src/planner.rs` (`plan_from`, `join_tree`).
+Code: `crates/engine/src/planner.rs` (`plan_from`) and
+`crates/engine/src/planner/join.rs` (`Analysis::build`).

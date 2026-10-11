@@ -6,21 +6,24 @@
 //! row by its rowid. For a table with an `INTEGER PRIMARY KEY`, that column
 //! is the rowid, so the table's own B-tree serves as the index.
 //!
-//! The rule for now is simple: if a WHERE term is an equality, a range or
-//! an `IN` list on the first column of an index, use that index. The M5
-//! planner will weigh costs instead.
+//! A lookup can fix the index's first columns with equalities (`a = 5 AND
+//! b IN (1, 2)`) and then bound the next one (`c > 3`). The values come from
+//! constants, or from the current row of an enclosing join or query, so a
+//! join can look up the matching rows for each row it holds. When the index
+//! holds every column the query reads, the table is not read at all: the
+//! rows are rebuilt from the index entries (a covering index).
 //!
-//! The Filter above the scan keeps the whole WHERE clause. The index only has
-//! to narrow the rows down, never to decide them, so the bounds here can
-//! stay simple without risking a wrong answer.
+//! Which access path to use is the planner's choice (`planner/paths.rs`).
+//! The Filter or join condition above the scan keeps every condition. The
+//! index only has to narrow the rows down, never to decide them, so the
+//! bounds here can stay simple without risking a wrong answer.
 
+use std::cmp::Ordering;
 use std::collections::VecDeque;
 use std::fmt;
 
-use crate::catalog::TableSchema;
 use crate::error::{Error, Result};
-use crate::expr::{BinaryOp, Expr};
-use crate::plan::PlanNode;
+use crate::expr::{Env, Expr};
 use crate::storage::{IndexCursor, Row, Storage, TableScan};
 use crate::value::{Affinity, Value};
 
@@ -30,79 +33,223 @@ pub struct IndexAccess {
     /// The index to read, or `None` for the table's own B-tree, keyed by the
     /// `INTEGER PRIMARY KEY` column.
     pub index: Option<String>,
-    /// The column the lookup is on.
-    pub column: String,
-    pub lookup: Lookup,
+    /// The names of the B-tree's key columns, in order.
+    pub columns: Vec<String>,
+    /// The values the first `eq.len()` key columns must equal.
+    pub eq: Vec<KeyValue>,
+    /// Bounds on the key column after them.
+    pub low: Vec<KeyBound>,
+    pub high: Vec<KeyBound>,
+    /// Set when the index holds every column the query reads.
+    pub covering: Option<Covering>,
+}
+
+/// What one key column must equal.
+#[derive(Debug, Clone)]
+pub enum KeyValue {
+    /// `column = expr`, worked out when the scan starts.
+    Expr { expr: Expr, convert: Convert },
+    /// `column IN (...)`: constants, converted, sorted and without repeats.
+    List(Vec<Value>),
 }
 
 #[derive(Debug, Clone)]
-pub enum Lookup {
-    /// Every value from `low` to `high`. NULL is never in a range, because
-    /// `NULL < 5` is not true.
-    Range {
-        low: Option<Bound>,
-        high: Option<Bound>,
-    },
-    /// Each of these values, sorted, without repeats. One value is `=`.
-    Values(Vec<Value>),
-}
-
-#[derive(Debug, Clone)]
-pub struct Bound {
-    pub value: Value,
+pub struct KeyBound {
+    pub expr: Expr,
+    pub convert: Convert,
     pub inclusive: bool,
 }
 
-impl Lookup {
-    /// The stretches of the index to read, in order, as (start, stop).
-    fn ranges(&self) -> VecDeque<(Bound, Option<Bound>)> {
-        let at = |value: &Value| Bound {
-            value: value.clone(),
-            inclusive: true,
-        };
+/// How a value is converted before the lookup, the way the comparison will
+/// convert it: `a = '5'` on an INTEGER column looks for the number 5.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Convert {
+    Numeric,
+    Text,
+    AsIs,
+}
+
+impl Convert {
+    fn apply(self, v: Value) -> Value {
         match self {
-            // NULL sorts first, so starting just past NULL skips every NULL.
-            Lookup::Range { low, high } => VecDeque::from([(
-                low.clone().unwrap_or(Bound {
-                    value: Value::Null,
-                    inclusive: false,
-                }),
-                high.clone(),
-            )]),
-            Lookup::Values(values) => values.iter().map(|v| (at(v), Some(at(v)))).collect(),
+            Convert::Numeric => v.apply_affinity(Affinity::Numeric),
+            Convert::Text => v.apply_affinity(Affinity::Text),
+            Convert::AsIs => v,
         }
     }
 }
 
+/// How to rebuild a table row from an index entry: each index column's
+/// place in the row, and the INTEGER PRIMARY KEY's, which holds the rowid.
+/// Columns the query never reads stay NULL.
+#[derive(Debug, Clone)]
+pub struct Covering {
+    pub width: usize,
+    pub positions: Vec<usize>,
+    pub rowid: Option<usize>,
+}
+
+impl IndexAccess {
+    /// Every row of the table, in rowid order.
+    pub fn whole_table() -> IndexAccess {
+        IndexAccess {
+            index: None,
+            columns: Vec::new(),
+            eq: Vec::new(),
+            low: Vec::new(),
+            high: Vec::new(),
+            covering: None,
+        }
+    }
+
+    /// The expressions the lookup evaluates, for finding the columns it reads.
+    pub fn exprs(&self) -> Vec<&Expr> {
+        let eq = self.eq.iter().filter_map(|k| match k {
+            KeyValue::Expr { expr, .. } => Some(expr),
+            KeyValue::List(_) => None,
+        });
+        let bounds = self.low.iter().chain(&self.high).map(|b| &b.expr);
+        eq.chain(bounds).collect()
+    }
+
+    /// The stretches of the B-tree to read, in order, for the values the
+    /// keys have now. An equality with NULL matches nothing.
+    fn stretches(&self, row: &[Value], env: &mut dyn Env) -> Result<VecDeque<Stretch>> {
+        let mut prefixes: Vec<Vec<Value>> = vec![Vec::new()];
+        for key in &self.eq {
+            let values = match key {
+                KeyValue::Expr { expr, convert } => match expr.eval_with(row, env)? {
+                    Value::Null => Vec::new(),
+                    v => vec![convert.apply(v)],
+                },
+                KeyValue::List(values) => values.clone(),
+            };
+            prefixes = prefixes
+                .into_iter()
+                .flat_map(|p| {
+                    values.iter().map(move |v| {
+                        let mut p = p.clone();
+                        p.push(v.clone());
+                        p
+                    })
+                })
+                .collect();
+        }
+        let (Some(low), Some(high)) = (
+            tightest(&self.low, row, env, true)?,
+            tightest(&self.high, row, env, false)?,
+        ) else {
+            // A bound compared with NULL is never true.
+            return Ok(VecDeque::new());
+        };
+        let ranged = !self.low.is_empty() || !self.high.is_empty();
+        Ok(prefixes
+            .into_iter()
+            .map(|prefix| {
+                let with = |bound: &Bound| {
+                    let mut values = prefix.clone();
+                    values.push(bound.value.clone());
+                    (values, bound.inclusive)
+                };
+                // NULL sorts first, so starting just past NULL skips every
+                // NULL: no range ever holds one.
+                let start = match &low {
+                    Some(bound) => Some(with(bound)),
+                    None if ranged => Some(with(&Bound {
+                        value: Value::Null,
+                        inclusive: false,
+                    })),
+                    None if prefix.is_empty() => None,
+                    None => Some((prefix.clone(), true)),
+                };
+                let stop = match &high {
+                    Some(bound) => Some(with(bound)),
+                    None if prefix.is_empty() => None,
+                    None => Some((prefix.clone(), true)),
+                };
+                Stretch { start, stop }
+            })
+            .collect())
+    }
+}
+
+/// One stretch of a B-tree: from the first key at or past `start` to the
+/// last key at or before `stop`, comparing only as many values as each has.
+struct Stretch {
+    start: Option<(Vec<Value>, bool)>,
+    stop: Option<(Vec<Value>, bool)>,
+}
+
+struct Bound {
+    value: Value,
+    inclusive: bool,
+}
+
+/// The narrowest of several bounds on one side, or `None` when one of them
+/// is NULL. `Some(None)` means there is no bound on this side.
+fn tightest(
+    bounds: &[KeyBound],
+    row: &[Value],
+    env: &mut dyn Env,
+    is_low: bool,
+) -> Result<Option<Option<Bound>>> {
+    let mut best: Option<Bound> = None;
+    for bound in bounds {
+        let value = match bound.expr.eval_with(row, env)? {
+            Value::Null => return Ok(None),
+            v => bound.convert.apply(v),
+        };
+        let wins = best.as_ref().is_none_or(|b| match value.compare(&b.value) {
+            Ordering::Equal => !bound.inclusive,
+            ord => ord.is_gt() == is_low,
+        });
+        if wins {
+            best = Some(Bound {
+                value,
+                inclusive: bound.inclusive,
+            });
+        }
+    }
+    Ok(Some(best))
+}
+
 impl fmt::Display for IndexAccess {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match &self.index {
-            Some(index) => write!(f, "USING INDEX {index} (")?,
-            None => f.write_str("USING INTEGER PRIMARY KEY (")?,
+        match (&self.index, &self.covering) {
+            (Some(index), Some(_)) => write!(f, "USING COVERING INDEX {index}")?,
+            (Some(index), None) => write!(f, "USING INDEX {index}")?,
+            (None, _) => f.write_str("USING INTEGER PRIMARY KEY")?,
         }
-        let column = &self.column;
-        match &self.lookup {
-            Lookup::Values(values) if values.len() == 1 => {
-                write!(f, "{column} = {}", literal(&values[0]))?
-            }
-            Lookup::Values(values) => {
-                let list: Vec<String> = values.iter().map(literal).collect();
-                write!(f, "{column} IN ({})", list.join(", "))?
-            }
-            Lookup::Range { low, high } => {
-                let low = low.as_ref().map(|b| {
-                    let op = if b.inclusive { ">=" } else { ">" };
-                    format!("{column} {op} {}", literal(&b.value))
-                });
-                let high = high.as_ref().map(|b| {
-                    let op = if b.inclusive { "<=" } else { "<" };
-                    format!("{column} {op} {}", literal(&b.value))
-                });
-                let parts: Vec<String> = low.into_iter().chain(high).collect();
-                f.write_str(&parts.join(" AND "))?
+        let mut terms = Vec::new();
+        for (key, column) in self.eq.iter().zip(&self.columns) {
+            terms.push(match key {
+                KeyValue::Expr { expr, .. } => format!("{column} = {}", shown(expr)),
+                KeyValue::List(values) => {
+                    let list: Vec<String> = values.iter().map(literal).collect();
+                    format!("{column} IN ({})", list.join(", "))
+                }
+            });
+        }
+        if let Some(column) = self.columns.get(self.eq.len()) {
+            for (bounds, strict, loose) in [(&self.low, ">", ">="), (&self.high, "<", "<=")] {
+                for b in bounds {
+                    let op = if b.inclusive { loose } else { strict };
+                    terms.push(format!("{column} {op} {}", shown(&b.expr)));
+                }
             }
         }
-        f.write_str(")")
+        if !terms.is_empty() {
+            write!(f, " ({})", terms.join(" AND "))?;
+        }
+        Ok(())
+    }
+}
+
+/// A key's expression as the plan shows it: a constant as SQL would spell it.
+fn shown(expr: &Expr) -> String {
+    match expr {
+        Expr::Literal(v) => literal(v),
+        other => other.to_string(),
     }
 }
 
@@ -114,326 +261,15 @@ fn literal(value: &Value) -> String {
     }
 }
 
-/// Puts an IndexScan under the WHERE filter when an index can narrow the
-/// scan, and otherwise explains why every row is read. Plans that are not a
-/// single-table scan pass through unchanged.
-pub fn use_index(root: PlanNode, table: Option<&TableSchema>) -> PlanNode {
-    let Some(table) = table.filter(|t| t.rowid_alias.is_some() || !t.indexes.is_empty()) else {
-        return root;
-    };
-    let seq_scan = |reason: String| PlanNode::SeqScan {
-        table: table.name.clone(),
-        reason,
-    };
-    match root {
-        PlanNode::Filter { input, predicate } if matches!(*input, PlanNode::SeqScan { .. }) => {
-            let input = match choose(table, &predicate) {
-                Some((access, reason)) => PlanNode::IndexScan {
-                    table: table.name.clone(),
-                    access,
-                    reason,
-                },
-                None => seq_scan(format!(
-                    "no WHERE term is an equality or range on the first column of an index \
-                     on {}, so every row is read",
-                    table.name
-                )),
-            };
-            PlanNode::Filter {
-                input: Box::new(input),
-                predicate,
-            }
-        }
-        PlanNode::SeqScan { .. } => seq_scan(format!(
-            "there is no WHERE clause to narrow the rows down, so every row of {} is read",
-            table.name
-        )),
-        other => other,
-    }
-}
-
-/// What one WHERE term says about one column.
-struct Term {
-    column: usize,
-    lookup: Lookup,
-}
-
-/// Picks the best usable term: an equality over an `IN` list over a range,
-/// the rowid over an index, a unique index over another, and otherwise the
-/// first term written. Range terms on the chosen column are combined, so
-/// `a > 5 AND a < 9` reads only from 5 to 9.
-fn choose(table: &TableSchema, predicate: &Expr) -> Option<(IndexAccess, String)> {
-    let mut conjuncts = Vec::new();
-    split_and(predicate, &mut conjuncts);
-    let terms: Vec<Term> = conjuncts.iter().filter_map(|e| term(table, e)).collect();
-
-    let rank = |term: &Term| {
-        let (index, unique) = index_on(table, term.column)?;
-        let kind = match &term.lookup {
-            Lookup::Values(values) if values.len() <= 1 => 2,
-            Lookup::Values(_) => 1,
-            Lookup::Range { .. } => 0,
-        };
-        Some((kind, index.is_none(), unique))
-    };
-    let best = terms
-        .iter()
-        .filter_map(|t| Some((rank(t)?, t)))
-        // `max_by_key` keeps the last of equals; reversing keeps the first.
-        .rev()
-        .max_by_key(|(rank, _)| *rank)
-        .map(|(_, t)| t)?;
-
-    let column = best.column;
-    let lookup = match &best.lookup {
-        Lookup::Range { .. } => {
-            let ranges = terms.iter().filter(|t| t.column == column);
-            let (mut low, mut high) = (None, None);
-            for term in ranges {
-                if let Lookup::Range { low: l, high: h } = &term.lookup {
-                    low = tighter(low, l.clone(), true);
-                    high = tighter(high, h.clone(), false);
-                }
-            }
-            Lookup::Range { low, high }
-        }
-        values => values.clone(),
-    };
-    let (index, _) = index_on(table, column)?;
-    let name = &table.columns[column].name;
-    let access = IndexAccess {
-        index: index.clone(),
-        column: name.clone(),
-        lookup,
-    };
-    let how = match &access.lookup {
-        Lookup::Values(values) if values.len() <= 1 => format!("is an equality on {name}"),
-        Lookup::Values(_) => format!("lists values of {name}"),
-        Lookup::Range { .. } => format!("is a range on {name}"),
-    };
-    let reason = match &index {
-        Some(index) => format!(
-            "the WHERE term {how}, and index {index} keeps {name} in order, so only the \
-             matching entries are read and each leads to its row by rowid"
-        ),
-        None => format!(
-            "the WHERE term {how}, the INTEGER PRIMARY KEY. It is the rowid the table's own \
-             B-tree is sorted by, so only the matching rows are read"
-        ),
-    };
-    Some((access, reason))
-}
-
-/// The tree that has `column` first: `Some(None)` for the rowid, or the
-/// name of an index, preferring a unique one. Also says whether it is unique.
-fn index_on(table: &TableSchema, column: usize) -> Option<(Option<String>, bool)> {
-    if table.rowid_alias == Some(column) {
-        return Some((None, true));
-    }
-    let leads = |unique: bool| {
-        table
-            .indexes
-            .iter()
-            .find(|i| i.unique == unique && i.columns[0].position == column)
-            .map(|i| (Some(i.name.clone()), unique))
-    };
-    leads(true).or_else(|| leads(false))
-}
-
-/// The narrower of two bounds on the same side of a range.
-fn tighter(current: Option<Bound>, new: Option<Bound>, is_low: bool) -> Option<Bound> {
-    match (current, new) {
-        (Some(a), Some(b)) => {
-            let ord = b.value.compare(&a.value);
-            let b_wins = match ord {
-                std::cmp::Ordering::Equal => !b.inclusive,
-                _ => ord.is_gt() == is_low,
-            };
-            Some(if b_wins { b } else { a })
-        }
-        (a, b) => a.or(b),
-    }
-}
-
-fn split_and<'e>(expr: &'e Expr, out: &mut Vec<&'e Expr>) {
-    match expr {
-        Expr::Binary {
-            op: BinaryOp::And,
-            left,
-            right,
-        } => {
-            split_and(left, out);
-            split_and(right, out);
-        }
-        other => out.push(other),
-    }
-}
-
-/// Reads `column = 5`, `5 < column`, `column BETWEEN 1 AND 9` and
-/// `column IN (1, 2)` where the other side is a constant.
-fn term(table: &TableSchema, expr: &Expr) -> Option<Term> {
-    let column_of = |e: &Expr| match e {
-        Expr::Column { index, .. } if *index < table.columns.len() => Some(*index),
-        _ => None,
-    };
-    let (column, lookup) = match expr {
-        Expr::Binary { op, left, right } => {
-            let (column, op, value) = match (column_of(left), column_of(right)) {
-                (Some(c), _) => (c, *op, constant(right)?),
-                (None, Some(c)) => (c, flip(*op)?, constant(left)?),
-                _ => return None,
-            };
-            let bound = |inclusive| {
-                Some(Bound {
-                    value: value.clone(),
-                    inclusive,
-                })
-            };
-            if value.is_null() {
-                return None;
-            }
-            let lookup = match op {
-                BinaryOp::Eq => Lookup::Values(vec![value.clone()]),
-                BinaryOp::Gt => range(bound(false), None),
-                BinaryOp::GtEq => range(bound(true), None),
-                BinaryOp::Lt => range(None, bound(false)),
-                BinaryOp::LtEq => range(None, bound(true)),
-                _ => return None,
-            };
-            (column, lookup)
-        }
-        Expr::Between {
-            expr,
-            low,
-            high,
-            negated: false,
-        } => {
-            let bound = |e: &Expr| {
-                Some(Bound {
-                    value: constant(e)?,
-                    inclusive: true,
-                })
-            };
-            (
-                column_of(expr)?,
-                range(bound(low)?.into(), bound(high)?.into()),
-            )
-        }
-        Expr::InList {
-            expr,
-            list,
-            negated: false,
-        } => {
-            let values = list.iter().map(constant).collect::<Option<Vec<_>>>()?;
-            (column_of(expr)?, Lookup::Values(values))
-        }
-        _ => return None,
-    };
-    Some(Term {
-        column,
-        lookup: convert(lookup, table.columns[column].affinity)?,
-    })
-}
-
-fn range(low: Option<Bound>, high: Option<Bound>) -> Lookup {
-    Lookup::Range { low, high }
-}
-
-/// The same comparison with its sides swapped: `5 < a` is `a > 5`.
-fn flip(op: BinaryOp) -> Option<BinaryOp> {
-    Some(match op {
-        BinaryOp::Eq => BinaryOp::Eq,
-        BinaryOp::Lt => BinaryOp::Gt,
-        BinaryOp::LtEq => BinaryOp::GtEq,
-        BinaryOp::Gt => BinaryOp::Lt,
-        BinaryOp::GtEq => BinaryOp::LtEq,
-        _ => return None,
-    })
-}
-
-/// The value of an expression that reads no column and calls no function,
-/// such as `5`, `-2.5` or `'abc'`. It must also have no affinity of its own
-/// (unlike `CAST(...)`), so the comparison uses the column's alone.
-fn constant(expr: &Expr) -> Option<Value> {
-    let mut fixed = expr.affinity().is_none();
-    expr.walk(&mut |e| {
-        fixed &= !matches!(
-            e,
-            Expr::Column { .. }
-                | Expr::Function { .. }
-                | Expr::OuterColumn { .. }
-                | Expr::Subquery { .. }
-        );
-    });
-    if !fixed {
-        return None;
-    }
-    expr.eval(&[]).ok()
-}
-
-/// Converts the constants the way the comparison will: `a = '5'` on an
-/// INTEGER column looks for the number 5. NULL in an `IN` list can never
-/// match, so it is dropped. A comparison with NULL is never true, so it is
-/// left to the Filter rather than turned into a lookup.
-fn convert(lookup: Lookup, affinity: Affinity) -> Option<Lookup> {
-    let convert = |v: Value| match affinity {
-        Affinity::Integer | Affinity::Real | Affinity::Numeric => {
-            v.apply_affinity(Affinity::Numeric)
-        }
-        // A TEXT column holds only text, so the other side becomes text.
-        Affinity::Text => v.apply_affinity(Affinity::Text),
-        Affinity::Blob => v,
-    };
-    match lookup {
-        Lookup::Values(values) => {
-            let mut values: Vec<Value> = values
-                .into_iter()
-                .filter(|v| !v.is_null())
-                .map(convert)
-                .collect();
-            values.sort_by(|a, b| a.compare(b));
-            values.dedup_by(|a, b| a.compare(b).is_eq());
-            Some(Lookup::Values(values))
-        }
-        Lookup::Range { low, high } => {
-            let bounds_null = [&low, &high]
-                .into_iter()
-                .any(|b| b.as_ref().is_some_and(|b| b.value.is_null()));
-            if bounds_null {
-                return None;
-            }
-            let convert = |b: Option<Bound>| {
-                b.map(|b| Bound {
-                    value: convert(b.value),
-                    inclusive: b.inclusive,
-                })
-            };
-            Some(range(convert(low), convert(high)))
-        }
-    }
-}
-
-/// How an UPDATE or DELETE finds its rows: through the index a SELECT with
-/// the same WHERE would use, or else every row in rowid order.
-pub fn for_write(table: &TableSchema, predicate: Option<&Expr>) -> IndexAccess {
-    predicate
-        .and_then(|p| choose(table, p))
-        .map(|(access, _)| access)
-        .unwrap_or_else(|| IndexAccess {
-            index: None,
-            column: String::new(),
-            lookup: range(None, None),
-        })
-}
-
 /// A running IndexScan: the stretches of the tree still to read and the
 /// cursor reading the current one.
 pub struct Scan {
     table: String,
     index: Option<String>,
-    ranges: VecDeque<(Bound, Option<Bound>)>,
+    covering: Option<Covering>,
+    stretches: VecDeque<Stretch>,
     cursor: Option<Cursor>,
-    stop: Option<Bound>,
+    stop: Option<(Vec<Value>, bool)>,
 }
 
 enum Cursor {
@@ -442,18 +278,23 @@ enum Cursor {
 }
 
 impl Scan {
-    pub fn new(table: &str, access: &IndexAccess) -> Scan {
-        Scan {
+    /// Starts a scan, working out the lookup's values from `row`, the row of
+    /// the enclosing join (empty when there is none), and `env`, which holds
+    /// the rows of enclosing queries.
+    pub fn start(
+        table: &str,
+        access: &IndexAccess,
+        row: &[Value],
+        env: &mut dyn Env,
+    ) -> Result<Scan> {
+        Ok(Scan {
             table: table.to_string(),
             index: access.index.clone(),
-            ranges: access.lookup.ranges(),
+            covering: access.covering.clone(),
+            stretches: access.stretches(row, env)?,
             cursor: None,
             stop: None,
-        }
-    }
-
-    pub fn next(&mut self, storage: &Storage) -> Result<Option<Row>> {
-        Ok(self.next_entry(storage)?.map(|(_, row)| row))
+        })
     }
 
     /// The next row and its rowid.
@@ -462,34 +303,41 @@ impl Scan {
             let cursor = match &mut self.cursor {
                 Some(cursor) => cursor,
                 None => {
-                    let Some((start, stop)) = self.ranges.pop_front() else {
+                    let Some(stretch) = self.stretches.pop_front() else {
                         return Ok(None);
                     };
-                    let start = Some((start.value, start.inclusive));
-                    self.stop = stop;
+                    self.stop = stretch.stop;
                     self.cursor.insert(match &self.index {
-                        Some(index) => Cursor::Index(IndexCursor::new(
-                            index,
-                            start.map(|(v, inclusive)| (vec![v], inclusive)),
+                        Some(index) => Cursor::Index(IndexCursor::new(index, stretch.start)),
+                        None => Cursor::Table(TableScan::from_value(
+                            &self.table,
+                            stretch
+                                .start
+                                .map(|(mut v, inclusive)| (v.remove(0), inclusive)),
                         )),
-                        None => Cursor::Table(TableScan::from_value(&self.table, start)),
                     })
                 }
             };
             let found = match cursor {
                 Cursor::Table(scan) => scan
                     .next_entry(storage)?
-                    .filter(|(rowid, _)| !past(&Value::Integer(*rowid), &self.stop)),
+                    .filter(|(rowid, _)| !past(&[Value::Integer(*rowid)], &self.stop)),
                 Cursor::Index(entries) => match entries.next(storage)? {
-                    Some(key) if !past(&key.values[0], &self.stop) => {
-                        let row = storage.get(&self.table, key.rowid)?.ok_or_else(|| {
-                            Error::Storage(format!(
-                                "an index on {} points to row {}, which does not exist",
-                                self.table, key.rowid
-                            ))
-                        })?;
-                        Some((key.rowid, row))
-                    }
+                    Some(key) if !past(&key.values, &self.stop) => Some(match &self.covering {
+                        Some(covering) => {
+                            let mut row = vec![Value::Null; covering.width];
+                            for (value, &position) in
+                                key.values.into_iter().zip(&covering.positions)
+                            {
+                                row[position] = value;
+                            }
+                            if let Some(position) = covering.rowid {
+                                row[position] = Value::Integer(key.rowid);
+                            }
+                            (key.rowid, row)
+                        }
+                        None => (key.rowid, self.fetch(storage, key.rowid)?),
+                    }),
                     _ => None,
                 },
             };
@@ -500,14 +348,32 @@ impl Scan {
             }
         }
     }
+
+    fn fetch(&self, storage: &Storage, rowid: i64) -> Result<Row> {
+        storage.get(&self.table, rowid)?.ok_or_else(|| {
+            Error::Storage(format!(
+                "an index on {} points to row {rowid}, which does not exist",
+                self.table
+            ))
+        })
+    }
 }
 
-/// Whether `value` lies beyond the end of the stretch being read.
-fn past(value: &Value, stop: &Option<Bound>) -> bool {
-    stop.as_ref()
-        .is_some_and(|stop| match value.compare(&stop.value) {
-            std::cmp::Ordering::Greater => true,
-            std::cmp::Ordering::Equal => !stop.inclusive,
-            std::cmp::Ordering::Less => false,
-        })
+/// Whether a key lies beyond the end of the stretch being read, comparing
+/// as many of its values as the stop has.
+fn past(values: &[Value], stop: &Option<(Vec<Value>, bool)>) -> bool {
+    let Some((stop, inclusive)) = stop else {
+        return false;
+    };
+    let ord = values
+        .iter()
+        .zip(stop)
+        .map(|(a, b)| a.compare(b))
+        .find(|o| o.is_ne())
+        .unwrap_or(Ordering::Equal);
+    match ord {
+        Ordering::Greater => true,
+        Ordering::Equal => !inclusive,
+        Ordering::Less => false,
+    }
 }

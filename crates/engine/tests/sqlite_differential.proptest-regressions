@@ -5,3 +5,5 @@
 # It is recommended to check this file in to source control so that
 # everyone who runs the test benefits from these saved cases.
 cc a6e1fd10c67c1e638a26b3169f2dbac730e5443c97e8a2ab4948dccd540b6ca0 # shrinks to schema = "CREATE TABLE t(id INTEGER, u INTEGER, v, w TEXT, PRIMARY KEY (w, u))", body = ["INSERT INTO t VALUES (0,NULL,2,NULL)", "INSERT INTO t VALUES (0,NULL,2.0,NULL)", "SELECT v FROM t WHERE id < 1 UNION SELECT id FROM t WHERE id = NULL"]
+cc c4ca3ba18c3e45529035f52aa0c8395a0f28d02d5725e853ab2a408a0f65713e # shrinks to schema = "CREATE TABLE t(id INTEGER PRIMARY KEY, u INTEGER UNIQUE, v, w TEXT, UNIQUE (v, w))", body = ["INSERT INTO t VALUES (2,2,2,1),(0,NULL,2.0,2)", "SELECT id FROM t WHERE id = NULL UNION SELECT v FROM t WHERE v <> 0"]
+cc b6e0b2d06ea91e06e3dbe087c6784e740893cff91fdf208cedbc7a21fb391a39 # shrinks to schema = "CREATE TABLE t(id INTEGER PRIMARY KEY, u INTEGER UNIQUE, v, w TEXT, UNIQUE (v, w))", body = ["INSERT INTO t VALUES (NULL,NULL,2.0,3),(NULL,NULL,2,2.0)", "SELECT v FROM t WHERE w >= 0 UNION SELECT id FROM t WHERE id = NULL"]
