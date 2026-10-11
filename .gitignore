@@ -1,0 +1,6 @@
+/target
+/sqllogictest/test/
+node_modules/
+/web/dist/
+/web/src/generated/
+.DS_Store

@@ -1,0 +1,15 @@
+[package]
+name = "fishbowl"
+description = "A SQL database engine written from scratch, built to be watched."
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+
+[dependencies]
+serde.workspace = true
+sqlparser.workspace = true
+
+[lints]
+workspace = true

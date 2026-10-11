@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+<title>Fishbowl</title>
+<defs><clipPath id="water"><circle cx="256" cy="286" r="115.0"/></clipPath><mask id="knock"><rect width="512" height="512" fill="#fff"/><path d="M346.8 300.0 C303.6 244.0 234.5 248.2 202.8 300.0 C234.5 351.9 303.6 356.0 346.8 300.0 Z M206.8 300.0 L142.4 256.4 Q165.4 300.0 142.4 343.6 Z" fill="#000" stroke="#000" stroke-width="22" stroke-linejoin="round"/></mask></defs>
+<rect width="512" height="512" rx="114" fill="#000"/>
+<g transform="translate(0 -9)">
+<g fill="none" stroke="#fff" stroke-width="42" stroke-linecap="round" stroke-linejoin="round"><path d="M192.0 118.0 L186.0 153.3 A150 150 0 0 0 174.6 412.0 L337.4 412.0 A150 150 0 0 0 326.0 153.3 L320.0 118.0"/><path d="M164.0 118.0 H348.0"/></g>
+<g clip-path="url(#water)" mask="url(#knock)" stroke-linecap="round">
+<line x1="0" x2="512" y1="214" y2="214" stroke="#fff" stroke-width="29"/>
+</g>
+<path d="M346.8 300.0 C303.6 244.0 234.5 248.2 202.8 300.0 C234.5 351.9 303.6 356.0 346.8 300.0 Z M206.8 300.0 L142.4 256.4 Q165.4 300.0 142.4 343.6 Z" fill="#FF7A1A"/>
+<circle cx="310.2" cy="291.5" r="9.2" fill="#000"/>
+</g>
+</svg>
