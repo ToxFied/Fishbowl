@@ -27,6 +27,7 @@ function summary(entry: Entry): string {
     case "begin":
     case "commit":
     case "rollback":
+    case "reindex":
       return result.kind;
     case "query":
       return `${result.rows.length} ${result.rows.length === 1 ? "row" : "rows"}`;

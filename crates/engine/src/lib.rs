@@ -87,6 +87,7 @@ pub enum StatementResult {
     Analyze {
         tables: Vec<String>,
     },
+    Reindex,
     Begin,
     Commit,
     Rollback,
@@ -437,6 +438,7 @@ impl Database {
                 }
                 StatementResult::Analyze { tables }
             }
+            Plan::Reindex => StatementResult::Reindex,
             Plan::Insert {
                 table,
                 targets,
@@ -461,10 +463,15 @@ impl Database {
             }
             Plan::Update {
                 table,
+                hint,
                 assignments,
                 predicate,
-            } => self.update(&table, &assignments, predicate.as_ref())?,
-            Plan::Delete { table, predicate } => self.delete(&table, predicate.as_ref())?,
+            } => self.update(&table, &assignments, hint, predicate.as_ref())?,
+            Plan::Delete {
+                table,
+                hint,
+                predicate,
+            } => self.delete(&table, hint, predicate.as_ref())?,
             Plan::DropTable { table, if_exists } => {
                 if if_exists && self.catalog.table(&table).is_err() {
                     return Ok(StatementResult::DropTable { table });
@@ -550,10 +557,11 @@ impl Database {
         &mut self,
         table: &str,
         assignments: &[(usize, expr::Expr)],
+        hint: plan::IndexHint,
         predicate: Option<&expr::Expr>,
     ) -> Result<StatementResult> {
         let schema = self.catalog.table(table)?;
-        let access = planner::access_for_write(&self.catalog, schema, predicate);
+        let access = planner::access_for_write(&self.catalog, schema, hint, predicate);
         let mut matches = self.matching_rows(table, &access, predicate)?;
         // Rows change in the order the scan found them, and each change is
         // checked against the rows not yet changed, so the order decides
@@ -588,9 +596,14 @@ impl Database {
         })
     }
 
-    fn delete(&mut self, table: &str, predicate: Option<&expr::Expr>) -> Result<StatementResult> {
+    fn delete(
+        &mut self,
+        table: &str,
+        hint: plan::IndexHint,
+        predicate: Option<&expr::Expr>,
+    ) -> Result<StatementResult> {
         let schema = self.catalog.table(table)?;
-        let access = planner::access_for_write(&self.catalog, schema, predicate);
+        let access = planner::access_for_write(&self.catalog, schema, hint, predicate);
         let doomed = self.matching_rows(table, &access, predicate)?;
         let count = doomed.len() as u64;
         let mut writer = TableWriter::new(schema, &mut self.storage, OnConflict::Abort);
@@ -745,6 +758,21 @@ fn ends_transaction(stmt: &ast::Statement, error: &Error) -> bool {
     }
 }
 
+/// How deeply the parser lets expressions and queries nest. `sqlparser`'s
+/// default of 50 is too low for SQLite's test suite, whose deepest WHERE
+/// clause needs 65. Planning and evaluating recurse over the same tree, so
+/// the limit also bounds their stack use; `tests/slice.rs` checks the limit
+/// fits in a 1 MiB stack, the WebAssembly default.
+pub const MAX_NESTING: usize = 100;
+
 fn parse(sql: &str) -> Result<Vec<ast::Statement>> {
-    Parser::parse_sql(&FishbowlDialect::default(), sql).map_err(|e| Error::Parse(e.to_string()))
+    let dialect = FishbowlDialect::default();
+    dialect::tokenize(&dialect, sql)
+        .and_then(|tokens| {
+            Parser::new(&dialect)
+                .with_recursion_limit(MAX_NESTING)
+                .with_tokens_with_locations(tokens)
+                .parse_statements()
+        })
+        .map_err(|e| Error::Parse(e.to_string()))
 }

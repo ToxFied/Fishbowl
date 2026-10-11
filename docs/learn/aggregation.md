@@ -57,6 +57,12 @@ is a second Filter step above Aggregate.
   name from its first row. With exactly one `min()` or `max()`, it shows the row
   that holds the minimum or maximum instead, so `SELECT name, max(weight)` names
   the heaviest fish.
+- **DISTINCT changes which row min() and max() show.** `max(DISTINCT x)`
+  returns the same value as `max(x)`, but SQLite skips a repeated value
+  without looking at it, and the plain columns then do whatever the row before
+  did. If that row was the new maximum, a later tie takes over; otherwise it
+  is ignored. So with x = 1, 3, 3 the plain columns come from the second 3,
+  where `max(x)` would show the first. A repeated NULL counts as a repeat too.
 
 Try the "groups" example in the UI.
 

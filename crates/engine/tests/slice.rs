@@ -132,3 +132,42 @@ fn scripts_stop_at_the_first_error() {
     assert!(entries[1].result.is_err());
     assert_eq!(db.tables().len(), 1);
 }
+
+/// The parser's nesting limit must cover SQLite's test suite (its deepest
+/// WHERE clause needs 65), and planning and running a query at the limit must
+/// fit in a 1 MiB stack, the WebAssembly default. Debug builds use bigger
+/// frames, so they get more room.
+#[test]
+fn nesting_up_to_the_parser_limit_runs_in_a_small_stack() {
+    let stack = if cfg!(debug_assertions) {
+        4 << 20
+    } else {
+        1 << 20
+    };
+    let shapes: [fn(usize) -> String; 3] = [
+        |n| format!("SELECT {}id{} FROM fish", "(".repeat(n), ")".repeat(n)),
+        |n| format!("SELECT {}id{} FROM fish", "abs(".repeat(n), ")".repeat(n)),
+        |n| {
+            let open = "id IN (SELECT id FROM fish WHERE ".repeat(n);
+            format!("SELECT name FROM fish WHERE {open}1{}", ")".repeat(n))
+        },
+    ];
+    std::thread::Builder::new()
+        .stack_size(stack)
+        .spawn(move || {
+            for shape in shapes {
+                let mut db = setup();
+                let deepest = (1..)
+                    .take_while(|&n| !matches!(db.execute(&shape(n)), Err(Error::Parse(_))))
+                    .last()
+                    .unwrap();
+                // Nested subqueries count twice: once as a query, once as an expression.
+                assert!(deepest >= 45, "{}", shape(deepest));
+                let message = db.execute(&shape(deepest + 1)).unwrap_err().to_string();
+                assert!(message.contains("recursion limit exceeded"), "{message}");
+            }
+        })
+        .unwrap()
+        .join()
+        .unwrap();
+}

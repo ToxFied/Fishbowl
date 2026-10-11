@@ -97,6 +97,8 @@ pub struct Accumulator {
     /// Values already seen, for DISTINCT aggregates.
     seen: Option<BTreeSet<RowKey>>,
     state: State,
+    /// What the last [`Accumulator::step`] returned.
+    chosen: bool,
 }
 
 #[derive(Debug, Clone)]
@@ -121,6 +123,7 @@ impl Accumulator {
             func: call.func,
             seen: call.distinct.then(BTreeSet::new),
             state,
+            chosen: false,
         }
     }
 
@@ -135,13 +138,18 @@ impl Accumulator {
             }
             return false;
         };
+        // NULL counts as a value here so that a repeated NULL is skipped
+        // like any repeat; every aggregate ignores NULL anyway.
         if let Some(seen) = &mut self.seen
-            && !value.is_null()
             && !seen.insert(RowKey(vec![value.clone()]))
         {
-            return false;
+            // SQLite skips a repeat without stepping the aggregate, and the
+            // row keeps whatever the previous row decided. So in
+            // `max(DISTINCT a)` a repeat of the best value takes over the
+            // plain columns if the row before it did.
+            return self.chosen;
         }
-        match &mut self.state {
+        self.chosen = match &mut self.state {
             State::Count(n) => {
                 if !value.is_null() {
                     *n += 1;
@@ -190,7 +198,8 @@ impl Accumulator {
                 }
                 false
             }
-        }
+        };
+        self.chosen
     }
 
     pub fn finish(&self) -> Result<Value> {

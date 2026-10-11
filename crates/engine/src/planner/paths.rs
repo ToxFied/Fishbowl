@@ -15,7 +15,7 @@ use std::collections::BTreeSet;
 use crate::access::{Convert, Covering, IndexAccess, KeyBound, KeyValue};
 use crate::catalog::{IndexSchema, TableSchema};
 use crate::expr::{BinaryOp, Expr};
-use crate::plan::{Estimate, PlanNode, Rejected, Why};
+use crate::plan::{Estimate, IndexHint, PlanNode, Rejected, Why};
 use crate::value::{Affinity, Value};
 
 use super::cost::{self, Sizes, TABLE_ROW};
@@ -250,6 +250,7 @@ pub(super) enum Kind {
 /// The table a path reads, and what the query needs of it.
 pub(super) struct Target<'a> {
     pub sizes: Sizes<'a>,
+    pub hint: IndexHint,
     /// The name the query uses for it.
     pub name: &'a str,
     pub terms: &'a [Term],
@@ -267,8 +268,14 @@ impl Target<'_> {
 
     /// Every path whose terms use only the items in `available`, in the
     /// order SQLite tries them, which settles ties: the full scan, the
-    /// rowid, then each index from the newest.
+    /// rowid, then each index from the newest. `INDEXED BY` leaves only the
+    /// paths through its index, the full scan of it included, and `NOT
+    /// INDEXED` only the table and the rowid.
     pub fn paths(&self, available: Mask) -> Vec<Path> {
+        let forced = match self.hint {
+            IndexHint::Index(i) => Some(i),
+            _ => None,
+        };
         let schema = self.schema();
         let n = self.sizes.rows();
         // Order only matters when one is wanted; joins skip the bookkeeping.
@@ -283,14 +290,17 @@ impl Target<'_> {
         };
         let rowid: Vec<usize> = schema.rowid_alias.into_iter().collect();
 
-        let mut paths = vec![Path {
-            kind: Kind::Seq,
-            rows: n,
-            cost: n * TABLE_ROW,
-            needs: 0,
-            ordered: self.gives_order(&rowid, &fixed),
-        }];
-        if let Some(alias) = schema.rowid_alias {
+        let mut paths = Vec::new();
+        if forced.is_none() {
+            paths.push(Path {
+                kind: Kind::Seq,
+                rows: n,
+                cost: n * TABLE_ROW,
+                needs: 0,
+                ordered: self.gives_order(&rowid, &fixed),
+            });
+        }
+        if let Some(alias) = schema.rowid_alias.filter(|_| forced.is_none()) {
             let found = self.lookup(available, [alias]);
             if !found.eq.is_empty() || found.ranged() {
                 let mut rows = if found.eq.is_empty() { n } else { found.combos };
@@ -312,6 +322,9 @@ impl Target<'_> {
             }
         }
         for (i, index) in schema.indexes.iter().enumerate().rev() {
+            if self.hint == IndexHint::NoIndex || forced.is_some_and(|f| f != i) {
+                continue;
+            }
             let in_index = |c: usize| index.columns.iter().any(|i| i.position == c);
             let found = self.lookup(available, index.columns.iter().map(|c| c.position));
             let covering = self.used.is_some_and(|used| {
@@ -329,7 +342,10 @@ impl Target<'_> {
             if k == 0 && !found.ranged() {
                 // Reading the whole index only pays off when it is narrower
                 // than the table, or saves a sort.
-                if (covering && self.sizes.narrower(index)) || (ordered && self.used.is_some()) {
+                if (covering && self.sizes.narrower(index))
+                    || (ordered && self.used.is_some())
+                    || forced == Some(i)
+                {
                     paths.push(Path {
                         rows: n,
                         cost: n * (entry + fetch),

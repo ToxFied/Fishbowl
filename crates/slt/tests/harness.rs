@@ -248,10 +248,10 @@ SELECT a FROM t WHERE a > 3
 fn parse_errors_are_grouped_by_cause_without_position() {
     let result = run("\
 statement ok
-SELECT a FROM t WHERE a IN t
+SELECT a FROM t WHERE a IN 1
 
 statement ok
-SELECT b FROM t WHERE b IN t
+SELECT b FROM t WHERE b IN 2
 ");
     let reasons: Vec<&str> = result.failures.iter().map(|f| f.reason.as_str()).collect();
     assert_eq!(

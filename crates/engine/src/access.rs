@@ -257,6 +257,7 @@ fn shown(expr: &Expr) -> String {
 fn literal(value: &Value) -> String {
     match value {
         Value::Text(s) => format!("'{}'", s.replace('\'', "''")),
+        Value::Blob(b) => crate::expr::blob_literal(b),
         other => other.to_string(),
     }
 }
