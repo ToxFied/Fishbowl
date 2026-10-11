@@ -76,7 +76,7 @@ impl Dialect for FishbowlDialect {
     }
 
     fn parse_statement(&self, parser: &mut Parser) -> Option<Result<Statement, ParserError>> {
-        self.0.parse_statement(parser)
+        crate::trigger::parse_create(parser).or_else(|| self.0.parse_statement(parser))
     }
 
     fn parse_infix(

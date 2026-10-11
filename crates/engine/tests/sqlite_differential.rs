@@ -9,7 +9,8 @@
 //! keeps earlier rows only when a constraint breaks, and the order an UPDATE
 //! visits rows decides whether a UNIQUE key clashes along the way. Scripts
 //! also open, commit and roll back transactions, including by `OR
-//! ROLLBACK`, and statements fail inside them.
+//! ROLLBACK`, and statements fail inside them. Some scripts start with
+//! triggers on `t` that log rows, change `t` again or call `RAISE()`.
 //!
 //! The test is skipped when `sqlite3` is not installed. Run more cases with
 //! `PROPTEST_CASES=5000 cargo test --test sqlite_differential`.
@@ -70,12 +71,12 @@ fn run_sqlite(statements: &[String]) -> Vec<Outcome> {
                 .push(line.into()),
         }
     }
-    // "Error near line N": statement i is on line 3 + 2i.
+    // "Error near line N": statement i is on line 3 + 2i. A parse error
+    // adds lines quoting the statement, which are skipped.
     for line in stderr.lines() {
-        let n = line
-            .split("near line ")
-            .nth(1)
-            .expect("an sqlite3 error line");
+        let Some(n) = line.split("near line ").nth(1) else {
+            continue;
+        };
         let n: usize = n.split(':').next().unwrap().parse().unwrap();
         outcomes[(n - 3) / 2] = Err(());
     }
@@ -223,12 +224,25 @@ const SCHEMAS: [&str; 3] = [
     "CREATE TABLE t(id INTEGER, u INTEGER, v, w TEXT, PRIMARY KEY (w, u))",
 ];
 
+/// Triggers a script may start with. Each writes to `log`, changes `t`
+/// again, or stops the row with `RAISE()`.
+const TRIGGERS: [&str; 7] = [
+    "CREATE TRIGGER ai AFTER INSERT ON t BEGIN INSERT INTO log VALUES (NULL, 'ai', new.id, new.u, new.v, new.w); END",
+    "CREATE TRIGGER bu BEFORE UPDATE ON t WHEN new.u > old.u BEGIN INSERT INTO log VALUES (NULL, 'bu', old.id, old.u, new.u, new.rowid); END",
+    "CREATE TRIGGER ad AFTER DELETE ON t BEGIN INSERT INTO log VALUES (NULL, 'ad', old.id, old.u, old.v, old.w); END",
+    "CREATE TRIGGER bi BEFORE INSERT ON t WHEN new.v = 'b' BEGIN SELECT RAISE(ABORT, 'no b'); END",
+    "CREATE TRIGGER bd BEFORE DELETE ON t WHEN old.u = 2 BEGIN SELECT RAISE(IGNORE); END",
+    "CREATE TRIGGER au AFTER UPDATE OF v ON t BEGIN UPDATE t SET w = 'x' WHERE u = new.u; INSERT INTO log SELECT NULL, 'au', count(*), NULL, NULL, NULL FROM t; END",
+    "CREATE TRIGGER bi2 BEFORE INSERT ON t BEGIN DELETE FROM t WHERE u = new.u + 1; SELECT CASE WHEN new.w = 'a' THEN RAISE(FAIL, 'no a') END; END",
+];
+
 proptest! {
     #![proptest_config(ProptestConfig::with_cases(256))]
 
     #[test]
     fn fishbowl_agrees_with_sqlite(
         schema in prop::sample::select(SCHEMAS.to_vec()),
+        triggers in prop::sample::subsequence(TRIGGERS.to_vec(), 0..4),
         body in prop::collection::vec(statement(), 1..25),
     ) {
         if !sqlite_available() {
@@ -238,10 +252,13 @@ proptest! {
         let mut statements = vec![
             schema.to_string(),
             "CREATE VIEW v AS SELECT a.u, b.w FROM t AS a, t AS b WHERE a.id = b.u".to_string(),
+            "CREATE TABLE log(n INTEGER PRIMARY KEY, k, a, b, c, d)".to_string(),
         ];
+        statements.extend(triggers.iter().map(|t| t.to_string()));
         statements.extend(body);
         avoid_unjournaled_failures(&mut statements);
         statements.push("SELECT * FROM t ORDER BY id, u, v, w".into());
+        statements.push("SELECT * FROM log ORDER BY n".into());
         prop_assert_eq!(run_fishbowl(&statements), run_sqlite(&statements), "{:#?}", statements);
     }
 }
@@ -297,6 +314,147 @@ fn equal_values_show_the_one_sqlite_reads_first() {
             .chain(body.iter().copied())
             .map(str::to_string)
             .collect();
+        assert_eq!(
+            run_fishbowl(&statements),
+            run_sqlite(&statements),
+            "{statements:#?}"
+        );
+    }
+}
+
+/// Triggers: firing order, `NEW` and `OLD`, `WHEN`, `UPDATE OF`, `RAISE()`,
+/// recursion, undo, `INSTEAD OF` on a view, and the errors around them.
+#[test]
+fn triggers_agree_with_sqlite() {
+    if !sqlite_available() {
+        return;
+    }
+    let cases: &[&[&str]] = &[
+        // Newest first; BEFORE sees the rowid as -1 until it is assigned.
+        &[
+            "CREATE TABLE t(id INTEGER PRIMARY KEY, x INTEGER, y TEXT)",
+            "CREATE TABLE log(n INTEGER PRIMARY KEY, m, a, b)",
+            "CREATE TRIGGER a AFTER INSERT ON t BEGIN INSERT INTO log VALUES (NULL, 'a', new.id, new.rowid); END",
+            "CREATE TRIGGER b AFTER INSERT ON t BEGIN INSERT INTO log VALUES (NULL, 'b', new.x, typeof(new.x)); END",
+            "CREATE TRIGGER c BEFORE INSERT ON t BEGIN INSERT INTO log VALUES (NULL, 'c', new.id, new.rowid); END",
+            "INSERT INTO t(x, y) VALUES ('5', 7), (-2, 'it''s')",
+            "INSERT INTO t VALUES (10, 1.5, NULL)",
+            "SELECT * FROM log ORDER BY n",
+            "SELECT * FROM t ORDER BY id",
+        ],
+        // NEW and OLD carry no affinity: '5' is not 5 here.
+        &[
+            "CREATE TABLE t(x INTEGER)",
+            "CREATE TABLE log(a)",
+            "CREATE TRIGGER r AFTER INSERT ON t WHEN new.x = '5' BEGIN INSERT INTO log VALUES ('text'); END",
+            "CREATE TRIGGER s AFTER INSERT ON t WHEN new.x = 5 BEGIN INSERT INTO log VALUES ('int'); END",
+            "INSERT INTO t VALUES ('5')",
+            "SELECT * FROM log",
+        ],
+        // UPDATE OF fires only when SET names the column; WHEN filters rows.
+        &[
+            "CREATE TABLE t(x, y)",
+            "CREATE TABLE log(a, b, c)",
+            "INSERT INTO t VALUES (1, 1), (2, 2), (3, 3)",
+            "CREATE TRIGGER r AFTER UPDATE OF y ON t WHEN old.x <> 2 BEGIN INSERT INTO log VALUES (old.x, old.y, new.y); END",
+            "UPDATE t SET x = x + 10",
+            "UPDATE t SET y = y * 2",
+            "SELECT * FROM log ORDER BY 1",
+        ],
+        // RAISE(ABORT) undoes the statement and its triggers' writes;
+        // RAISE(FAIL) keeps the rows before it; RAISE(IGNORE) skips one row.
+        &[
+            "CREATE TABLE t(x)",
+            "CREATE TABLE log(a)",
+            "CREATE TRIGGER l AFTER INSERT ON t BEGIN INSERT INTO log VALUES (new.x); END",
+            "CREATE TRIGGER r BEFORE INSERT ON t WHEN new.x = 3 BEGIN SELECT RAISE(ABORT, 'three'); END",
+            "CREATE TRIGGER f BEFORE INSERT ON t WHEN new.x = 6 BEGIN SELECT RAISE(FAIL, 'six'); END",
+            "CREATE TRIGGER i BEFORE INSERT ON t WHEN new.x = 8 BEGIN SELECT RAISE(IGNORE); END",
+            "INSERT INTO t VALUES (1), (2), (3)",
+            "INSERT INTO t VALUES (4), (5), (6), (7)",
+            "INSERT INTO t VALUES (7), (8), (9)",
+            "SELECT * FROM t ORDER BY 1",
+            "SELECT * FROM log ORDER BY 1",
+        ],
+        // RAISE(ROLLBACK) ends the transaction.
+        &[
+            "CREATE TABLE t(x)",
+            "CREATE TRIGGER r BEFORE DELETE ON t BEGIN SELECT RAISE(ROLLBACK, 'no') WHERE old.x = 2; END",
+            "BEGIN",
+            "INSERT INTO t VALUES (1), (2)",
+            "DELETE FROM t",
+            "COMMIT",
+            "SELECT count(*) FROM t",
+        ],
+        // A trigger does not fire itself, but fires others.
+        &[
+            "CREATE TABLE t(x)",
+            "CREATE TABLE u(y)",
+            "CREATE TRIGGER a AFTER INSERT ON t BEGIN INSERT INTO t VALUES (new.x + 1); INSERT INTO u VALUES (new.x); END",
+            "CREATE TRIGGER b AFTER INSERT ON u BEGIN INSERT INTO t VALUES (new.y * 10); END",
+            "INSERT INTO t VALUES (1)",
+            "SELECT * FROM t ORDER BY 1",
+            "SELECT * FROM u ORDER BY 1",
+        ],
+        // A BEFORE trigger's changes show in the row being updated or
+        // deleted; a row it deletes is skipped.
+        &[
+            "CREATE TABLE t(x, y)",
+            "INSERT INTO t VALUES (1, 1), (2, 2)",
+            "CREATE TRIGGER r BEFORE UPDATE ON t BEGIN UPDATE t SET y = 100; END",
+            "UPDATE t SET x = x + 1 WHERE x = 1",
+            "SELECT * FROM t ORDER BY 1",
+            "CREATE TRIGGER d BEFORE DELETE ON t BEGIN DELETE FROM t WHERE x = 2; END",
+            "DELETE FROM t",
+            "SELECT * FROM t ORDER BY 1",
+        ],
+        // A failing statement in a trigger undoes the whole statement.
+        &[
+            "CREATE TABLE t(x)",
+            "CREATE TABLE u(y UNIQUE)",
+            "CREATE TRIGGER r AFTER INSERT ON t BEGIN INSERT INTO u VALUES (new.x % 2); END",
+            "INSERT INTO t VALUES (1), (2)",
+            "INSERT INTO t VALUES (3)",
+            "SELECT * FROM t ORDER BY 1",
+            "SELECT * FROM u ORDER BY 1",
+        ],
+        // INSTEAD OF makes a view writable.
+        &[
+            "CREATE TABLE t(a, b)",
+            "CREATE VIEW v AS SELECT a, b, a + b AS s FROM t",
+            "INSERT INTO v VALUES (1, 2, 3)",
+            "CREATE TRIGGER vi INSTEAD OF INSERT ON v BEGIN INSERT INTO t VALUES (new.a, new.b); END",
+            "CREATE TRIGGER vu INSTEAD OF UPDATE ON v BEGIN UPDATE t SET b = new.b WHERE a = old.a; END",
+            "CREATE TRIGGER vd INSTEAD OF DELETE ON v BEGIN DELETE FROM t WHERE a = old.a; END",
+            "INSERT INTO v(a, b) VALUES (1, 2), (3, 4)",
+            "INSERT INTO v SELECT 5, 6, 0",
+            "UPDATE v SET b = s * 10 WHERE a > 1",
+            "DELETE FROM v WHERE s = 3",
+            "SELECT * FROM v ORDER BY 1",
+        ],
+        // Errors, and triggers going with their table.
+        &[
+            "CREATE TABLE t(x)",
+            "CREATE VIEW v AS SELECT x FROM t",
+            "CREATE TRIGGER r AFTER INSERT ON t BEGIN SELECT 1; END",
+            "CREATE TRIGGER r AFTER INSERT ON t BEGIN SELECT 1; END",
+            "CREATE TRIGGER IF NOT EXISTS r AFTER INSERT ON t BEGIN SELECT 1; END",
+            "CREATE TRIGGER s BEFORE INSERT ON v BEGIN SELECT 1; END",
+            "CREATE TRIGGER s INSTEAD OF INSERT ON t BEGIN SELECT 1; END",
+            "CREATE TRIGGER s AFTER INSERT ON nope BEGIN SELECT 1; END",
+            "CREATE TRIGGER s AFTER DELETE ON t BEGIN SELECT new.x; END",
+            "INSERT INTO t VALUES (1)",
+            "DELETE FROM t",
+            "SELECT count(*) FROM t",
+            "DROP TRIGGER nope",
+            "DROP TRIGGER IF EXISTS nope",
+            "DROP TABLE t",
+            "DROP TRIGGER r",
+            "SELECT RAISE(ABORT, 'x')",
+        ],
+    ];
+    for body in cases {
+        let statements: Vec<String> = body.iter().map(|s| s.to_string()).collect();
         assert_eq!(
             run_fishbowl(&statements),
             run_sqlite(&statements),

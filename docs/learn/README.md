@@ -40,3 +40,4 @@ code where the idea lives. Every milestone adds notes for what it touched.
 | [Choosing an index](choosing-an-index.md) | M5 |
 | [Join ordering](join-ordering.md) | M5 |
 | [Why 2 and 2.0 matter](equal-values.md) | M5 |
+| [Triggers](triggers.md) | M9 |

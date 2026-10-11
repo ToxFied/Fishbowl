@@ -66,6 +66,11 @@ fn workload() -> Vec<String> {
          note TEXT)"
             .into(),
         "CREATE INDEX fish_weight ON fish(weight)".into(),
+        // Rows the trigger writes commit or vanish with the statement.
+        "CREATE TABLE gone(id INTEGER PRIMARY KEY, fish INTEGER)".into(),
+        "CREATE TRIGGER fish_gone AFTER DELETE ON fish BEGIN INSERT INTO gone VALUES (NULL, old.id); \
+         END"
+            .into(),
         format!("INSERT INTO fish VALUES {}", rows(1..4)),
         // Big enough to split leaves of the table and of both indexes.
         "BEGIN".into(),

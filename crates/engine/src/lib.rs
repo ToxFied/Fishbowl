@@ -13,6 +13,9 @@
 //! until `COMMIT` or `ROLLBACK`; outside one, each statement is its own
 //! transaction and commits as it ends, as in SQLite. A commit is durable
 //! once the write-ahead log is synced ([`storage::wal`]).
+//!
+//! An INSERT, UPDATE or DELETE on a table with triggers fires them for each
+//! row, inside the same statement ([`trigger`]).
 
 pub mod access;
 pub mod catalog;
@@ -24,6 +27,7 @@ pub mod plan;
 pub mod planner;
 pub mod storage;
 pub mod trace;
+pub mod trigger;
 pub mod value;
 pub mod write;
 
@@ -45,6 +49,7 @@ use exec::ExecContext;
 use plan::Plan;
 use storage::index::IndexKey;
 use storage::{IndexCursor, LogStore, PageStore, Row, Storage, TableScan};
+use trigger::Change;
 use write::{OnConflict, TableWriter};
 
 /// What a statement produced.
@@ -74,6 +79,12 @@ pub enum StatementResult {
     },
     DropView {
         view: String,
+    },
+    CreateTrigger {
+        trigger: String,
+    },
+    DropTrigger {
+        trigger: String,
     },
     Query(QueryResult),
     CreateIndex {
@@ -128,6 +139,10 @@ pub struct Database {
     saved_catalog: Option<Catalog>,
     /// Trace every query, recording at most this many events.
     trace_limit: Option<usize>,
+    /// Whether the failing statement ends the transaction, when its
+    /// triggers decided: `RAISE()` and `INSERT OR ROLLBACK` in a trigger
+    /// override the statement's own `OR` clause.
+    end_transaction: Option<bool>,
 }
 
 impl Default for Database {
@@ -147,6 +162,7 @@ impl Database {
             in_transaction: false,
             saved_catalog: None,
             trace_limit: None,
+            end_transaction: None,
         }
     }
 
@@ -167,7 +183,8 @@ impl Database {
 
     /// Opens a database on any page store and log, recovering what the log
     /// holds, then rebuilding the catalog from the `CREATE TABLE`, `CREATE
-    /// INDEX` and `CREATE VIEW` statements stored in the database.
+    /// INDEX`, `CREATE VIEW` and `CREATE TRIGGER` statements stored in the
+    /// database.
     pub fn with_stores(
         store: Box<dyn PageStore>,
         log: Box<dyn LogStore>,
@@ -177,6 +194,10 @@ impl Database {
         let mut catalog = Catalog::default();
         for sql in statements {
             for stmt in parse(&sql)? {
+                if let ast::Statement::CreateTrigger(create) = &stmt {
+                    catalog.add_trigger(trigger::plan_create(&catalog, create)?)?;
+                    continue;
+                }
                 match planner::plan_statement(&catalog, &stmt)? {
                     Plan::CreateTable { schema, .. } => catalog.add_table(schema)?,
                     Plan::CreateIndex { table, index, .. } => catalog.add_index(&table, index)?,
@@ -192,6 +213,7 @@ impl Database {
             in_transaction: false,
             saved_catalog: None,
             trace_limit: None,
+            end_transaction: None,
         })
     }
 
@@ -325,8 +347,9 @@ impl Database {
         // `OR FAIL` keeps, so the transaction carries on. Outside `BEGIN`
         // it then commits, like SQLite's autocommit.
         let result = self.run_statement(stmt);
+        let verdict = self.end_transaction.take();
         match &result {
-            Err(e) if ends_transaction(stmt, e) => self.rollback(),
+            Err(e) if verdict.unwrap_or_else(|| ends_transaction(stmt, e)) => self.rollback(),
             _ if !active => self.commit()?,
             _ => {}
         }
@@ -360,6 +383,12 @@ impl Database {
     }
 
     fn run_statement(&mut self, stmt: &ast::Statement) -> Result<StatementResult> {
+        if let Some(result) = self
+            .trigger_statement(stmt)
+            .or_else(|| self.instead_of(stmt))
+        {
+            return result;
+        }
         let result = match planner::plan_statement(&self.catalog, stmt)? {
             Plan::CreateTable {
                 schema,
@@ -437,38 +466,18 @@ impl Database {
                 }
                 StatementResult::Analyze { tables }
             }
-            Plan::Insert {
-                table,
-                targets,
-                rows,
-                on_conflict,
-            } => {
-                let rows = rows
-                    .iter()
-                    .map(|exprs| exprs.iter().map(|e| e.eval(&[])).collect())
-                    .collect::<Result<Vec<_>>>()?;
-                self.insert(&table, &targets, rows, on_conflict)?
+            plan @ (Plan::Insert { .. }
+            | Plan::InsertSelect { .. }
+            | Plan::Update { .. }
+            | Plan::Delete { .. }) => {
+                let (table, change) = self.change_for(plan)?;
+                self.write(&table, change)?
             }
-            Plan::InsertSelect {
-                table,
-                targets,
-                query,
-                on_conflict,
-            } => {
-                let mut ctx = ExecContext::new(&self.storage, self.row_budget);
-                let (rows, _) = exec::run_query(&mut ctx, &query.root)?;
-                self.insert(&table, &targets, rows, on_conflict)?
-            }
-            Plan::Update {
-                table,
-                assignments,
-                predicate,
-            } => self.update(&table, &assignments, predicate.as_ref())?,
-            Plan::Delete { table, predicate } => self.delete(&table, predicate.as_ref())?,
             Plan::DropTable { table, if_exists } => {
                 if if_exists && self.catalog.table(&table).is_err() {
                     return Ok(StatementResult::DropTable { table });
                 }
+                self.drop_triggers_on(&table)?;
                 self.storage.drop_table(&table)?;
                 self.catalog.remove_table(&table);
                 StatementResult::DropTable { table }
@@ -492,6 +501,7 @@ impl Database {
                 StatementResult::CreateView { view: name }
             }
             Plan::DropView { view, .. } => {
+                self.drop_triggers_on(&view)?;
                 if self.catalog.remove_view(&view).is_some() {
                     self.storage.drop_view(&view)?;
                 }
@@ -514,93 +524,143 @@ impl Database {
         Ok(result)
     }
 
-    /// Stores rows of values, one per VALUES row or SELECT result row, each
-    /// value for the column in `targets` at its position. If any row fails a
-    /// constraint, the rows stored before it are taken out again, unless
-    /// `on_conflict` says otherwise.
-    fn insert(
-        &mut self,
-        table: &str,
-        targets: &[usize],
-        rows: Vec<Vec<Value>>,
-        on_conflict: OnConflict,
-    ) -> Result<StatementResult> {
-        let schema = self.catalog.table(table)?;
-        let mut count = 0;
-        let mut writer = TableWriter::new(schema, &mut self.storage, on_conflict);
-        let result = rows.into_iter().try_for_each(|values| {
-            let mut row = vec![Value::Null; schema.columns.len()];
-            for (&target, value) in targets.iter().zip(values) {
-                row[target] = value.apply_affinity(schema.columns[target].affinity);
+    /// Finds the rows an INSERT, UPDATE or DELETE plan changes, without
+    /// changing any: INSERT's values, or the rows UPDATE and DELETE match.
+    /// Reading them all first means a row is never met twice in the scan.
+    fn change_for(&self, plan: Plan) -> Result<(String, Change)> {
+        Ok(match plan {
+            Plan::Insert {
+                table,
+                targets,
+                rows,
+                on_conflict,
+            } => {
+                let rows = rows
+                    .iter()
+                    .map(|exprs| exprs.iter().map(|e| e.eval(&[])).collect())
+                    .collect::<Result<Vec<_>>>()?;
+                let change = Change::Insert {
+                    targets,
+                    rows,
+                    on_conflict,
+                };
+                (table, change)
             }
-            count += u64::from(writer.insert(row)?);
-            Ok(())
-        });
-        writer.finish(result)?;
-        Ok(StatementResult::Insert {
-            table: table.to_string(),
-            rows: count,
+            Plan::InsertSelect {
+                table,
+                targets,
+                query,
+                on_conflict,
+            } => {
+                let mut ctx = ExecContext::new(&self.storage, self.row_budget);
+                let (rows, _) = exec::run_query(&mut ctx, &query.root)?;
+                let change = Change::Insert {
+                    targets,
+                    rows,
+                    on_conflict,
+                };
+                (table, change)
+            }
+            Plan::Update {
+                table,
+                assignments,
+                predicate,
+            } => {
+                let schema = self.catalog.table(&table)?;
+                let access = planner::access_for_write(&self.catalog, schema, predicate.as_ref());
+                let mut rows = self.matching_rows(&table, &access, predicate.as_ref())?;
+                // Rows change in the order the scan found them, and each
+                // change is checked against the rows not yet changed, so the
+                // order decides which UPDATEs fail. Like SQLite, change rows
+                // in rowid order instead when the UPDATE moves them within
+                // the tree that was scanned.
+                let scanned = schema
+                    .indexes
+                    .iter()
+                    .find(|i| access.index.as_ref() == Some(&i.name));
+                let moves = assignments.iter().any(|(column, _)| {
+                    Some(*column) == schema.rowid_alias
+                        || scanned.is_some_and(|i| i.columns.iter().any(|c| c.position == *column))
+                });
+                if moves {
+                    rows.sort_by_key(|(rowid, _)| *rowid);
+                }
+                (table, Change::Update { assignments, rows })
+            }
+            Plan::Delete { table, predicate } => {
+                let schema = self.catalog.table(&table)?;
+                let access = planner::access_for_write(&self.catalog, schema, predicate.as_ref());
+                let rows = self.matching_rows(&table, &access, predicate.as_ref())?;
+                (table, Change::Delete { rows })
+            }
+            _ => return Err(Error::Runtime("expected INSERT, UPDATE or DELETE".into())),
         })
     }
 
-    /// Computes each new row from the old one. The matching rows are found
-    /// before any is changed, so a row is never updated twice by meeting it
-    /// again later in the scan. A failure undoes the rows already updated.
-    fn update(
-        &mut self,
-        table: &str,
-        assignments: &[(usize, expr::Expr)],
-        predicate: Option<&expr::Expr>,
-    ) -> Result<StatementResult> {
-        let schema = self.catalog.table(table)?;
-        let access = planner::access_for_write(&self.catalog, schema, predicate);
-        let mut matches = self.matching_rows(table, &access, predicate)?;
-        // Rows change in the order the scan found them, and each change is
-        // checked against the rows not yet changed, so the order decides
-        // which UPDATEs fail. Like SQLite, change rows in rowid order instead
-        // when the UPDATE moves them within the tree that was scanned.
-        let scanned = schema
-            .indexes
-            .iter()
-            .find(|i| access.index.as_ref() == Some(&i.name));
-        let moves = assignments.iter().any(|(column, _)| {
-            Some(*column) == schema.rowid_alias
-                || scanned.is_some_and(|i| i.columns.iter().any(|c| c.position == *column))
-        });
-        if moves {
-            matches.sort_by_key(|(rowid, _)| *rowid);
+    /// Writes the rows a statement changes. Constraints are checked one row
+    /// at a time; if a row fails, the rows written before it are undone,
+    /// unless `OR FAIL` keeps them. A table with triggers takes the slower
+    /// path in [`trigger`], which fires them around each row.
+    fn write(&mut self, table: &str, change: Change) -> Result<StatementResult> {
+        if self.catalog.triggers_on(table).next().is_some() {
+            let kind = match &change {
+                Change::Insert { .. } => 0,
+                Change::Update { .. } => 1,
+                Change::Delete { .. } => 2,
+            };
+            let rows = self.write_with_triggers(table, change)?;
+            let table = table.to_string();
+            return Ok(match kind {
+                0 => StatementResult::Insert { table, rows },
+                1 => StatementResult::Update { table, rows },
+                _ => StatementResult::Delete { table, rows },
+            });
         }
-        let count = matches.len() as u64;
-        let mut writer = TableWriter::new(schema, &mut self.storage, OnConflict::Abort);
-        let result = matches.into_iter().try_for_each(|(rowid, old)| {
-            let mut row = old.clone();
-            for (index, expr) in assignments {
-                row[*index] = expr
-                    .eval(&old)?
-                    .apply_affinity(schema.columns[*index].affinity);
-            }
-            writer.update(rowid, old, row)
-        });
-        writer.finish(result)?;
-        Ok(StatementResult::Update {
-            table: table.to_string(),
-            rows: count,
-        })
-    }
-
-    fn delete(&mut self, table: &str, predicate: Option<&expr::Expr>) -> Result<StatementResult> {
         let schema = self.catalog.table(table)?;
-        let access = planner::access_for_write(&self.catalog, schema, predicate);
-        let doomed = self.matching_rows(table, &access, predicate)?;
-        let count = doomed.len() as u64;
-        let mut writer = TableWriter::new(schema, &mut self.storage, OnConflict::Abort);
-        let result = doomed
-            .into_iter()
-            .try_for_each(|(rowid, row)| writer.delete(rowid, row));
-        writer.finish(result)?;
-        Ok(StatementResult::Delete {
-            table: table.to_string(),
-            rows: count,
+        let table = table.to_string();
+        Ok(match change {
+            Change::Insert {
+                targets,
+                rows,
+                on_conflict,
+            } => {
+                let mut count = 0;
+                let mut writer = TableWriter::new(schema, &mut self.storage, on_conflict);
+                let result = rows.into_iter().try_for_each(|values| {
+                    let mut row = vec![Value::Null; schema.columns.len()];
+                    for (&target, value) in targets.iter().zip(values) {
+                        row[target] = value.apply_affinity(schema.columns[target].affinity);
+                    }
+                    count += u64::from(writer.insert(row)?.is_some());
+                    Ok(())
+                });
+                writer.finish(result)?;
+                StatementResult::Insert { table, rows: count }
+            }
+            Change::Update { assignments, rows } => {
+                let count = rows.len() as u64;
+                let mut writer = TableWriter::new(schema, &mut self.storage, OnConflict::Abort);
+                let result = rows.into_iter().try_for_each(|(rowid, old)| {
+                    let mut row = old.clone();
+                    for (index, expr) in &assignments {
+                        row[*index] = expr
+                            .eval(&old)?
+                            .apply_affinity(schema.columns[*index].affinity);
+                    }
+                    writer.update(rowid, old, row)
+                });
+                writer.finish(result)?;
+                StatementResult::Update { table, rows: count }
+            }
+            Change::Delete { rows } => {
+                let count = rows.len() as u64;
+                let mut writer = TableWriter::new(schema, &mut self.storage, OnConflict::Abort);
+                let result = rows
+                    .into_iter()
+                    .try_for_each(|(rowid, row)| writer.delete(rowid, row));
+                writer.finish(result)?;
+                StatementResult::Delete { table, rows: count }
+            }
         })
     }
 

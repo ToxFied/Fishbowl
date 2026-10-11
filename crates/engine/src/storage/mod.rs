@@ -74,7 +74,9 @@ pub struct Storage {
     indexes: HashMap<String, Index>,
     /// Each view's row in the schema table.
     views: HashMap<String, i64>,
-    /// The three maps above as they were at the last commit, saved before
+    /// Each trigger's row in the schema table.
+    triggers: HashMap<String, i64>,
+    /// The four maps above as they were at the last commit, saved before
     /// the first change after it, for rollback.
     saved: Option<Saved>,
 }
@@ -84,6 +86,7 @@ struct Saved {
     tables: HashMap<String, Table>,
     indexes: HashMap<String, Index>,
     views: HashMap<String, i64>,
+    triggers: HashMap<String, i64>,
 }
 
 #[derive(Clone)]
@@ -129,8 +132,9 @@ impl Storage {
 
     /// Opens a database file and its log, recovering any transactions the
     /// log holds, or creates a new database if both are empty. Also returns
-    /// the `CREATE TABLE`, `CREATE INDEX` and `CREATE VIEW` statements it
-    /// holds, oldest first, so the caller can rebuild its catalog.
+    /// the `CREATE TABLE`, `CREATE INDEX`, `CREATE VIEW` and `CREATE TRIGGER`
+    /// statements it holds, oldest first, so the caller can rebuild its
+    /// catalog.
     pub fn open(
         store: Box<dyn PageStore>,
         log: Box<dyn LogStore>,
@@ -149,6 +153,7 @@ impl Storage {
         let mut tables = HashMap::new();
         let mut indexes = HashMap::new();
         let mut views = HashMap::new();
+        let mut triggers = HashMap::new();
         let mut statements = Vec::new();
         let mut cursor = Cursor::new(&mut pager, schema)?;
         while let Some((schema_rowid, bytes)) = cursor.next(&mut pager)? {
@@ -192,6 +197,10 @@ impl Storage {
                     views.insert(name.to_ascii_lowercase(), schema_rowid);
                     statements.push(sql.clone());
                 }
+                ("trigger", Value::Text(sql)) => {
+                    triggers.insert(name.to_ascii_lowercase(), schema_rowid);
+                    statements.push(sql.clone());
+                }
                 _ => return Err(damaged()),
             }
         }
@@ -201,6 +210,7 @@ impl Storage {
             tables,
             indexes,
             views,
+            triggers,
             saved: None,
         };
         Ok((storage, statements))
@@ -222,6 +232,7 @@ impl Storage {
             self.tables = saved.tables;
             self.indexes = saved.indexes;
             self.views = saved.views;
+            self.triggers = saved.triggers;
         }
     }
 
@@ -247,6 +258,7 @@ impl Storage {
                 tables: self.tables.clone(),
                 indexes: self.indexes.clone(),
                 views: self.views.clone(),
+                triggers: self.triggers.clone(),
             });
         }
     }
@@ -338,6 +350,28 @@ impl Storage {
     pub fn drop_view(&mut self, name: &str) -> Result<()> {
         self.save();
         if let Some(schema_rowid) = self.views.remove(&name.to_ascii_lowercase()) {
+            self.schema.delete(self.pager.get_mut(), schema_rowid)?;
+        }
+        Ok(())
+    }
+
+    /// Records a trigger's `CREATE TRIGGER` statement. Like a view, a
+    /// trigger is only its statement.
+    pub fn create_trigger(&mut self, name: &str, table: &str, sql: &str) -> Result<()> {
+        self.save();
+        let pager = self.pager.get_mut();
+        let row = schema_row("trigger", name, table, 0, Some(sql));
+        let schema_rowid = add_schema_row(pager, self.schema, &row)?;
+        self.triggers
+            .insert(name.to_ascii_lowercase(), schema_rowid);
+        Ok(())
+    }
+
+    /// Forgets a trigger. One that was never stored, like a TEMP trigger,
+    /// is not an error.
+    pub fn drop_trigger(&mut self, name: &str) -> Result<()> {
+        self.save();
+        if let Some(schema_rowid) = self.triggers.remove(&name.to_ascii_lowercase()) {
             self.schema.delete(self.pager.get_mut(), schema_rowid)?;
         }
         Ok(())
