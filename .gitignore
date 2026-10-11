@@ -1,6 +1,10 @@
 /target
-/sqllogictest/test/
-node_modules/
+/sqllogictest/test
+node_modules
 /web/dist/
 /web/src/generated/
 .DS_Store
+
+# Build output and downloads live in *.nosync so iCloud skips them; the
+# plain names are symlinks to them.
+*.nosync
