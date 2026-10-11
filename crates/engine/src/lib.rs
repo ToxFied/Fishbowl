@@ -8,6 +8,11 @@
 //! 3. **Execute** the plan, pulling rows through each step ([`exec`]).
 //! 4. **Store** rows in B+trees on 4 KiB pages ([`storage`]), in a file or in
 //!    memory, keeping each table's indexes in step ([`write`]).
+//!
+//! Every statement runs inside a transaction. `BEGIN` opens one that lasts
+//! until `COMMIT` or `ROLLBACK`; outside one, each statement is its own
+//! transaction and commits as it ends, as in SQLite. A commit is durable
+//! once the write-ahead log is synced ([`storage::wal`]).
 
 pub mod access;
 pub mod catalog;
@@ -21,18 +26,20 @@ pub mod value;
 pub mod write;
 
 use serde::Serialize;
+use sqlparser::ast;
 use sqlparser::dialect::SQLiteDialect;
 use sqlparser::parser::Parser;
 
 pub use error::{Error, Result};
 pub use plan::PlanProfile;
+pub use storage::{Options, Recovery};
 pub use value::Value;
 
 use catalog::{Catalog, TableSchema};
 use exec::ExecContext;
 use plan::Plan;
 use storage::index::IndexKey;
-use storage::{IndexCursor, PageStore, Row, Storage, TableScan};
+use storage::{IndexCursor, LogStore, PageStore, Row, Storage, TableScan};
 use write::{OnConflict, TableWriter};
 
 /// What a statement produced.
@@ -49,6 +56,9 @@ pub enum StatementResult {
     Query(QueryResult),
     CreateIndex { index: String, table: String },
     DropIndex { index: String },
+    Begin,
+    Commit,
+    Rollback,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -76,6 +86,12 @@ pub struct Database {
     catalog: Catalog,
     storage: Storage,
     row_budget: Option<u64>,
+    /// Between `BEGIN` and `COMMIT` or `ROLLBACK`. Otherwise each statement
+    /// is its own transaction.
+    in_transaction: bool,
+    /// The catalog as of the last commit, saved before the first statement
+    /// since then that might change it, for rollback.
+    saved_catalog: Option<Catalog>,
 }
 
 impl Default for Database {
@@ -85,27 +101,42 @@ impl Default for Database {
 }
 
 impl Database {
-    /// A new, empty database held in memory.
+    /// A new, empty database held in memory. Its write-ahead log is in
+    /// memory too.
     pub fn new() -> Self {
         Database {
             catalog: Catalog::default(),
             storage: Storage::memory(),
             row_budget: None,
+            in_transaction: false,
+            saved_catalog: None,
         }
     }
 
-    /// Opens a database file, creating it if it does not exist. Every
-    /// statement that changes data is written to the file before it returns.
+    /// Opens a database file, creating it if it does not exist. Its
+    /// write-ahead log is the file of the same name with `-wal` added.
+    /// Opening recovers every committed transaction the log holds. A
+    /// transaction is durable once its `COMMIT` (or, outside `BEGIN`, its
+    /// statement) returns `Ok`.
     #[cfg(not(target_arch = "wasm32"))]
     pub fn open(path: impl AsRef<std::path::Path>) -> Result<Self> {
-        let store = storage::store::FileStore::open(path.as_ref())?;
-        Self::with_store(Box::new(store))
+        let path = path.as_ref();
+        let mut log_path = path.as_os_str().to_owned();
+        log_path.push("-wal");
+        let store = storage::store::FileStore::open(path)?;
+        let log = storage::store::FileLog::open(std::path::Path::new(&log_path))?;
+        Self::with_stores(Box::new(store), Box::new(log), Options::default())
     }
 
-    /// Opens a database on any page store, rebuilding the catalog from the
-    /// `CREATE TABLE`, `CREATE INDEX` and `CREATE VIEW` statements stored in it.
-    pub fn with_store(store: Box<dyn PageStore>) -> Result<Self> {
-        let (storage, statements) = Storage::open(store)?;
+    /// Opens a database on any page store and log, recovering what the log
+    /// holds, then rebuilding the catalog from the `CREATE TABLE`, `CREATE
+    /// INDEX` and `CREATE VIEW` statements stored in the database.
+    pub fn with_stores(
+        store: Box<dyn PageStore>,
+        log: Box<dyn LogStore>,
+        options: Options,
+    ) -> Result<Self> {
+        let (storage, statements) = Storage::open(store, log, options)?;
         let mut catalog = Catalog::default();
         for sql in statements {
             for stmt in parse(&sql)? {
@@ -121,7 +152,25 @@ impl Database {
             catalog,
             storage,
             row_budget: None,
+            in_transaction: false,
+            saved_catalog: None,
         })
+    }
+
+    /// Whether a `BEGIN` is waiting for its `COMMIT` or `ROLLBACK`.
+    pub fn in_transaction(&self) -> bool {
+        self.in_transaction
+    }
+
+    /// What recovery found in the log when the database was opened.
+    pub fn recovery(&self) -> Recovery {
+        self.storage.recovery()
+    }
+
+    /// Copies the write-ahead log into the database file and empties it.
+    /// This also happens on its own once the log holds 1000 pages.
+    pub fn checkpoint(&mut self) -> Result<()> {
+        self.storage.checkpoint()
     }
 
     /// Caps how many rows one statement may process. `None` means no cap.
@@ -175,7 +224,92 @@ impl Database {
             .collect()
     }
 
-    fn execute_statement(&mut self, stmt: &sqlparser::ast::Statement) -> Result<StatementResult> {
+    /// Runs one statement inside a transaction: the one `BEGIN` opened, or
+    /// else one of its own that commits as the statement ends.
+    fn execute_statement(&mut self, stmt: &ast::Statement) -> Result<StatementResult> {
+        let active = self.in_transaction;
+        match stmt {
+            ast::Statement::StartTransaction {
+                modes,
+                statements,
+                exception: None,
+                has_end_keyword: false,
+                ..
+            } if modes.is_empty() && statements.is_empty() => {
+                if active {
+                    return Err(Error::Runtime(
+                        "cannot start a transaction within a transaction".into(),
+                    ));
+                }
+                self.in_transaction = true;
+                return Ok(StatementResult::Begin);
+            }
+            // `END` is another name for `COMMIT`.
+            ast::Statement::Commit { chain: false, .. } => {
+                if !active {
+                    return Err(Error::Runtime(
+                        "cannot commit - no transaction is active".into(),
+                    ));
+                }
+                self.commit()?;
+                return Ok(StatementResult::Commit);
+            }
+            ast::Statement::Rollback {
+                chain: false,
+                savepoint: None,
+            } => {
+                if !active {
+                    return Err(Error::Runtime(
+                        "cannot rollback - no transaction is active".into(),
+                    ));
+                }
+                self.rollback();
+                return Ok(StatementResult::Rollback);
+            }
+            _ => {}
+        }
+        if !matches!(stmt, ast::Statement::Query(_)) && self.saved_catalog.is_none() {
+            self.saved_catalog = Some(self.catalog.clone());
+        }
+        // A failed statement has already undone itself, except for what
+        // `OR FAIL` keeps, so the transaction carries on. Outside `BEGIN`
+        // it then commits, like SQLite's autocommit.
+        let result = self.run_statement(stmt);
+        match &result {
+            Err(e) if ends_transaction(stmt, e) => self.rollback(),
+            _ if !active => self.commit()?,
+            _ => {}
+        }
+        result
+    }
+
+    /// Ends the transaction, keeping its changes. If the commit fails, the
+    /// changes are dropped from memory; whether they reached the disk is
+    /// unknown until the database is reopened.
+    fn commit(&mut self) -> Result<()> {
+        self.in_transaction = false;
+        match self.storage.commit() {
+            Ok(()) => {
+                self.saved_catalog = None;
+                Ok(())
+            }
+            Err(e) => {
+                self.rollback();
+                Err(e)
+            }
+        }
+    }
+
+    /// Ends the transaction, forgetting its changes.
+    fn rollback(&mut self) {
+        self.in_transaction = false;
+        self.storage.rollback();
+        if let Some(catalog) = self.saved_catalog.take() {
+            self.catalog = catalog;
+        }
+    }
+
+    fn run_statement(&mut self, stmt: &ast::Statement) -> Result<StatementResult> {
         let result = match planner::plan_statement(&self.catalog, stmt)? {
             Plan::CreateTable {
                 schema,
@@ -314,8 +448,6 @@ impl Database {
                 }));
             }
         };
-        // Every change reaches the page store before the statement returns.
-        self.storage.flush()?;
         Ok(result)
     }
 
@@ -415,6 +547,7 @@ impl Database {
     /// share a key in a unique index.
     pub fn integrity_check(&self) -> Result<()> {
         let broken = |what: String| Err(Error::Storage(format!("integrity check: {what}")));
+        self.storage.check_pages()?;
         for schema in self.catalog.tables() {
             self.storage.check_trees(&schema.name)?;
             let mut rows = Vec::new();
@@ -490,6 +623,20 @@ impl Database {
     }
 }
 
-fn parse(sql: &str) -> Result<Vec<sqlparser::ast::Statement>> {
+/// Errors that end the whole transaction rather than just the statement, as
+/// in SQLite: a broken constraint under `INSERT OR ROLLBACK`, and a storage
+/// error, after which the statement's own undo cannot be trusted.
+fn ends_transaction(stmt: &ast::Statement, error: &Error) -> bool {
+    match error {
+        Error::Storage(_) => true,
+        Error::Constraint(_) => matches!(
+            stmt,
+            ast::Statement::Insert(insert) if insert.or == Some(ast::SqliteOnConflict::Rollback)
+        ),
+        _ => false,
+    }
+}
+
+fn parse(sql: &str) -> Result<Vec<ast::Statement>> {
     Parser::parse_sql(&SQLiteDialect {}, sql).map_err(|e| Error::Parse(e.to_string()))
 }

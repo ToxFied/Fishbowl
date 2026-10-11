@@ -22,6 +22,10 @@ function summary(entry: Entry): string {
       return `created ${result.index}`;
     case "drop_index":
       return `dropped ${result.index}`;
+    case "begin":
+    case "commit":
+    case "rollback":
+      return result.kind;
     case "query":
       return `${result.rows.length} ${result.rows.length === 1 ? "row" : "rows"}`;
   }

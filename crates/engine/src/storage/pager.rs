@@ -3,21 +3,51 @@
 //! Reading the store for every access would be slow on a disk, so the pager
 //! keeps a small buffer pool: a fixed number of frames, each holding one page.
 //! A page that is already in a frame is a hit. Otherwise it is a miss: the
-//! least recently used frame is emptied (written back first if it was
-//! changed) and the page is read into it.
+//! least recently used unchanged frame is emptied and the page is read into
+//! it, from the write-ahead log if the log has a copy, else from the
+//! database file.
 //!
-//! Changed pages stay in memory until [`Pager::flush`] or until they are
-//! evicted. The pager also tracks which pages are free, through a linked list
-//! that starts in the header on page 0.
+//! Changed pages stay in memory until [`Pager::commit`] hands them all to the
+//! log at once, or [`Pager::rollback`] drops them. A changed page is never
+//! evicted: if every frame holds one, the pool grows past its size until the
+//! transaction ends. That keeps uncommitted data out of both files, so
+//! recovery never has to undo anything (the textbook name is "no steal").
+//! The price is that one transaction's changes must fit in memory.
+//!
+//! The pager also tracks which pages are free, through a linked list that
+//! starts in the header on page 0.
 
+use std::cmp::Reverse;
 use std::collections::HashMap;
+use std::io;
 
 use super::page::{self, Header, PAGE_SIZE, Page, PageId};
-use super::store::PageStore;
+use super::store::{LogStore, PageStore};
+use super::wal::{Recovery, Wal};
 use crate::error::{Error, Result};
 
 /// Frames in the default buffer pool: 64 pages, 256 KiB.
 pub const DEFAULT_POOL_PAGES: usize = 64;
+
+/// Tuning knobs. The defaults suit real use; tests shrink them so that
+/// eviction and checkpoints happen often.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct Options {
+    /// Frames in the buffer pool.
+    pub pool_pages: usize,
+    /// Checkpoint once the log holds this many frames. SQLite's default is
+    /// 1000.
+    pub checkpoint_frames: u64,
+}
+
+impl Default for Options {
+    fn default() -> Self {
+        Options {
+            pool_pages: DEFAULT_POOL_PAGES,
+            checkpoint_frames: 1000,
+        }
+    }
+}
 
 /// How the buffer pool has been doing. Useful for tests and for the UI.
 #[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
@@ -30,49 +60,62 @@ pub struct PoolStats {
 struct Frame {
     id: PageId,
     data: Box<Page>,
-    /// Changed since it was read, so it must be written before it is dropped.
+    /// Changed since the last commit. Such a frame is never evicted.
     dirty: bool,
     last_used: u64,
 }
 
 pub struct Pager {
-    store: Box<dyn PageStore>,
+    wal: Wal,
     frames: Vec<Frame>,
     /// Which frame holds each cached page.
     lookup: HashMap<PageId, usize>,
     capacity: usize,
+    checkpoint_frames: u64,
     /// Ticks once per page access, to find the least recently used frame.
     clock: u64,
     page_count: u32,
     header: Header,
     header_dirty: bool,
+    /// The header as of the last commit, for rollback.
+    committed_header: Header,
+    /// Set by an I/O error while writing. After one, nobody knows what the
+    /// files hold until recovery reads them, so every later call fails.
+    failed: Option<String>,
+    recovery: Recovery,
     stats: PoolStats,
 }
 
 impl Pager {
-    /// Opens a store. An empty store becomes a new database with just a
-    /// header page.
-    pub fn open(mut store: Box<dyn PageStore>, capacity: usize) -> Result<Pager> {
-        let (header, page_count, header_dirty) = if store.page_count() == 0 {
-            let empty = Header {
-                first_free: 0,
-                free_count: 0,
-            };
-            (empty, 1, true)
+    /// Opens a database file and its log, recovering any transactions the
+    /// log holds. An empty store becomes a new database with just a header
+    /// page, which the first commit writes.
+    pub fn open(
+        store: Box<dyn PageStore>,
+        log: Box<dyn LogStore>,
+        options: Options,
+    ) -> Result<Pager> {
+        let (mut wal, recovery) = Wal::open(store, log)?;
+        let (header, page_count, header_dirty) = if wal.page_count() == 0 {
+            (Header::default(), 1, true)
         } else {
             let mut page = Box::new([0; PAGE_SIZE]);
-            store.read_page(0, &mut page)?;
-            (Header::decode(&page)?, store.page_count(), false)
+            wal.read_page(0, &mut page)?;
+            (Header::decode(&page)?, wal.page_count(), false)
         };
         Ok(Pager {
-            store,
+            wal,
             frames: Vec::new(),
             lookup: HashMap::new(),
-            capacity: capacity.max(1),
+            capacity: options.pool_pages.max(1),
+            checkpoint_frames: options.checkpoint_frames.max(1),
             clock: 0,
             page_count,
             header,
             header_dirty,
+            committed_header: header,
+            failed: None,
+            recovery,
             stats: PoolStats::default(),
         })
     }
@@ -88,6 +131,16 @@ impl Pager {
 
     pub fn stats(&self) -> PoolStats {
         self.stats
+    }
+
+    /// What recovery found when the database was opened.
+    pub fn recovery(&self) -> Recovery {
+        self.recovery
+    }
+
+    /// Frames in the log that a checkpoint has not copied yet.
+    pub fn log_frames(&self) -> u64 {
+        self.wal.frames()
     }
 
     /// Reads a page through the buffer pool.
@@ -148,32 +201,112 @@ impl Pager {
         Ok(pages)
     }
 
-    /// Writes every changed page and the header to the store, then syncs.
-    pub fn flush(&mut self) -> Result<()> {
-        for frame in &mut self.frames {
-            if frame.dirty {
-                self.store.write_page(frame.id, &frame.data)?;
-                frame.dirty = false;
-            }
-        }
-        if self.header_dirty {
+    /// Makes every change since the last commit durable, as one
+    /// transaction: each changed page, and the header if it changed, goes to
+    /// the log, and the log is synced. Then, if the log has grown long
+    /// enough, checkpoints.
+    ///
+    /// A failed checkpoint does not fail the commit, which is already
+    /// durable, but it does stop the pager until the database is reopened.
+    pub fn commit(&mut self) -> Result<()> {
+        self.usable()?;
+        let header = self.header_dirty.then(|| {
             let mut page = Box::new([0; PAGE_SIZE]);
             self.header.encode(&mut page);
-            self.store.write_page(0, &page)?;
-            self.header_dirty = false;
+            page
+        });
+        let mut pages: Vec<(PageId, &Page)> = header.iter().map(|page| (0, &**page)).collect();
+        pages.extend(
+            self.frames
+                .iter()
+                .filter(|f| f.dirty)
+                .map(|f| (f.id, &*f.data)),
+        );
+        if pages.is_empty() {
+            return Ok(());
         }
-        self.store.sync()?;
+        pages.sort_unstable_by_key(|&(id, _)| id);
+        let committed = self.wal.commit(&pages, self.page_count);
+        drop(pages);
+        if let Err(e) = committed {
+            return Err(self.fail(e));
+        }
+        for frame in &mut self.frames {
+            frame.dirty = false;
+        }
+        self.header_dirty = false;
+        self.committed_header = self.header;
+        self.trim();
+        if self.wal.frames() >= self.checkpoint_frames
+            && let Err(e) = self.wal.checkpoint()
+        {
+            self.fail(e);
+        }
         Ok(())
     }
 
-    /// Hands back the store, for reopening it in tests. Call
-    /// [`Pager::flush`] first, or unflushed changes are lost.
-    pub fn into_store(self) -> Box<dyn PageStore> {
-        self.store
+    /// Forgets every change since the last commit.
+    pub fn rollback(&mut self) {
+        self.frames.retain(|f| !f.dirty);
+        self.reindex();
+        let committed = self.wal.page_count();
+        self.page_count = committed.max(1);
+        self.header = self.committed_header;
+        // A database that was never committed still needs its header.
+        self.header_dirty = committed == 0;
+        self.trim();
+    }
+
+    /// Copies the log into the database file and empties it. Changes not
+    /// yet committed stay in memory, untouched.
+    pub fn checkpoint(&mut self) -> Result<()> {
+        self.usable()?;
+        self.wal.checkpoint().map_err(|e| self.fail(e))
+    }
+
+    /// Hands back the files, for reopening them in tests. Changes not yet
+    /// committed are lost, as in a crash.
+    pub fn into_stores(self) -> (Box<dyn PageStore>, Box<dyn LogStore>) {
+        self.wal.into_stores()
+    }
+
+    fn usable(&self) -> Result<()> {
+        match &self.failed {
+            Some(message) => Err(Error::Storage(message.clone())),
+            None => Ok(()),
+        }
+    }
+
+    fn fail(&mut self, e: io::Error) -> Error {
+        let message = format!("{e}; reopen the database to recover");
+        self.failed = Some(message.clone());
+        Error::Storage(message)
+    }
+
+    /// Shrinks a pool that grew during a big transaction back to its size,
+    /// keeping the most recently used pages. Only runs when no page is
+    /// changed.
+    fn trim(&mut self) {
+        if self.frames.len() > self.capacity {
+            self.frames.sort_unstable_by_key(|f| Reverse(f.last_used));
+            self.stats.evictions += (self.frames.len() - self.capacity) as u64;
+            self.frames.truncate(self.capacity);
+            self.reindex();
+        }
+    }
+
+    fn reindex(&mut self) {
+        self.lookup = self
+            .frames
+            .iter()
+            .enumerate()
+            .map(|(i, f)| (f.id, i))
+            .collect();
     }
 
     /// The frame holding page `id`, reading it in on a miss when `load` is set.
     fn frame(&mut self, id: PageId, load: bool) -> Result<usize> {
+        self.usable()?;
         // Page 0 is the header, which the pager keeps decoded on its own.
         if id == 0 || id >= self.page_count {
             return Err(Error::Storage(format!("page {id} does not exist")));
@@ -187,7 +320,7 @@ impl Pager {
         self.stats.misses += 1;
         let mut data = Box::new([0; PAGE_SIZE]);
         if load {
-            self.store.read_page(id, &mut data)?;
+            self.wal.read_page(id, &mut data)?;
         }
         let frame = Frame {
             id,
@@ -195,21 +328,26 @@ impl Pager {
             dirty: false,
             last_used: self.clock,
         };
-        let index = if self.frames.len() < self.capacity {
-            self.frames.push(frame);
-            self.frames.len() - 1
-        } else {
-            let victim = (0..self.frames.len())
-                .min_by_key(|&i| self.frames[i].last_used)
-                .expect("the pool has at least one frame");
-            let old = &self.frames[victim];
-            if old.dirty {
-                self.store.write_page(old.id, &old.data)?;
+        // Reuse the least recently used unchanged frame once the pool is
+        // full. If every frame is changed, grow instead.
+        let victim = (self.frames.len() >= self.capacity)
+            .then(|| {
+                (0..self.frames.len())
+                    .filter(|&i| !self.frames[i].dirty)
+                    .min_by_key(|&i| self.frames[i].last_used)
+            })
+            .flatten();
+        let index = match victim {
+            Some(victim) => {
+                self.lookup.remove(&self.frames[victim].id);
+                self.stats.evictions += 1;
+                self.frames[victim] = frame;
+                victim
             }
-            self.lookup.remove(&old.id);
-            self.stats.evictions += 1;
-            self.frames[victim] = frame;
-            victim
+            None => {
+                self.frames.push(frame);
+                self.frames.len() - 1
+            }
         };
         self.lookup.insert(id, index);
         Ok(index)
@@ -219,28 +357,59 @@ impl Pager {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::storage::store::MemoryStore;
+    use crate::storage::store::{MemoryLog, MemoryStore};
 
     fn pager(capacity: usize) -> Pager {
-        Pager::open(Box::new(MemoryStore::default()), capacity).unwrap()
+        let options = Options {
+            pool_pages: capacity,
+            ..Options::default()
+        };
+        Pager::open(
+            Box::new(MemoryStore::default()),
+            Box::new(MemoryLog::default()),
+            options,
+        )
+        .unwrap()
     }
 
     #[test]
-    fn evicted_pages_are_written_back_and_read_again() {
+    fn evicted_pages_are_read_again_after_a_commit() {
         let mut pager = pager(2);
         let ids: Vec<PageId> = (0..5).map(|_| pager.allocate().unwrap()).collect();
         for &id in &ids {
             pager.overwrite(id).unwrap()[100] = id as u8;
         }
+        // Changed pages are never evicted, so the pool grew.
+        assert_eq!(pager.stats().evictions, 0);
+        pager.commit().unwrap();
         for &id in &ids {
             assert_eq!(pager.page(id).unwrap()[100], id as u8);
         }
         assert!(pager.stats().evictions >= 3);
 
-        pager.flush().unwrap();
-        let mut reopened = Pager::open(pager.into_store(), 2).unwrap();
+        let (store, log) = pager.into_stores();
+        let mut reopened = Pager::open(store, log, Options::default()).unwrap();
+        assert_eq!(reopened.recovery().transactions, 1);
         assert_eq!(reopened.page_count(), 6);
         assert_eq!(reopened.page(ids[4]).unwrap()[100], ids[4] as u8);
+    }
+
+    #[test]
+    fn rollback_forgets_pages_the_free_list_and_new_pages() {
+        let mut pager = pager(4);
+        let a = pager.allocate().unwrap();
+        pager.overwrite(a).unwrap()[0] = 7;
+        pager.commit().unwrap();
+
+        pager.overwrite(a).unwrap()[0] = 8;
+        let b = pager.allocate().unwrap();
+        pager.free(a).unwrap();
+        pager.rollback();
+        assert_eq!(pager.page(a).unwrap()[0], 7);
+        assert_eq!(pager.page_count(), 2);
+        assert!(pager.page(b).is_err());
+        assert_eq!(pager.free_count(), 0);
+        assert_eq!(pager.allocate().unwrap(), b);
     }
 
     #[test]

@@ -23,7 +23,8 @@ use crate::storage::{IndexCursor, Row, Storage, TableScan};
 use crate::value::Value;
 
 /// What an INSERT does when a row breaks a constraint, as in SQLite's
-/// `INSERT OR <rule>`. Without transactions (M6), `OR ROLLBACK` is `Abort`.
+/// `INSERT OR <rule>`. `OR ROLLBACK` is `Abort` here; ending the transaction
+/// as well is up to `Database`.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum OnConflict {
     /// Fail the statement and undo all of its changes. The default.

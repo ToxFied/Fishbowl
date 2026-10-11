@@ -98,7 +98,8 @@ mod tests {
              CREATE TABLE k(id INTEGER PRIMARY KEY, code TEXT UNIQUE); \
              CREATE INDEX t_a ON t(a DESC); SELECT a FROM t WHERE a = 3; \
              CREATE INDEX spare ON t(a); DROP INDEX spare; \
-             CREATE VIEW v AS SELECT a FROM t; DROP VIEW v; SELECT b FROM t",
+             CREATE VIEW v AS SELECT a FROM t; DROP VIEW v; \
+             BEGIN; INSERT INTO t VALUES (9); ROLLBACK; BEGIN; COMMIT; SELECT b FROM t",
         ))
         .unwrap();
 
@@ -153,8 +154,12 @@ mod tests {
             json!({"kind": "drop_view", "view": "v"})
         );
 
-        assert_eq!(statements[14]["status"], "error");
-        assert_eq!(statements[14]["message"], "no such column: b");
+        assert_eq!(statements[14]["result"], json!({"kind": "begin"}));
+        assert_eq!(statements[16]["result"], json!({"kind": "rollback"}));
+        assert_eq!(statements[18]["result"], json!({"kind": "commit"}));
+
+        assert_eq!(statements[19]["status"], "error");
+        assert_eq!(statements[19]["message"], "no such column: b");
         // Tables come sorted by name.
         let tables = out["tables"].as_array().unwrap();
         assert_eq!(tables.len(), 2);

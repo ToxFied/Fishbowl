@@ -20,8 +20,8 @@ pass rate is the project's headline claim.
    │ execute    exec.rs      │  pull rows through the plan, one at a time,
    │                         │  counting rows per step
    ├─────────────────────────┤
-   │ store      storage/     │  pager -> B+trees on 4 KiB pages
-   │                         │  later: write-ahead log
+   │ store      storage/     │  pager -> B+trees on 4 KiB pages,
+   │                         │  write-ahead log, recovery
    └────────────┬────────────┘
                 │
      ┌──────────┼───────────────┬──────────────────┐
@@ -54,8 +54,10 @@ pass rate is the project's headline claim.
 | `access.rs` | Access paths: when to use an index, and the IndexScan that reads one |
 | `exec.rs` | Iterator-model executor with per-step row counts and a row budget |
 | `write.rs` | Row writes: rowids, index maintenance, constraint checks, undo on failure |
-| `storage/` | Page store (file or memory), pager and buffer pool, row encoding, B+trees for tables and indexes, schema table |
-| `lib.rs` | `Database`: runs statements, `integrity_check` |
+| `storage/` | Page store and log store (file or memory), pager and buffer pool, row encoding, B+trees for tables and indexes, schema table |
+| `storage/wal.rs` | Write-ahead log: checksummed frames, commit, checkpoint, recovery |
+| `storage/fault.rs` | Simulated disk that loses power on purpose, for the crash test |
+| `lib.rs` | `Database`: runs statements in transactions, autocommit, `integrity_check` |
 
 ## Key design choices
 
@@ -71,7 +73,11 @@ pass rate is the project's headline claim.
 | One B-tree implementation, generic over its key (M4) | Tables use the rowid, indexes use (values, rowid). Splits, merges and their property tests serve both. |
 | IndexScan keeps the Filter above it (M4) | The index only narrows rows down and the Filter decides them, so a loose bound costs speed, never correctness. |
 | Constraints checked row by row with an undo log (M4) | Matches SQLite's order of checks exactly, and a failed statement still leaves no trace. |
-| Write-ahead log for crash safety (M6) | Recovery is "replay committed frames", which is simple to reason about and to animate. |
+| Write-ahead log for crash safety (M6) | Recovery is "replay committed frames", which is simple to reason about and to animate. SQLite's WAL mode, minus its multi-process index. |
+| No steal: uncommitted pages stay in memory (M6) | Nothing uncommitted ever reaches a file, so recovery only redoes. The cost: one transaction's changes must fit in RAM. |
+| Truncate the log after each checkpoint (M6) | Old frames can never be mistaken for new ones, with no extra header sync. |
+| After a write-path I/O error, the handle stops until reopened (M6) | What reached the disk is unknown, and retrying a failed `fsync` can lie. Recovery reads the truth. |
+| Crash test on a simulated disk, checked by planted bugs (M6) | Every write point, torn writes and lost unsynced writes, in seconds. Planting bugs shows what the test can and cannot see. |
 | Storage behind a page-store trait (M3) | A real file on native builds, memory in the browser, a fault-injecting store in crash tests. |
 | JSON across the WebAssembly boundary | A two-method API. A Rust test pins the shape that `web/src/engine.ts` relies on. |
 | Own sqllogictest evaluator on the crate's parser | Formatting, sorting and hashing rules from SQLite's reference runner live in one tested file. |
@@ -95,6 +101,7 @@ with a pinned 29-file corpus. Baseline: **11.90%** of records.
 After M1 and M3: **31.06%**. After M4: **84.31%**. After M2 on top of M4:
 **99.89%**, with 4 wrong results left (the `1<<63` rows in
 `slt_lang_aggfunc.test`: `<<` is not supported, so those rows are missing).
+M6 left the report unchanged.
 
 ### M1. Query breadth
 
@@ -150,13 +157,23 @@ index, join ordering (replacing M2's connect-the-conditions rule), and index
 lookups inside a join. The planner keeps the rejected plans and their costs so
 the UI can show the chosen plan beside the alternatives. Depends on M2 and M4.
 
-### M6. Transactions and crash recovery
+### M6. Transactions and crash recovery (done)
 
 `BEGIN`, `COMMIT`, `ROLLBACK`, a write-ahead log with checksummed frames,
 checkpointing, and recovery on open. A crash-test harness that cuts power at
 every write in a workload (through a fault-injecting page store) and checks that
 each committed transaction survives and no uncommitted one appears. Depends on
 M3.
+
+Done. Autocommit as in SQLite, `INSERT OR ROLLBACK` ending the transaction,
+`Database::checkpoint` and `Database::recovery`. Durability is defined in
+[durability](learn/durability.md): a transaction is durable once `COMMIT`
+returns. The crash test cuts power at 178 points, rebooting each crashed disk
+in several ways (unsynced writes lost, kept, torn, random), and runs 7,189
+recoveries, 3,370 of them after a second crash during recovery. Eight bugs
+planted in the log code checked the test itself; see
+[the crash test](learn/crash-harness.md). The differential test against
+`sqlite3` now runs transactions too.
 
 ### M7. Visual depth
 
@@ -205,9 +222,18 @@ Shared seams to coordinate:
   column is rejected with "not supported yet".
 - `AUTOINCREMENT`, `WITHOUT ROWID`, partial and expression indexes, `UPDATE OR`
   and `ON CONFLICT` clauses are rejected.
-- Changes are written to disk at the end of each statement, but a crash mid-write
-  can leave a mix of old and new pages until the write-ahead log lands (M6).
-- The browser build is about 700 KB gzipped, mostly `sqlparser`. `wasm-opt` and
+- One transaction's changed pages must fit in memory, since they stay there
+  until it commits.
+- One connection per database. There is no file locking, so two processes
+  using one file at once would damage it.
+- Savepoints (`SAVEPOINT`, `RELEASE`, `ROLLBACK TO`) are rejected.
+- A failed statement inside a transaction always undoes itself. SQLite keeps
+  the partial work of a failed `INSERT OR REPLACE`, `OR IGNORE`, `OR FAIL` or
+  `OR ROLLBACK` there, because it skips its statement journal for them.
+- A database is not checkpointed when it is closed. Its log stays next to the
+  file until the next open recovers it, so copying the `.db` file alone can
+  miss recent commits.
+- The browser build is about 910 KB gzipped, mostly `sqlparser`. `wasm-opt` and
   trimming dialects are possible later.
 - A join reads its right side in full for every left row (from memory, after
   Materialize). It does not look matching rows up by index yet; that is M5.

@@ -77,7 +77,7 @@ pub const MAX_INLINE_PAYLOAD: usize = 1000;
 pub const OVERFLOW_CAPACITY: usize = PAGE_SIZE - NODE_HEADER;
 
 /// What page 0 records about the whole file.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
 pub struct Header {
     pub first_free: PageId,
     pub free_count: u32,

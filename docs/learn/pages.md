@@ -73,8 +73,12 @@ two implementations:
   system, so the web UI uses this one. The tests use it too.
 
 Everything above the store, from the buffer pool to the B-trees, is the same
-code in both cases. A later milestone adds a third store that fails on purpose
-partway through a write, to test crash recovery.
+code in both cases. A third store, `SimDisk`, loses power on purpose, for
+the [crash test](crash-harness.md).
+
+Since M6, a database also has a [write-ahead log](write-ahead-log.md), kept
+next to the file (`fish.db-wal` for `fish.db`) or in memory. Commits go to the
+log, and checkpoints copy pages from it into the file.
 
 Code: `crates/engine/src/storage/page.rs` (every page layout) and
 `crates/engine/src/storage/store.rs` (the stores).

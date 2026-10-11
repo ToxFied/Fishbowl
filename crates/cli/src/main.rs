@@ -87,6 +87,9 @@ fn run(db: &mut Database, sql: &str) -> ExitCode {
                 println!("created index {index} on {table}")
             }
             Ok(StatementResult::DropIndex { index }) => println!("dropped index {index}"),
+            Ok(StatementResult::Begin) => println!("began a transaction"),
+            Ok(StatementResult::Commit) => println!("committed"),
+            Ok(StatementResult::Rollback) => println!("rolled back"),
             Ok(StatementResult::Query(result)) => print_query(&result),
             Err(e) => {
                 eprintln!("error: {e}\n  in: {}", entry.sql);

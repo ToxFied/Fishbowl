@@ -3,15 +3,17 @@
 //! proptest generates long random sequences of inserts, replacements and
 //! deletes, runs each one on the B+tree and on a `BTreeMap`, and fails if the
 //! two ever disagree. When a sequence fails, proptest shrinks it to the
-//! shortest one that still fails. After the sequence, the tree's structure
-//! is checked, every page is accounted for, and the file is reopened from its
-//! bytes to prove that nothing lived only in the buffer pool.
+//! shortest one that still fails. Commits and rollbacks are mixed in, so a
+//! rollback must bring back the tree as it was at the last commit. After the
+//! sequence, the tree's structure is checked, every page is accounted for,
+//! and the files are reopened from their bytes to prove that nothing
+//! committed lived only in the buffer pool.
 
 use std::collections::{BTreeMap, BTreeSet};
 
-use fishbowl::storage::MemoryStore;
 use fishbowl::storage::btree::{BTree, Cursor};
 use fishbowl::storage::pager::Pager;
+use fishbowl::storage::{MemoryLog, MemoryStore, Options};
 use proptest::prelude::*;
 
 #[derive(Debug, Clone)]
@@ -20,6 +22,8 @@ enum Op {
     Insert(i64, usize),
     Delete(i64),
     Get(i64),
+    Commit,
+    Rollback,
 }
 
 /// Bytes that depend on the key and on when they were written, so a stale or
@@ -53,11 +57,20 @@ fn op() -> impl Strategy<Value = Op> {
         5 => (key(), size()).prop_map(|(k, n)| Op::Insert(k, n)),
         3 => key().prop_map(Op::Delete),
         1 => key().prop_map(Op::Get),
+        1 => Just(Op::Commit),
+        1 => Just(Op::Rollback),
     ]
 }
 
+/// A pager whose log is checkpointed every few frames, so pages are read
+/// back from the log and from the database file.
 fn new_pager(pool: usize) -> Pager {
-    Pager::open(Box::new(MemoryStore::default()), pool).unwrap()
+    let options = Options {
+        pool_pages: pool,
+        checkpoint_frames: 16,
+    };
+    let store = Box::new(MemoryStore::default());
+    Pager::open(store, Box::new(MemoryLog::default()), options).unwrap()
 }
 
 fn scan(pager: &mut Pager, tree: BTree) -> Vec<(i64, Vec<u8>)> {
@@ -86,7 +99,9 @@ fn check_pages(pager: &mut Pager, tree: BTree) -> usize {
 fn run(ops: &[Op], pool: usize) {
     let mut pager = new_pager(pool);
     let tree = BTree::create(&mut pager).unwrap();
+    pager.commit().unwrap();
     let mut model = BTreeMap::new();
+    let mut committed = model.clone();
     for (version, op) in ops.iter().enumerate() {
         match *op {
             Op::Insert(k, len) => {
@@ -101,6 +116,14 @@ fn run(ops: &[Op], pool: usize) {
             Op::Get(k) => {
                 assert_eq!(tree.get(&mut pager, k).unwrap().as_ref(), model.get(&k));
             }
+            Op::Commit => {
+                pager.commit().unwrap();
+                committed = model.clone();
+            }
+            Op::Rollback => {
+                pager.rollback();
+                model = committed.clone();
+            }
         }
     }
     let expected: Vec<(i64, Vec<u8>)> = model.into_iter().collect();
@@ -112,9 +135,10 @@ fn run(ops: &[Op], pool: usize) {
     );
     check_pages(&mut pager, tree);
 
-    // Everything must survive a trip through the store's bytes.
-    pager.flush().unwrap();
-    let mut reopened = Pager::open(pager.into_store(), 8).unwrap();
+    // Everything committed must survive a trip through the files' bytes.
+    pager.commit().unwrap();
+    let (store, log) = pager.into_stores();
+    let mut reopened = Pager::open(store, log, Options::default()).unwrap();
     assert_eq!(scan(&mut reopened, tree), expected);
     check_pages(&mut reopened, tree);
 }
@@ -122,7 +146,8 @@ fn run(ops: &[Op], pool: usize) {
 proptest! {
     #![proptest_config(ProptestConfig::with_cases(256))]
 
-    /// A pool of three frames forces constant eviction and write-back.
+    /// A pool of three frames forces constant eviction between commits,
+    /// and growth past three frames within one.
     #[test]
     fn matches_btreemap_with_a_tiny_buffer_pool(ops in prop::collection::vec(op(), 0..1000)) {
         run(&ops, 3);

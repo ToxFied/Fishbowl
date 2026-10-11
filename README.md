@@ -31,8 +31,13 @@ results with `UNION`, `INTERSECT` and `EXCEPT`, and read views, along with
 sorting, grouping and aggregates. `INSERT`, `UPDATE` and `DELETE` write to
 B-trees on 4 KiB pages, `PRIMARY KEY`, `UNIQUE` and `CREATE INDEX` are enforced
 on every write, and a condition on an indexed column reads the index instead
-of the whole table, in joins too. Everything else is rejected with "not
-supported yet" rather than answered wrongly. What remains is mostly triggers
+of the whole table, in joins too. `BEGIN`, `COMMIT` and `ROLLBACK` group
+changes into transactions, which commit through a write-ahead log. A
+[crash test](docs/learn/crash-harness.md) cuts the power at each of the 178
+points where a workload writes to or syncs the disk, tears writes partway,
+and checks after 7,189 recoveries that every committed transaction is there
+and nothing else is. Everything else is rejected with "not supported yet" rather than
+answered wrongly. What remains is mostly triggers
 and SQL the parser does not accept.
 [`RESULTS.md`](sqllogictest/RESULTS.md) breaks the failures down by reason.
 
@@ -41,10 +46,10 @@ and SQL the parser does not accept.
 | Part | State |
 | --- | --- |
 | Parse, plan, execute pipeline | Working: joins, subqueries, compound SELECTs, views, sorting, grouping, aggregates |
-| Storage | Pager, buffer pool and B+tree tables on 4 KiB pages (M3). Not crash-safe until M6 |
+| Storage | Pager, buffer pool and B+tree tables on 4 KiB pages (M3) |
 | Indexes and constraints | `PRIMARY KEY`, `UNIQUE`, `CREATE INDEX`, IndexScan chosen by a simple rule (M4) |
 | Cost-based planner | Planned (M5) |
-| Transactions and crash recovery | Planned, write-ahead log (M6) |
+| Transactions and crash recovery | `BEGIN`/`COMMIT`/`ROLLBACK`, write-ahead log, checkpoints, recovery on open, crash test (M6) |
 | Browser UI | Plan tree, step-through, results, schema |
 | sqllogictest harness | Pinned corpus, self-tested, deterministic report |
 
@@ -81,6 +86,9 @@ Project name  [rows=1]
 # Browser UI at http://localhost:5173
 cargo install wasm-bindgen-cli --version 0.2.129
 cd web && pnpm install && pnpm dev
+
+# Crash test: prints how many crash points it tried
+cargo test -p fishbowl --test crash -- --nocapture
 
 # sqllogictest pass rate
 scripts/fetch-sqllogictest.sh

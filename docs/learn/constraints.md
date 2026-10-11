@@ -40,8 +40,9 @@ and 2 are already stored. The statement must still leave no trace.
 The writer keeps an **undo log**: one entry per change, with what is needed to
 reverse it ("inserted row 7", "deleted row 4, which held ..."). When the
 statement fails, it walks the log backwards and undoes each change, table and
-indexes together. When it succeeds, the log is thrown away. Milestone 6 brings
-transactions, which use the same idea on a larger scale.
+indexes together. When it succeeds, the log is thrown away. A
+[transaction](transactions.md) can then still roll back the whole statement
+along with the rest of its changes.
 
 Checking row by row, rather than all rows at the end, matters for UPDATE.
 `UPDATE t SET a = a + 1` on a UNIQUE column holding 1, 2 and 3 fails in SQLite:
@@ -62,8 +63,9 @@ Fishbowl follows the same rule.
 | `IGNORE` | skip this row, carry on with the next |
 | `REPLACE` | delete the rows it clashes with, then insert it |
 
-`REPLACE INTO` is short for `INSERT OR REPLACE INTO`. `ROLLBACK` acts like
-`ABORT` until there are transactions to roll back.
+`REPLACE INTO` is short for `INSERT OR REPLACE INTO`. `ROLLBACK` undoes the
+statement like `ABORT`, then rolls back the rest of the transaction too. Outside
+a transaction it is the same as `ABORT`.
 
 ## Checking the checks
 
