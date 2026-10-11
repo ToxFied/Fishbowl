@@ -15,11 +15,41 @@ export interface PlanProfile {
   children: PlanProfile[];
 }
 
+export type Row = SqlValue[];
+
+export interface TraceEvent {
+  /** The plan step's `id`. */
+  step: number;
+  /** out: passed the row on. drop: read it and threw it away.
+   * run: a subquery started for this outer row. reuse: it handed back its first answer. */
+  kind: "out" | "drop" | "run" | "reuse";
+  row: Row;
+  /** Set when a scan read the row from its table. */
+  rowid?: number;
+}
+
+export interface ScanRows {
+  step: number;
+  table: string;
+  row_count: number;
+  /** Every rowid in the table, in order. Empty for tables too big to draw. */
+  rowids: number[];
+  /** The rows, in the same order, for a table small enough to print. */
+  rows: Row[];
+}
+
+export interface Trace {
+  events: TraceEvent[];
+  truncated: boolean;
+  scans: ScanRows[];
+}
+
 export interface QueryResult {
   kind: "query";
   columns: string[];
-  rows: SqlValue[][];
+  rows: Row[];
   plan: PlanProfile;
+  trace?: Trace;
 }
 
 export type StatementResult =
@@ -66,18 +96,62 @@ export interface RunOutput {
   tables: TableInfo[];
 }
 
+export interface KeyInfo {
+  /** An index key's values. Empty for a table, whose key is the rowid. */
+  values: SqlValue[];
+  rowid: number;
+}
+
+export interface PageInfo {
+  id: number;
+  /** 0 for the root. */
+  level: number;
+  kind: "leaf" | "interior";
+  /** Bytes in use out of 4096. */
+  used: number;
+  keys: KeyInfo[];
+  children: number[];
+  next: number | null;
+  overflow: { cell: number; bytes: number; pages: number[] }[];
+}
+
+export interface TreeInfo {
+  name: string;
+  kind: "table" | "index";
+  root: number;
+  depth: number;
+  /** Level by level from the root, left to right. */
+  pages: PageInfo[];
+  truncated: boolean;
+  file_pages: number;
+  free_pages: number;
+}
+
+export const PAGE_SIZE = 4096;
+
 export interface Engine {
-  run(sql: string): RunOutput;
+  /** Runs a script. With `trace`, every query also says what each step did with each row. */
+  run(sql: string, trace?: boolean): RunOutput;
+  inspect(name: string): { tree: TreeInfo } | { error: string };
   reset(): void;
 }
 
+// Instantiate the module once. Two overlapping `init()` calls (React runs
+// mount effects twice in development) would create two instances, and an
+// engine made in one would then be called through the other's memory.
+let loaded: ReturnType<typeof init> | undefined;
+
 export async function createEngine(): Promise<Engine> {
-  await init();
+  loaded ??= init();
+  await loaded;
   let db = new Fishbowl();
   return {
-    run(sql) {
-      const output: RunOutput = JSON.parse(db.run(sql));
+    run(sql, trace = false) {
+      const output: RunOutput = JSON.parse(db.run(sql, trace));
       return output;
+    },
+    inspect(name) {
+      return JSON.parse(db.inspect(name));
     },
     reset() {
       db.free();

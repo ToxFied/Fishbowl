@@ -15,9 +15,10 @@
 </p>
 
 Fishbowl is a SQL database written from scratch in Rust. It compiles to
-WebAssembly and runs in your browser, where you type a query and watch it run:
-the plan tree, why each step was chosen, and how many rows moved through each
-step.
+WebAssembly and runs in your browser, where you type a query and watch it run
+row by row: each row rising out of its table, through every step of the plan,
+into the result. You can also see why each step was chosen and which rows an
+index let the query skip, and look at the B-tree pages the data lives on.
 
 Correctness is measured, not claimed. A harness runs SQLite's own
 [sqllogictest](https://www.sqlite.org/sqllogictest) suite against Fishbowl.
@@ -45,7 +46,7 @@ and SQL the parser does not accept.
 | Indexes and constraints | `PRIMARY KEY`, `UNIQUE`, `CREATE INDEX`, IndexScan chosen by a simple rule (M4) |
 | Cost-based planner | Planned (M5) |
 | Transactions and crash recovery | Planned, write-ahead log (M6) |
-| Browser UI | Plan tree, step-through, results, schema |
+| Browser UI | Row-by-row trace playback, why this plan, B-tree page viewer with live splits (M7) |
 | sqllogictest harness | Pinned corpus, self-tested, deterministic report |
 
 ## Try it

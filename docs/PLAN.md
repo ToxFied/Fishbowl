@@ -37,7 +37,7 @@ pass rate is the project's headline claim.
 | `fishbowl` | `crates/engine` | The engine. Everything that matters lives here. |
 | `fishbowl-cli` | `crates/cli` | `fishbowl` shell: runs SQL, prints rows and the plan tree. |
 | `fishbowl-slt` | `crates/slt` | Runs the pinned sqllogictest corpus and writes the report. |
-| `fishbowl-wasm` | `crates/wasm` | Two-method WebAssembly API that returns JSON. |
+| `fishbowl-wasm` | `crates/wasm` | Small WebAssembly API that returns JSON: run SQL, inspect pages. |
 
 `web/` is a static React app that loads the WebAssembly build. It has no server.
 
@@ -52,9 +52,10 @@ pass rate is the project's headline claim.
 | `expr.rs` | Bound expressions and their evaluation (three-valued logic, arithmetic, subqueries through an `Env`) |
 | `planner/schema.rs` | `PRIMARY KEY` and `UNIQUE` in `CREATE TABLE`, `CREATE INDEX`, `DROP INDEX` |
 | `access.rs` | Access paths: when to use an index, and the IndexScan that reads one |
-| `exec.rs` | Iterator-model executor with per-step row counts and a row budget |
+| `exec.rs` | Iterator-model executor with per-step row counts, a row budget and an optional row-level trace |
+| `trace.rs` | Trace events (passed on, dropped, subquery run) and the recorder that collects them |
 | `write.rs` | Row writes: rowids, index maintenance, constraint checks, undo on failure |
-| `storage/` | Page store (file or memory), pager and buffer pool, row encoding, B+trees for tables and indexes, schema table |
+| `storage/` | Page store (file or memory), pager and buffer pool, row encoding, B+trees for tables and indexes, schema table, read-only page inspection |
 | `lib.rs` | `Database`: runs statements, `integrity_check` |
 
 ## Key design choices
@@ -73,7 +74,9 @@ pass rate is the project's headline claim.
 | Constraints checked row by row with an undo log (M4) | Matches SQLite's order of checks exactly, and a failed statement still leaves no trace. |
 | Write-ahead log for crash safety (M6) | Recovery is "replay committed frames", which is simple to reason about and to animate. |
 | Storage behind a page-store trait (M3) | A real file on native builds, memory in the browser, a fault-injecting store in crash tests. |
-| JSON across the WebAssembly boundary | A two-method API. A Rust test pins the shape that `web/src/engine.ts` relies on. |
+| JSON across the WebAssembly boundary | A three-method API: run, inspect pages, reset. A Rust test pins the shape that `web/src/engine.ts` relies on. |
+| Trace recorder is an `Option` on the executor context (M7) | An untraced query pays one check per row and copies nothing, so the harness keeps its speed. One run gives both the result and its trace, so they always agree. |
+| Page viewer reads pages, never a copy (M7) | It decodes the same bytes the B-tree uses, so what it draws is what is stored. Splits are found by comparing two snapshots, so the B-tree code needs no hooks. |
 | Own sqllogictest evaluator on the crate's parser | Formatting, sorting and hashing rules from SQLite's reference runner live in one tested file. |
 | Corpus pinned by check-in and SHA-256, fetched not vendored | The repo stays small and every run is checked against the exact files behind the number. |
 | Row budget instead of wall-clock timeouts | A runaway query fails the same way on every machine, so results stay deterministic. |
@@ -165,6 +168,15 @@ back at the user's pace. Chosen plan versus rejected plans with costs. A B-tree
 page viewer. A WAL viewer that replays recovery. Engine side: a trace hook in
 `exec.rs`, behind a flag so the harness pays nothing. UI side: `web/`.
 
+Done: the trace (`trace.rs`, `exec.rs`) and its playback, with rows rising
+from their table through each step into the result, joins shown pair by pair
+and correlated subqueries run by run; the reason for each choice and the rows
+an index never touched next to what a full scan would read; a B-tree page
+viewer (`storage/inspect.rs`) that shows splits and merges as rows are
+inserted and deleted; and a first screen that is already playing a query.
+Waiting on other milestones: rejected plans with their costs (M5) and the WAL
+viewer (M6).
+
 ### M8. Proof and presentation
 
 GitHub Actions running tests and the corpus on every push, a larger corpus, the
@@ -207,7 +219,8 @@ Shared seams to coordinate:
   and `ON CONFLICT` clauses are rejected.
 - Changes are written to disk at the end of each statement, but a crash mid-write
   can leave a mix of old and new pages until the write-ahead log lands (M6).
-- The browser build is about 700 KB gzipped, mostly `sqlparser`. `wasm-opt` and
+- The browser download is about 970 KB gzipped (engine 888 KB, UI 83 KB),
+  plus 141 KB of fonts. Most of the engine is `sqlparser`. `wasm-opt` and
   trimming dialects are possible later.
 - A join reads its right side in full for every left row (from memory, after
   Materialize). It does not look matching rows up by index yet; that is M5.

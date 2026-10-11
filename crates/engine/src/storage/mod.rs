@@ -11,6 +11,7 @@
 //!   a B+tree of (values, rowid) keys.
 //! - [`record`]: how one row of values becomes bytes.
 //! - [`index`]: index keys and their order.
+//! - [`inspect`]: read-only views of a tree's pages, for the page viewer.
 //!
 //! This module ties them together. Like SQLite's `sqlite_schema`, a schema
 //! table at page 1 lists every table, index and view with its root page and
@@ -22,6 +23,7 @@
 
 pub mod btree;
 pub mod index;
+pub mod inspect;
 pub mod page;
 pub mod pager;
 pub mod record;

@@ -40,3 +40,33 @@ body {
 ::selection {
   background: rgb(255 255 255 / 0.25);
 }
+
+/* The trace scrubber: a white line, and an orange mark where playback is now. */
+.scrubber {
+  appearance: none;
+  height: 1.5rem;
+  background: transparent;
+}
+.scrubber::-webkit-slider-runnable-track {
+  height: 1px;
+  background: rgb(255 255 255 / 0.34);
+}
+.scrubber::-moz-range-track {
+  height: 1px;
+  background: rgb(255 255 255 / 0.34);
+}
+.scrubber::-webkit-slider-thumb {
+  appearance: none;
+  width: 3px;
+  height: 14px;
+  margin-top: -7px;
+  background: var(--color-fish);
+  border: 0;
+}
+.scrubber::-moz-range-thumb {
+  width: 3px;
+  height: 14px;
+  background: var(--color-fish);
+  border: 0;
+  border-radius: 0;
+}

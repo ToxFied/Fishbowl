@@ -17,6 +17,7 @@ pub mod expr;
 pub mod plan;
 pub mod planner;
 pub mod storage;
+pub mod trace;
 pub mod value;
 pub mod write;
 
@@ -26,6 +27,7 @@ use sqlparser::parser::Parser;
 
 pub use error::{Error, Result};
 pub use plan::PlanProfile;
+pub use trace::Trace;
 pub use value::Value;
 
 use catalog::{Catalog, TableSchema};
@@ -56,6 +58,9 @@ pub struct QueryResult {
     pub columns: Vec<String>,
     pub rows: Vec<Row>,
     pub plan: PlanProfile,
+    /// What each step did with each row, when tracing is on.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub trace: Option<Trace>,
 }
 
 /// One statement from a script and its outcome.
@@ -76,6 +81,8 @@ pub struct Database {
     catalog: Catalog,
     storage: Storage,
     row_budget: Option<u64>,
+    /// Trace every query, recording at most this many events.
+    trace_limit: Option<usize>,
 }
 
 impl Default for Database {
@@ -91,6 +98,7 @@ impl Database {
             catalog: Catalog::default(),
             storage: Storage::memory(),
             row_budget: None,
+            trace_limit: None,
         }
     }
 
@@ -121,12 +129,19 @@ impl Database {
             catalog,
             storage,
             row_budget: None,
+            trace_limit: None,
         })
     }
 
     /// Caps how many rows one statement may process. `None` means no cap.
     pub fn set_row_budget(&mut self, budget: Option<u64>) {
         self.row_budget = budget;
+    }
+
+    /// Records a row-level [`Trace`] of every query, up to `limit` events
+    /// each, or stops tracing with `None`. Off by default.
+    pub fn set_trace(&mut self, limit: Option<usize>) {
+        self.trace_limit = limit;
     }
 
     /// Runs exactly one SQL statement.
@@ -163,6 +178,12 @@ impl Database {
             }
         }
         entries
+    }
+
+    /// Every page of the B-tree behind a table or an index, for the page
+    /// viewer. Reads only.
+    pub fn inspect_tree(&self, name: &str) -> Result<storage::inspect::TreeInfo> {
+        self.storage.inspect_tree(name)
     }
 
     pub fn tables(&self) -> Vec<TableInfo> {
@@ -306,11 +327,15 @@ impl Database {
             }
             Plan::Query(query) => {
                 let mut ctx = ExecContext::new(&self.storage, self.row_budget);
+                if let Some(limit) = self.trace_limit {
+                    ctx.start_trace(limit);
+                }
                 let (rows, plan) = exec::run_query(&mut ctx, &query.root)?;
                 return Ok(StatementResult::Query(QueryResult {
                     columns: query.columns,
                     rows,
                     plan,
+                    trace: ctx.take_trace(),
                 }));
             }
         };

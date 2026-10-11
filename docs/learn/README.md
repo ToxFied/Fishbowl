@@ -27,3 +27,5 @@ code where the idea lives. Every milestone adds notes for what it touched.
 | [The nested-loop join](nested-loop-join.md) | M2 |
 | [Subqueries and correlation](subqueries.md) | M2 |
 | [UNION, INTERSECT and EXCEPT](set-operations.md) | M2 |
+| [The execution trace](execution-trace.md) | M7 |
+| [Reading the page viewer](page-viewer.md) | M7 |
