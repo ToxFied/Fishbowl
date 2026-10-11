@@ -14,3 +14,10 @@ code where the idea lives. Every milestone adds notes for what it touched.
 | [Measuring correctness with sqllogictest](sqllogictest.md) | M0 |
 | [Sorting, LIMIT and DISTINCT](sorting-and-limits.md) | M1 |
 | [Aggregation: GROUP BY and HAVING](aggregation.md) | M1 |
+| [Pages and the page store](pages.md) | M3 |
+| [The buffer pool](buffer-pool.md) | M3 |
+| [Row encoding](row-encoding.md) | M3 |
+| [B+trees](b-plus-trees.md) | M3 |
+| [Splits and merges](splits-and-merges.md) | M3 |
+| [How UPDATE and DELETE run](update-and-delete.md) | M3 |
+| [Property testing the B-tree](property-testing.md) | M3 |

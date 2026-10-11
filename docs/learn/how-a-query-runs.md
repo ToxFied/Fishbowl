@@ -13,8 +13,8 @@ Each stage hands a more precise description to the next.
    of steps. See [query plans](query-plans.md).
 3. **Execute.** The executor runs the plan. Rows flow up from the table through
    each step. See [the iterator model](iterator-model.md).
-4. **Store.** Rows live in storage. For now that is a list in memory. Later it
-   becomes pages in a file, organized as B-trees.
+4. **Store.** Rows live in [B+trees](b-plus-trees.md) made of 4 KiB
+   [pages](pages.md), in a file or, in the browser, in memory.
 
 Splitting the work this way means each stage can be tested and replaced on its
 own. It also means mistakes surface early: a misspelled column fails during

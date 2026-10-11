@@ -20,8 +20,8 @@ pass rate is the project's headline claim.
    │ execute    exec.rs      │  pull rows through the plan, one at a time,
    │                         │  counting rows per step
    ├─────────────────────────┤
-   │ store      storage.rs   │  today: rows in memory
-   │                         │  later: pager -> B-trees -> write-ahead log
+   │ store      storage/     │  pager -> B+trees on 4 KiB pages
+   │                         │  later: write-ahead log
    └────────────┬────────────┘
                 │
      ┌──────────┼───────────────┬──────────────────┐
@@ -51,7 +51,7 @@ pass rate is the project's headline claim.
 | `plan.rs` | Plan nodes and the profiled plan tree the UI draws |
 | `expr.rs` | Bound expressions and their evaluation (three-valued logic, arithmetic) |
 | `exec.rs` | Iterator-model executor with per-step row counts and a row budget |
-| `storage.rs` | In-memory rows behind a narrow interface, replaced in M3 |
+| `storage/` | Page store (file or memory), pager and buffer pool, row encoding, B+tree tables, schema table |
 | `lib.rs` | `Database`: runs statements, makes INSERT all-or-nothing |
 
 ## Key design choices
@@ -85,6 +85,8 @@ steer by, not promises.
 Workspace, in-memory engine slice (CREATE TABLE, INSERT, SELECT with WHERE),
 CLI, WebAssembly build, UI with plan tree and step-through, sqllogictest harness
 with a pinned 29-file corpus. Baseline: **11.90%** of records.
+
+After M1 and M3: **31.06%**.
 
 ### M1. Query breadth
 
@@ -172,10 +174,10 @@ Shared seams to coordinate:
 - M4 needs M3's B-tree, and M5 needs M2's joins and M4's indexes. Those cannot
   start early.
 
-## Known gaps in M0
+## Known gaps
 
-- Comparisons do not yet apply column affinity, so `int_column = '5'` compares a
-  number with text. SQLite would convert the text first.
 - `PRIMARY KEY` and `UNIQUE` are rejected, not ignored, until M4 can enforce them.
+- Changes are written to disk at the end of each statement, but a crash mid-write
+  can leave a mix of old and new pages until the write-ahead log lands (M6).
 - The browser build is about 700 KB gzipped, mostly `sqlparser`. `wasm-opt` and
   trimming dialects are possible later.

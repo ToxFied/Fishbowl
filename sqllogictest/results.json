@@ -7,20 +7,20 @@
   },
   "totals": {
     "records": {
-      "passed": 40155,
-      "failed": 89193
+      "passed": 40185,
+      "failed": 89163
     },
     "statements": {
-      "passed": 1203,
-      "failed": 10737
+      "passed": 1227,
+      "failed": 10713
     },
     "queries": {
-      "passed": 38952,
-      "failed": 78456
+      "passed": 38958,
+      "failed": 78450
     },
     "skipped": 14153,
-    "pass_rate": 31.04,
-    "query_pass_rate": 33.17
+    "pass_rate": 31.06,
+    "query_pass_rate": 33.18
   },
   "files": [
     {
@@ -78,15 +78,15 @@
     {
       "path": "evidence/slt_lang_createview.test",
       "statements": {
-        "passed": 6,
-        "failed": 15
+        "passed": 10,
+        "failed": 11
       },
       "queries": {
         "passed": 1,
         "failed": 1
       },
       "skipped": 2,
-      "pass_rate": 30.43
+      "pass_rate": 47.82
     },
     {
       "path": "evidence/slt_lang_dropindex.test",
@@ -104,28 +104,28 @@
     {
       "path": "evidence/slt_lang_droptable.test",
       "statements": {
-        "passed": 4,
-        "failed": 8
+        "passed": 10,
+        "failed": 2
       },
       "queries": {
         "passed": 0,
         "failed": 0
       },
       "skipped": 0,
-      "pass_rate": 33.33
+      "pass_rate": 83.33
     },
     {
       "path": "evidence/slt_lang_droptrigger.test",
       "statements": {
-        "passed": 4,
-        "failed": 8
+        "passed": 5,
+        "failed": 7
       },
       "queries": {
         "passed": 0,
         "failed": 0
       },
       "skipped": 0,
-      "pass_rate": 33.33
+      "pass_rate": 41.66
     },
     {
       "path": "evidence/slt_lang_dropview.test",
@@ -169,15 +169,15 @@
     {
       "path": "evidence/slt_lang_update.test",
       "statements": {
-        "passed": 4,
-        "failed": 14
+        "passed": 17,
+        "failed": 1
       },
       "queries": {
-        "passed": 3,
-        "failed": 6
+        "passed": 9,
+        "failed": 0
       },
       "skipped": 0,
-      "pass_rate": 25.92
+      "pass_rate": 96.29
     },
     {
       "path": "index/between/10/slt_good_0.test",
@@ -404,7 +404,7 @@
   "failure_reasons": [
     {
       "reason": "no such table",
-      "count": 68784,
+      "count": 71491,
       "example": "evidence/in1.test:368: no such table: t4"
     },
     {
@@ -426,11 +426,6 @@
       "reason": "unsupported: scalar subquery",
       "count": 2139,
       "example": "select1.test:94: not supported yet: scalar subquery"
-    },
-    {
-      "reason": "unsupported: DELETE",
-      "count": 2129,
-      "example": "evidence/slt_lang_createview.test:69: not supported yet: DELETE"
     },
     {
       "reason": "unsupported: CREATE INDEX",
@@ -458,18 +453,13 @@
       "example": "index/random/10/slt_good_0.test:14219: not supported yet: JOIN"
     },
     {
-      "reason": "unsupported: DROP TABLE",
-      "count": 586,
-      "example": "evidence/slt_lang_droptable.test:22: not supported yet: DROP TABLE"
-    },
-    {
       "reason": "unsupported: CREATE UNIQUE",
       "count": 580,
       "example": "index/between/10/slt_good_0.test:60: not supported yet: CREATE UNIQUE"
     },
     {
       "reason": "wrong result",
-      "count": 453,
+      "count": 447,
       "example": "evidence/slt_lang_aggfunc.test:480: expected [], got [9.000]"
     },
     {
@@ -486,11 +476,6 @@
       "reason": "unsupported: IN (subquery)",
       "count": 81,
       "example": "evidence/in1.test:75: not supported yet: IN (subquery)"
-    },
-    {
-      "reason": "unsupported: UPDATE",
-      "count": 15,
-      "example": "evidence/slt_lang_createview.test:80: not supported yet: UPDATE"
     },
     {
       "reason": "unsupported: DROP TRIGGER",
@@ -531,11 +516,6 @@
       "reason": "unsupported: literal X'303132'",
       "count": 2,
       "example": "evidence/in1.test:296: not supported yet: literal X'303132'"
-    },
-    {
-      "reason": "table t1 already exists",
-      "count": 1,
-      "example": "evidence/slt_lang_droptable.test:46: table t1 already exists"
     }
   ]
 }

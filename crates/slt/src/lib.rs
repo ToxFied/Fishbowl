@@ -222,6 +222,7 @@ fn error_reason(e: &Error) -> String {
         Error::Constraint(_) => "constraint failed".into(),
         Error::Runtime(msg) => msg.clone(),
         Error::BudgetExceeded(_) => "row budget exceeded".into(),
+        Error::Storage(_) => "storage error".into(),
     }
 }
 

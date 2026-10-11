@@ -16,6 +16,8 @@ pub enum Error {
     Runtime(String),
     /// The statement did more work than the configured row budget allows.
     BudgetExceeded(u64),
+    /// Reading or writing the database failed, or its pages are damaged.
+    Storage(String),
 }
 
 impl fmt::Display for Error {
@@ -29,6 +31,7 @@ impl fmt::Display for Error {
             Error::BudgetExceeded(limit) => {
                 write!(f, "statement exceeded the budget of {limit} rows")
             }
+            Error::Storage(msg) => write!(f, "storage error: {msg}"),
         }
     }
 }

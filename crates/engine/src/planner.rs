@@ -19,6 +19,18 @@ pub fn plan_statement(catalog: &Catalog, stmt: &ast::Statement) -> Result<Plan> 
         ast::Statement::CreateTable(create) => plan_create_table(create),
         ast::Statement::Insert(insert) => plan_insert(catalog, insert),
         ast::Statement::Query(query) => plan_query(catalog, query).map(Plan::Query),
+        ast::Statement::Update(update) => plan_update(catalog, update),
+        ast::Statement::Delete(delete) => plan_delete(catalog, delete),
+        ast::Statement::Drop {
+            object_type: ast::ObjectType::Table,
+            if_exists,
+            names,
+            cascade: false,
+            restrict: false,
+            purge: false,
+            temporary: false,
+            ..
+        } => plan_drop_table(catalog, *if_exists, names),
         other => unsupported(statement_kind(other)),
     }
 }
@@ -70,6 +82,106 @@ fn plan_create_table(create: &ast::CreateTable) -> Result<Plan> {
     })
 }
 
+fn plan_update(catalog: &Catalog, update: &ast::Update) -> Result<Plan> {
+    if update.or.is_some()
+        || update.from.is_some()
+        || update.returning.is_some()
+        || update.output.is_some()
+        || !update.order_by.is_empty()
+        || update.limit.is_some()
+    {
+        return unsupported("UPDATE OR / FROM / RETURNING / LIMIT");
+    }
+    let (schema, scope) = dml_target(catalog, &update.table)?;
+    let mut binder = Binder::without_items(&scope);
+    let mut assignments = Vec::new();
+    for assignment in &update.assignments {
+        let ast::AssignmentTarget::ColumnName(column) = &assignment.target else {
+            return unsupported("UPDATE of a column tuple");
+        };
+        let name = object_name(column)?;
+        let index = schema
+            .column_index(&name)
+            .ok_or_else(|| Error::Catalog(format!("no such column: {name}")))?;
+        assignments.push((index, binder.bind(&assignment.value, Ctx::ROW)?));
+    }
+    Ok(Plan::Update {
+        table: schema.name.clone(),
+        assignments,
+        predicate: update
+            .selection
+            .as_ref()
+            .map(|e| binder.bind(e, Ctx::ROW))
+            .transpose()?,
+    })
+}
+
+fn plan_delete(catalog: &Catalog, delete: &ast::Delete) -> Result<Plan> {
+    if !delete.tables.is_empty()
+        || delete.using.is_some()
+        || delete.returning.is_some()
+        || delete.output.is_some()
+        || !delete.order_by.is_empty()
+        || delete.limit.is_some()
+    {
+        return unsupported("DELETE USING / RETURNING / LIMIT");
+    }
+    let (ast::FromTable::WithFromKeyword(from) | ast::FromTable::WithoutKeyword(from)) =
+        &delete.from;
+    let [target] = from.as_slice() else {
+        return unsupported("DELETE from several tables");
+    };
+    let (schema, scope) = dml_target(catalog, target)?;
+    let mut binder = Binder::without_items(&scope);
+    Ok(Plan::Delete {
+        table: schema.name.clone(),
+        predicate: delete
+            .selection
+            .as_ref()
+            .map(|e| binder.bind(e, Ctx::ROW))
+            .transpose()?,
+    })
+}
+
+fn plan_drop_table(catalog: &Catalog, if_exists: bool, names: &[ast::ObjectName]) -> Result<Plan> {
+    let [name] = names else {
+        return unsupported("DROP TABLE of several tables");
+    };
+    let name = object_name(name)?;
+    let table = match catalog.table(&name) {
+        Ok(schema) => schema.name.clone(),
+        Err(_) if if_exists => name,
+        Err(e) => return Err(e),
+    };
+    Ok(Plan::DropTable { table, if_exists })
+}
+
+/// The one table an UPDATE or DELETE changes, and the names its expressions
+/// can see.
+fn dml_target<'a>(
+    catalog: &'a Catalog,
+    target: &ast::TableWithJoins,
+) -> Result<(&'a TableSchema, Scope<'a>)> {
+    if !target.joins.is_empty() {
+        return unsupported("JOIN in UPDATE or DELETE");
+    }
+    let ast::TableFactor::Table {
+        name,
+        alias,
+        args: None,
+        ..
+    } = &target.relation
+    else {
+        return unsupported("UPDATE or DELETE of a subquery or table function");
+    };
+    let schema = catalog.table(&object_name(name)?)?;
+    let scope = Scope {
+        table: Some(schema),
+        alias: alias.as_ref().map(|a| a.name.value.clone()),
+    };
+    Ok((schema, scope))
+}
+
 fn plan_insert(catalog: &Catalog, insert: &ast::Insert) -> Result<Plan> {
     if insert.or.is_some() || insert.on.is_some() || insert.returning.is_some() {
         return unsupported("INSERT OR / ON CONFLICT / RETURNING");
@@ -100,7 +212,7 @@ fn plan_insert(catalog: &Catalog, insert: &ast::Insert) -> Result<Plan> {
     };
     // VALUES rows are constants: there is no table in scope to reference.
     let scope = Scope::empty();
-    let mut binder = Binder::constants(&scope);
+    let mut binder = Binder::without_items(&scope);
     let mut rows = Vec::new();
     for row in &values.rows {
         if row.content.len() != targets.len() {
@@ -271,7 +383,7 @@ fn plan_query(catalog: &Catalog, query: &ast::Query) -> Result<QueryPlan> {
     if let Some((limit, offset)) = limit_clause(query)? {
         // LIMIT and OFFSET are constants: no table is in scope.
         let scope = Scope::empty();
-        let mut constants = Binder::constants(&scope);
+        let mut constants = Binder::without_items(&scope);
         root = PlanNode::Limit {
             input: Box::new(root),
             limit: constants.bind(limit, Ctx::CONSTANT)?,
@@ -581,7 +693,9 @@ struct Binder<'a> {
 }
 
 impl<'a> Binder<'a> {
-    fn constants(scope: &'a Scope<'a>) -> Self {
+    /// A binder with no result columns: INSERT values, LIMIT, and the
+    /// expressions of UPDATE and DELETE.
+    fn without_items(scope: &'a Scope<'a>) -> Self {
         Binder {
             scope,
             items: &[],

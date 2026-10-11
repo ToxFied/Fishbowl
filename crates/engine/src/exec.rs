@@ -13,18 +13,18 @@ use std::collections::{BTreeMap, BTreeSet};
 use crate::error::{Error, Result};
 use crate::expr::{Accumulator, AggregateCall, Expr, RowKey};
 use crate::plan::{PlanNode, PlanProfile, SortKey};
-use crate::storage::{MemoryStorage, Row};
+use crate::storage::{Row, Storage, TableScan};
 use crate::value::{Affinity, Value};
 
 /// Shared state for one statement: where rows live and how much work is left.
 pub struct ExecContext<'a> {
-    pub storage: &'a MemoryStorage,
+    pub storage: &'a Storage,
     budget: Option<u64>,
     rows_processed: u64,
 }
 
 impl<'a> ExecContext<'a> {
-    pub fn new(storage: &'a MemoryStorage, budget: Option<u64>) -> Self {
+    pub fn new(storage: &'a Storage, budget: Option<u64>) -> Self {
         ExecContext {
             storage,
             budget,
@@ -56,7 +56,7 @@ enum State {
     /// Filter and Project keep nothing between rows.
     None,
     Scan {
-        position: usize,
+        scan: TableScan,
     },
     OneRow {
         done: bool,
@@ -78,7 +78,9 @@ impl<'p> Operator<'p> {
             .first()
             .map(|child| Box::new(Operator::build(child)));
         let state = match node {
-            PlanNode::SeqScan { .. } => State::Scan { position: 0 },
+            PlanNode::SeqScan { table, .. } => State::Scan {
+                scan: TableScan::new(table),
+            },
             PlanNode::OneRow => State::OneRow { done: false },
             PlanNode::Filter { .. } | PlanNode::Project { .. } => State::None,
             PlanNode::Sort { .. } | PlanNode::Aggregate { .. } => State::Buffered(None),
@@ -108,11 +110,7 @@ impl<'p> Operator<'p> {
     fn produce(&mut self, ctx: &mut ExecContext) -> Result<Option<Row>> {
         let input = &mut self.input;
         match (self.node, &mut self.state) {
-            (PlanNode::SeqScan { table, .. }, State::Scan { position }) => {
-                let row = ctx.storage.row(table, *position).cloned();
-                *position += 1;
-                Ok(row)
-            }
+            (PlanNode::SeqScan { .. }, State::Scan { scan }) => scan.next(ctx.storage),
             (PlanNode::OneRow, State::OneRow { done }) => {
                 let first = !*done;
                 *done = true;
