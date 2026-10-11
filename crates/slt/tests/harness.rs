@@ -185,3 +185,44 @@ SELECT 2
     assert_eq!(result.skipped, 2);
     assert_eq!(result.queries, queries(1, 0));
 }
+
+#[test]
+fn a_statement_record_runs_every_statement_in_it() {
+    // SQLite's runner passes statement records to sqlite3_exec, which runs
+    // them all. slt_lang_aggfunc.test relies on that.
+    let result = run("\
+statement ok
+INSERT INTO t VALUES (4, 'y');
+INSERT INTO t VALUES (5, 'z');
+
+statement error
+INSERT INTO t VALUES (6, 'w');
+SELECT nope FROM t
+
+query I rowsort
+SELECT a FROM t WHERE a > 3
+----
+4
+5
+6
+");
+    // The failing second statement does not undo the first, as in sqlite3_exec.
+    assert_eq!(result.statements, queries(4, 0));
+    assert_eq!(result.queries, queries(1, 0));
+}
+
+#[test]
+fn parse_errors_are_grouped_by_cause_without_position() {
+    let result = run("\
+statement ok
+SELECT a FROM t WHERE a IN t
+
+statement ok
+SELECT b FROM t WHERE b IN t
+");
+    let reasons: Vec<&str> = result.failures.iter().map(|f| f.reason.as_str()).collect();
+    assert_eq!(
+        reasons,
+        ["parse error: Expected: (", "parse error: Expected: ("]
+    );
+}

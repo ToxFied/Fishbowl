@@ -139,7 +139,7 @@ pub fn run_script(script: &str, name: &str) -> Result<FileResult, String> {
                     result.skipped += 1;
                     continue;
                 }
-                let outcome = check_statement(run_guarded(&mut db, &sql), &expected);
+                let outcome = check_statement(run_guarded(|| run_all(&mut db, &sql)), &expected);
                 result.record(RecordKind::Statement, loc.line(), outcome);
             }
             Record::Query {
@@ -149,7 +149,8 @@ pub fn run_script(script: &str, name: &str) -> Result<FileResult, String> {
                     result.skipped += 1;
                     continue;
                 }
-                let outcome = check_query(run_guarded(&mut db, &sql), &expected, hash_threshold);
+                let outcome =
+                    check_query(run_guarded(|| db.execute(&sql)), &expected, hash_threshold);
                 result.record(RecordKind::Query, loc.line(), outcome);
             }
             Record::HashThreshold { threshold, .. } => hash_threshold = threshold,
@@ -192,8 +193,8 @@ enum RunOutcome {
     Panic(String),
 }
 
-fn run_guarded(db: &mut Database, sql: &str) -> RunOutcome {
-    match panic::catch_unwind(AssertUnwindSafe(|| db.execute(sql))) {
+fn run_guarded(run: impl FnOnce() -> Result<StatementResult, Error>) -> RunOutcome {
+    match panic::catch_unwind(AssertUnwindSafe(run)) {
         Ok(Ok(result)) => RunOutcome::Ok(result),
         Ok(Err(e)) => RunOutcome::Err(e),
         Err(payload) => {
@@ -207,6 +208,17 @@ fn run_guarded(db: &mut Database, sql: &str) -> RunOutcome {
     }
 }
 
+/// Runs every statement in `sql` and returns the last result or the first
+/// error. The reference runner sends a `statement` record to `sqlite3_exec`,
+/// which runs them all; `slt_lang_aggfunc.test` has a record with two.
+fn run_all(db: &mut Database, sql: &str) -> Result<StatementResult, Error> {
+    let mut last = Err(Error::Parse("no statement to run".into()));
+    for entry in db.run_script(sql) {
+        last = entry.result;
+    }
+    last
+}
+
 type Outcome = Result<(), (String, String)>;
 
 fn fail(reason: impl Into<String>, message: impl Into<String>) -> Outcome {
@@ -217,7 +229,14 @@ fn fail(reason: impl Into<String>, message: impl Into<String>) -> Outcome {
 fn error_reason(e: &Error) -> String {
     match e {
         Error::Unsupported(what) => format!("unsupported: {what}"),
-        Error::Parse(_) => "parse error".into(),
+        Error::Parse(msg) => {
+            // "sql parser error: Expected: (, found: t1 at Line: 1, Column: 13"
+            // becomes "parse error: Expected: (", so one cause is one bucket.
+            let msg = msg.trim_start_matches("sql parser error: ");
+            let msg = msg.split(" at Line:").next().unwrap_or(msg);
+            let msg = msg.split(", found:").next().unwrap_or(msg);
+            format!("parse error: {msg}")
+        }
         Error::Catalog(msg) => msg.split(':').next().unwrap_or(msg).to_string(),
         Error::Constraint(_) => "constraint failed".into(),
         Error::Runtime(msg) => msg.clone(),

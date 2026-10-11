@@ -1,12 +1,15 @@
 //! `fishbowl-slt`: runs the pinned sqllogictest corpus and reports a pass rate.
 //!
 //! ```text
-//! fishbowl-slt [--corpus DIR] [--manifest FILE] [--json FILE] [--markdown FILE]
-//!              [--jobs N] [--verbose] [FILE...]
+//! fishbowl-slt [--full] [--write] [--corpus DIR] [--manifest FILE]
+//!              [--json FILE] [--markdown FILE] [--jobs N] [--verbose] [FILE...]
 //! ```
 //!
 //! With no FILE arguments it runs every file in the manifest after checking its
-//! SHA-256. Naming files skips that check and marks the report unpinned.
+//! SHA-256: the 29-file sample, or with `--full` the whole upstream suite.
+//! `--write` saves the report as `sqllogictest/sample.{md,json}` or
+//! `sqllogictest/full.{md,json}`. Naming files skips the check and marks the
+//! report unpinned.
 
 use std::path::{Path, PathBuf};
 use std::process::ExitCode;
@@ -25,20 +28,26 @@ struct Args {
     files: Vec<String>,
 }
 
+const SAMPLE_MANIFEST: &str = "sqllogictest/manifest.txt";
+const FULL_MANIFEST: &str = "sqllogictest/manifest-full.txt";
+
 fn parse_args() -> Result<Args, String> {
     let mut args = Args {
         corpus: PathBuf::from("sqllogictest/test"),
-        manifest: PathBuf::from("sqllogictest/manifest.txt"),
+        manifest: PathBuf::from(SAMPLE_MANIFEST),
         json: None,
         markdown: None,
         jobs: std::thread::available_parallelism().map_or(1, |n| n.get()),
         verbose: false,
         files: Vec::new(),
     };
+    let mut write = false;
     let mut iter = std::env::args().skip(1);
     while let Some(arg) = iter.next() {
         let mut value = || iter.next().ok_or(format!("{arg} needs a value"));
         match arg.as_str() {
+            "--full" => args.manifest = FULL_MANIFEST.into(),
+            "--write" => write = true,
             "--corpus" => args.corpus = value()?.into(),
             "--manifest" => args.manifest = value()?.into(),
             "--json" => args.json = Some(value()?.into()),
@@ -48,6 +57,15 @@ fn parse_args() -> Result<Args, String> {
             flag if flag.starts_with("--") => return Err(format!("unknown flag {flag}")),
             file => args.files.push(file.to_string()),
         }
+    }
+    if write {
+        let stem = if args.manifest == Path::new(FULL_MANIFEST) {
+            "sqllogictest/full"
+        } else {
+            "sqllogictest/sample"
+        };
+        args.json = Some(format!("{stem}.json").into());
+        args.markdown = Some(format!("{stem}.md").into());
     }
     Ok(args)
 }
@@ -102,6 +120,11 @@ fn run() -> Result<(), String> {
     }
 
     let info = report::CorpusInfo {
+        name: if pinned {
+            corpus::header(&manifest_text, "corpus").unwrap_or_default()
+        } else {
+            "files named on the command line".into()
+        },
         source: corpus::header(&manifest_text, "source").unwrap_or_default(),
         checkin: corpus::header(&manifest_text, "checkin").unwrap_or_default(),
         files: paths.len(),
@@ -140,9 +163,15 @@ fn run() -> Result<(), String> {
 }
 
 /// Runs files on `jobs` threads. Each file gets its own database, so the
-/// order files finish in cannot change any result.
+/// order files finish in cannot change any result. The largest files start
+/// first, so no long file is left running alone at the end.
 fn run_parallel(paths: &[(PathBuf, String)], jobs: usize) -> Result<Vec<FileResult>, String> {
-    let queue = Mutex::new(paths.iter());
+    let mut by_size: Vec<_> = paths
+        .iter()
+        .map(|p| (std::fs::metadata(&p.0).map_or(0, |m| m.len()), p))
+        .collect();
+    by_size.sort_by(|a, b| b.0.cmp(&a.0).then(a.1.1.cmp(&b.1.1)));
+    let queue = Mutex::new(by_size.into_iter().map(|(_, p)| p));
     let results = Mutex::new(Vec::new());
     std::thread::scope(|scope| {
         for _ in 0..jobs.min(paths.len()) {

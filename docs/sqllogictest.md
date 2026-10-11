@@ -3,20 +3,27 @@
 Fishbowl's correctness claim is a pass rate on SQLite's
 [sqllogictest](https://www.sqlite.org/sqllogictest) suite. This page explains
 what the number counts, how the harness avoids inflating it, and where the
-test files come from. The latest numbers are in
+test files come from. The latest numbers, and what fails and why, are in
 [`sqllogictest/RESULTS.md`](../sqllogictest/RESULTS.md).
 
 ## Run it
 
 ```bash
-scripts/fetch-sqllogictest.sh          # download the pinned files, check SHA-256
-cargo run --release -p fishbowl-slt -- \
-  --markdown sqllogictest/RESULTS.md --json sqllogictest/results.json
+# The 29-file sample: the fast check
+scripts/fetch-sqllogictest.sh                    # download, check SHA-256
+cargo run --release -p fishbowl-slt -- --write   # writes sqllogictest/sample.{md,json}
+
+# The full suite: the headline number
+scripts/fetch-sqllogictest.sh --full
+cargo run --release -p fishbowl-slt -- --full --write   # writes sqllogictest/full.{md,json}
 ```
 
 Add `--verbose` to print every failure with its file and line. Pass file paths
 to run just those files; the report is then marked "unpinned" and should not be
-quoted.
+quoted. `--jobs N` sets the number of threads; the default is one per core.
+
+After regenerating, update the quoted rows in `README.md` and
+`sqllogictest/RESULTS.md`. `cargo test` fails until they match the reports.
 
 ## What counts
 
@@ -55,12 +62,18 @@ success or an error. A `query` record runs SQL and lists the expected values.
    feeds it scripts with known outcomes, including wrong answers, wrong hashes,
    wrong column counts and unsorted results, and checks that each one fails.
 7. **The report is deterministic.** It holds no timings or machine details, so
-   a change in the committed file always means a change in behavior.
+   a change in the committed file always means a change in behavior. Files run
+   in parallel, largest first, each against its own database, and the report
+   is sorted by path, so thread timing cannot change it. Two full runs give
+   identical bytes.
+8. **Failures are grouped by cause.** A parse error is bucketed by the
+   parser's message without its position, so `x IN t1` and `x IN t2` count as
+   one cause and the report reads as a to-do list.
 
-## Two fixes on top of the parser
+## Three fixes on top of the parser
 
 The `sqllogictest` crate parses the files. Fishbowl evaluates them itself and
-corrects two parsing differences from SQLite's reference runner:
+corrects three differences from SQLite's reference runner:
 
 - SQLite's files put notes after conditions, as in `skipif mysql # not
   compatible`. The crate rejects that line. The harness drops the note before
@@ -69,14 +82,38 @@ corrects two parsing differences from SQLite's reference runner:
   `halt`. Left alone, `onlyif mssql` followed by `halt` would stop the file for
   every engine and then skip the next statement. The harness tracks conditions
   per record block instead.
+- The reference runner passes a `statement` record to `sqlite3_exec`, which
+  runs every statement in it. One record in `slt_lang_aggfunc.test` holds two.
+  The harness runs them all and reports the first error, if any.
 
-Both fixes have tests in `crates/slt/tests/harness.rs`.
+All three fixes have tests in `crates/slt/tests/harness.rs`.
 
 ## The corpus
 
-29 files from the SQLite sqllogictest repository, check-in
+Both corpora come from the SQLite sqllogictest repository at check-in
 [`ab599cbdd0976a63`](https://www.sqlite.org/sqllogictest/info/ab599cbdd0976a63c5cfc7755588f716a7621f27)
-(2026-10-07). About 143,000 records in total.
+(2026-10-07).
+
+### The full suite
+
+All 622 test files at that check-in: 1.2 GB and 7.4 million records, of which
+5.9 million apply to SQLite. `sqllogictest/manifest-full.txt` lists them with
+their SHA-256. A run takes about 35 seconds on a 10-core Apple M4 and peaks at
+about 570 MB of memory. The first download takes about 8 minutes.
+
+`scripts/pin-sqllogictest.sh <checkin>` writes that manifest. Fossil, the
+version control system SQLite uses, names a check-in by the SHA-1 of its
+manifest, and the manifest lists every file's SHA-1. The script downloads the
+manifest from `/raw/<checkin>`, checks its SHA-1 against the check-in name,
+downloads each file and checks its SHA-1, and only then writes the SHA-256
+list. So the pinned list matches upstream exactly, with no file guessed or
+missed. Run it only to move to a new check-in.
+
+### The sample
+
+29 of those files, about 143,000 records, listed in
+`sqllogictest/manifest.txt`. It runs in about 8 seconds, so CI runs it on
+every push and checks that the committed report still matches.
 
 | Files | Why |
 | --- | --- |
@@ -86,10 +123,10 @@ Both fixes have tests in `crates/slt/tests/harness.rs`.
 | `index/view/10/slt_good_1.test` | Views over indexed tables. Upstream `slt_good_0.test` at this path is an empty file, so the next one is used |
 | `random/<kind>/slt_good_0.test` (4 files) | Randomly generated aggregates, expressions, `GROUP BY` and `SELECT`s |
 
-The full upstream suite has millions of records. This subset covers every
-category while keeping a full run under a few seconds. A later milestone can
-widen it; widening it changes the denominator, so the report always states the
-corpus it measured.
+The sample covers every category of the full suite. Its pass rate is lower
+than the full suite's because the `evidence/` files, where most failures are,
+weigh far more in 129,000 records than in 5.9 million. Every report states
+which corpus it measured.
 
 ### License
 

@@ -92,8 +92,8 @@ pass rate is the project's headline claim.
 
 ## Milestones
 
-Pass-rate numbers come from `sqllogictest/RESULTS.md`. Targets are guesses to
-steer by, not promises.
+Pass-rate numbers come from `sqllogictest/RESULTS.md`: the 29-file sample until
+M8, then the full suite too. Targets are guesses to steer by, not promises.
 
 ### M0. Foundation (done)
 
@@ -200,6 +200,15 @@ GitHub Actions running tests and the corpus on every push, a larger corpus, the
 engineering case study, the published static site. Deploying and creating the
 GitHub repo need Anestis's go-ahead.
 
+Done, apart from deploying: the full upstream suite (622 files, 5,939,879
+records run) passes **99.99%**, in about 35 seconds on 10 cores, pinned by
+`scripts/pin-sqllogictest.sh` through Fossil's SHA-1 chain. The 29-file sample
+stays as the fast check. `RESULTS.md` lists what fails and why; the generated
+reports are `sample.{md,json}` and `full.{md,json}`. `.github/workflows/ci.yml`
+runs fmt, clippy, tests, the web build and the sample on every push, and the
+full suite weekly; it has not run, since there is no GitHub repo yet. The case
+study is `docs/CASE_STUDY.md`.
+
 ## Which milestones can run in parallel
 
 Threads can run at the same time when they do not edit the same files.
@@ -220,8 +229,11 @@ Shared seams to coordinate:
   need to touch it. Merge M3 last if both are open.
 - `crates/wasm` and `web/src/engine.ts`: any lane that adds fields to the JSON
   contract updates both, plus the contract test in `crates/wasm/src/lib.rs`.
-- `sqllogictest/RESULTS.md` and `results.json` are generated. Regenerate them
-  after a merge instead of resolving conflicts by hand.
+- `sqllogictest/sample.*` and `full.*` are generated. Regenerate them after a
+  merge instead of resolving conflicts by hand
+  (`cargo run --release -p fishbowl-slt -- --write`, and `--full --write`), then
+  update the quoted rows in `README.md` and `sqllogictest/RESULTS.md`, which
+  `cargo test` checks against them.
 - `docs/learn/`: every lane adds its own notes; new files rarely conflict.
 - M4 needs M3's B-tree, and M5 needs M2's joins and M4's indexes. Those cannot
   start early.

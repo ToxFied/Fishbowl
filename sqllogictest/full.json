@@ -1,0 +1,8166 @@
+{
+  "corpus": {
+    "name": "full suite",
+    "source": "https://www.sqlite.org/sqllogictest",
+    "checkin": "ab599cbdd0976a63c5cfc7755588f716a7621f27",
+    "files": 622,
+    "pinned": true
+  },
+  "totals": {
+    "records": {
+      "passed": 5939421,
+      "failed": 458
+    },
+    "statements": {
+      "passed": 210756,
+      "failed": 30
+    },
+    "queries": {
+      "passed": 5728665,
+      "failed": 428
+    },
+    "skipped": 1480834,
+    "pass_rate": 99.99,
+    "query_pass_rate": 99.99
+  },
+  "files": [
+    {
+      "path": "evidence/in1.test",
+      "statements": {
+        "passed": 27,
+        "failed": 0
+      },
+      "queries": {
+        "passed": 111,
+        "failed": 76
+      },
+      "skipped": 2,
+      "pass_rate": 64.48
+    },
+    {
+      "path": "evidence/in2.test",
+      "statements": {
+        "passed": 8,
+        "failed": 0
+      },
+      "queries": {
+        "passed": 45,
+        "failed": 0
+      },
+      "skipped": 1,
+      "pass_rate": 100.0
+    },
+    {
+      "path": "evidence/slt_lang_aggfunc.test",
+      "statements": {
+        "passed": 11,
+        "failed": 2
+      },
+      "queries": {
+        "passed": 57,
+        "failed": 10
+      },
+      "skipped": 0,
+      "pass_rate": 85.0
+    },
+    {
+      "path": "evidence/slt_lang_createtrigger.test",
+      "statements": {
+        "passed": 5,
+        "failed": 21
+      },
+      "queries": {
+        "passed": 0,
+        "failed": 0
+      },
+      "skipped": 0,
+      "pass_rate": 19.23
+    },
+    {
+      "path": "evidence/slt_lang_createview.test",
+      "statements": {
+        "passed": 21,
+        "failed": 0
+      },
+      "queries": {
+        "passed": 2,
+        "failed": 0
+      },
+      "skipped": 2,
+      "pass_rate": 100.0
+    },
+    {
+      "path": "evidence/slt_lang_dropindex.test",
+      "statements": {
+        "passed": 8,
+        "failed": 0
+      },
+      "queries": {
+        "passed": 0,
+        "failed": 0
+      },
+      "skipped": 0,
+      "pass_rate": 100.0
+    },
+    {
+      "path": "evidence/slt_lang_droptable.test",
+      "statements": {
+        "passed": 12,
+        "failed": 0
+      },
+      "queries": {
+        "passed": 0,
+        "failed": 0
+      },
+      "skipped": 0,
+      "pass_rate": 100.0
+    },
+    {
+      "path": "evidence/slt_lang_droptrigger.test",
+      "statements": {
+        "passed": 6,
+        "failed": 6
+      },
+      "queries": {
+        "passed": 0,
+        "failed": 0
+      },
+      "skipped": 0,
+      "pass_rate": 50.0
+    },
+    {
+      "path": "evidence/slt_lang_dropview.test",
+      "statements": {
+        "passed": 11,
+        "failed": 0
+      },
+      "queries": {
+        "passed": 2,
+        "failed": 0
+      },
+      "skipped": 0,
+      "pass_rate": 100.0
+    },
+    {
+      "path": "evidence/slt_lang_reindex.test",
+      "statements": {
+        "passed": 6,
+        "failed": 1
+      },
+      "queries": {
+        "passed": 0,
+        "failed": 0
+      },
+      "skipped": 0,
+      "pass_rate": 85.71
+    },
+    {
+      "path": "evidence/slt_lang_replace.test",
+      "statements": {
+        "passed": 8,
+        "failed": 0
+      },
+      "queries": {
+        "passed": 6,
+        "failed": 0
+      },
+      "skipped": 0,
+      "pass_rate": 100.0
+    },
+    {
+      "path": "evidence/slt_lang_update.test",
+      "statements": {
+        "passed": 18,
+        "failed": 0
+      },
+      "queries": {
+        "passed": 9,
+        "failed": 0
+      },
+      "skipped": 0,
+      "pass_rate": 100.0
+    },
+    {
+      "path": "index/between/1/slt_good_0.test",
+      "statements": {
+        "passed": 22,
+        "failed": 0
+      },
+      "queries": {
+        "passed": 9980,
+        "failed": 20
+      },
+      "skipped": 0,
+      "pass_rate": 99.8
+    },
+    {
+      "path": "index/between/10/slt_good_0.test",
+      "statements": {
+        "passed": 33,
+        "failed": 0
+      },
+      "queries": {
+        "passed": 10000,
+        "failed": 0
+      },
+      "skipped": 0,
+      "pass_rate": 100.0
+    },
+    {
+      "path": "index/between/10/slt_good_1.test",
+      "statements": {
+        "passed": 29,
+        "failed": 0
+      },
+      "queries": {
+        "passed": 9990,
+        "failed": 10
+      },
+      "skipped": 0,
+      "pass_rate": 99.9
+    },
+    {
+      "path": "index/between/10/slt_good_2.test",
+      "statements": {
+        "passed": 32,
+        "failed": 0
+      },
+      "queries": {
+        "passed": 10000,
+        "failed": 0
+      },
+      "skipped": 0,
+      "pass_rate": 100.0
+    },
+    {
+      "path": "index/between/10/slt_good_3.test",
+      "statements": {
+        "passed": 32,
+        "failed": 0
+      },
+      "queries": {
+        "passed": 9990,
+        "failed": 10
+      },
+      "skipped": 0,
+      "pass_rate": 99.9
+    },
+    {
+      "path": "index/between/10/slt_good_4.test",
+      "statements": {
+        "passed": 32,
+        "failed": 0
+      },
+      "queries": {
+        "passed": 9990,
+        "failed": 10
+      },
+      "skipped": 0,
+      "pass_rate": 99.9
+    },
+    {
+      "path": "index/between/10/slt_good_5.test",
+      "statements": {
+        "passed": 31,
+        "failed": 0
+      },
+      "queries": {
+        "passed": 10000,
+        "failed": 0
+      },
+      "skipped": 0,
+      "pass_rate": 100.0
+    },
+    {
+      "path": "index/between/100/slt_good_0.test",
+      "statements": {
+        "passed": 123,
+        "failed": 0
+      },
+      "queries": {
+        "passed": 9990,
+        "failed": 10
+      },
+      "skipped": 0,
+      "pass_rate": 99.9
+    },
+    {
+      "path": "index/between/100/slt_good_1.test",
+      "statements": {
+        "passed": 125,
+        "failed": 0
+      },
+      "queries": {
+        "passed": 9990,
+        "failed": 10
+      },
+      "skipped": 0,
+      "pass_rate": 99.9
+    },
+    {
+      "path": "index/between/100/slt_good_2.test",
+      "statements": {
+        "passed": 121,
+        "failed": 0
+      },
+      "queries": {
+        "passed": 9970,
+        "failed": 30
+      },
+      "skipped": 0,
+      "pass_rate": 99.7
+    },
+    {
+      "path": "index/between/100/slt_good_3.test",
+      "statements": {
+        "passed": 121,
+        "failed": 0
+      },
+      "queries": {
+        "passed": 10000,
+        "failed": 0
+      },
+      "skipped": 0,
+      "pass_rate": 100.0
+    },
+    {
+      "path": "index/between/100/slt_good_4.test",
+      "statements": {
+        "passed": 125,
+        "failed": 0
+      },
+      "queries": {
+        "passed": 9990,
+        "failed": 10
+      },
+      "skipped": 0,
+      "pass_rate": 99.9
+    },
+    {
+      "path": "index/between/1000/slt_good_0.test",
+      "statements": {
+        "passed": 1021,
+        "failed": 0
+      },
+      "queries": {
+        "passed": 2771,
+        "failed": 0
+      },
+      "skipped": 0,
+      "pass_rate": 100.0
+    },
+    {
+      "path": "index/commute/10/slt_good_0.test",
+      "statements": {
+        "passed": 34,
+        "failed": 0
+      },
+      "queries": {
+        "passed": 10000,
+        "failed": 0
+      },
+      "skipped": 0,
+      "pass_rate": 100.0
+    },
+    {
+      "path": "index/commute/10/slt_good_1.test",
+      "statements": {
+        "passed": 30,
+        "failed": 0
+      },
+      "queries": {
+        "passed": 9990,
+        "failed": 10
+      },
+      "skipped": 0,
+      "pass_rate": 99.9
+    },
+    {
+      "path": "index/commute/10/slt_good_10.test",
+      "statements": {
+        "passed": 32,
+        "failed": 0
+      },
+      "queries": {
+        "passed": 4229,
+        "failed": 0
+      },
+      "skipped": 0,
+      "pass_rate": 100.0
+    },
+    {
+      "path": "index/commute/10/slt_good_11.test",
+      "statements": {
+        "passed": 32,
+        "failed": 0
+      },
+      "queries": {
+        "passed": 10000,
+        "failed": 0
+      },
+      "skipped": 0,
+      "pass_rate": 100.0
+    },
+    {
+      "path": "index/commute/10/slt_good_12.test",
+      "statements": {
+        "passed": 31,
+        "failed": 0
+      },
+      "queries": {
+        "passed": 10000,
+        "failed": 0
+      },
+      "skipped": 0,
+      "pass_rate": 100.0
+    },
+    {
+      "path": "index/commute/10/slt_good_13.test",
+      "statements": {
+        "passed": 32,
+        "failed": 0
+      },
+      "queries": {
+        "passed": 10000,
+        "failed": 0
+      },
+      "skipped": 0,
+      "pass_rate": 100.0
+    },
+    {
+      "path": "index/commute/10/slt_good_14.test",
+      "statements": {
+        "passed": 32,
+        "failed": 0
+      },
+      "queries": {
+        "passed": 9990,
+        "failed": 10
+      },
+      "skipped": 0,
+      "pass_rate": 99.9
+    },
+    {
+      "path": "index/commute/10/slt_good_15.test",
+      "statements": {
+        "passed": 30,
+        "failed": 0
+      },
+      "queries": {
+        "passed": 10000,
+        "failed": 0
+      },
+      "skipped": 0,
+      "pass_rate": 100.0
+    },
+    {
+      "path": "index/commute/10/slt_good_16.test",
+      "statements": {
+        "passed": 32,
+        "failed": 0
+      },
+      "queries": {
+        "passed": 10000,
+        "failed": 0
+      },
+      "skipped": 0,
+      "pass_rate": 100.0
+    },
+    {
+      "path": "index/commute/10/slt_good_17.test",
+      "statements": {
+        "passed": 31,
+        "failed": 0
+      },
+      "queries": {
+        "passed": 10000,
+        "failed": 0
+      },
+      "skipped": 0,
+      "pass_rate": 100.0
+    },
+    {
+      "path": "index/commute/10/slt_good_18.test",
+      "statements": {
+        "passed": 34,
+        "failed": 0
+      },
+      "queries": {
+        "passed": 10000,
+        "failed": 0
+      },
+      "skipped": 0,
+      "pass_rate": 100.0
+    },
+    {
+      "path": "index/commute/10/slt_good_19.test",
+      "statements": {
+        "passed": 31,
+        "failed": 0
+      },
+      "queries": {
+        "passed": 10000,
+        "failed": 0
+      },
+      "skipped": 0,
+      "pass_rate": 100.0
+    },
+    {
+      "path": "index/commute/10/slt_good_2.test",
+      "statements": {
+        "passed": 33,
+        "failed": 0
+      },
+      "queries": {
+        "passed": 10004,
+        "failed": 0
+      },
+      "skipped": 0,
+      "pass_rate": 100.0
+    },
+    {
+      "path": "index/commute/10/slt_good_20.test",
+      "statements": {
+        "passed": 32,
+        "failed": 0
+      },
+      "queries": {
+        "passed": 10000,
+        "failed": 0
+      },
+      "skipped": 0,
+      "pass_rate": 100.0
+    },
+    {
+      "path": "index/commute/10/slt_good_21.test",
+      "statements": {
+        "passed": 30,
+        "failed": 0
+      },
+      "queries": {
+        "passed": 10000,
+        "failed": 0
+      },
+      "skipped": 0,
+      "pass_rate": 100.0
+    },
+    {
+      "path": "index/commute/10/slt_good_22.test",
+      "statements": {
+        "passed": 33,
+        "failed": 0
+      },
+      "queries": {
+        "passed": 10000,
+        "failed": 0
+      },
+      "skipped": 0,
+      "pass_rate": 100.0
+    },
+    {
+      "path": "index/commute/10/slt_good_23.test",
+      "statements": {
+        "passed": 33,
+        "failed": 0
+      },
+      "queries": {
+        "passed": 10000,
+        "failed": 0
+      },
+      "skipped": 0,
+      "pass_rate": 100.0
+    },
+    {
+      "path": "index/commute/10/slt_good_24.test",
+      "statements": {
+        "passed": 33,
+        "failed": 0
+      },
+      "queries": {
+        "passed": 10000,
+        "failed": 0
+      },
+      "skipped": 0,
+      "pass_rate": 100.0
+    },
+    {
+      "path": "index/commute/10/slt_good_25.test",
+      "statements": {
+        "passed": 30,
+        "failed": 0
+      },
+      "queries": {
+        "passed": 10000,
+        "failed": 0
+      },
+      "skipped": 0,
+      "pass_rate": 100.0
+    },
+    {
+      "path": "index/commute/10/slt_good_26.test",
+      "statements": {
+        "passed": 31,
+        "failed": 0
+      },
+      "queries": {
+        "passed": 10000,
+        "failed": 0
+      },
+      "skipped": 0,
+      "pass_rate": 100.0
+    },
+    {
+      "path": "index/commute/10/slt_good_27.test",
+      "statements": {
+        "passed": 33,
+        "failed": 0
+      },
+      "queries": {
+        "passed": 10000,
+        "failed": 0
+      },
+      "skipped": 0,
+      "pass_rate": 100.0
+    },
+    {
+      "path": "index/commute/10/slt_good_28.test",
+      "statements": {
+        "passed": 33,
+        "failed": 0
+      },
+      "queries": {
+        "passed": 10000,
+        "failed": 0
+      },
+      "skipped": 0,
+      "pass_rate": 100.0
+    },
+    {
+      "path": "index/commute/10/slt_good_29.test",
+      "statements": {
+        "passed": 32,
+        "failed": 0
+      },
+      "queries": {
+        "passed": 10000,
+        "failed": 0
+      },
+      "skipped": 0,
+      "pass_rate": 100.0
+    },
+    {
+      "path": "index/commute/10/slt_good_3.test",
+      "statements": {
+        "passed": 32,
+        "failed": 0
+      },
+      "queries": {
+        "passed": 10000,
+        "failed": 0
+      },
+      "skipped": 0,
+      "pass_rate": 100.0
+    },
+    {
+      "path": "index/commute/10/slt_good_30.test",
+      "statements": {
+        "passed": 32,
+        "failed": 0
+      },
+      "queries": {
+        "passed": 10000,
+        "failed": 0
+      },
+      "skipped": 0,
+      "pass_rate": 100.0
+    },
+    {
+      "path": "index/commute/10/slt_good_31.test",
+      "statements": {
+        "passed": 33,
+        "failed": 0
+      },
+      "queries": {
+        "passed": 10000,
+        "failed": 0
+      },
+      "skipped": 0,
+      "pass_rate": 100.0
+    },
+    {
+      "path": "index/commute/10/slt_good_32.test",
+      "statements": {
+        "passed": 32,
+        "failed": 0
+      },
+      "queries": {
+        "passed": 9990,
+        "failed": 10
+      },
+      "skipped": 0,
+      "pass_rate": 99.9
+    },
+    {
+      "path": "index/commute/10/slt_good_33.test",
+      "statements": {
+        "passed": 34,
+        "failed": 0
+      },
+      "queries": {
+        "passed": 10000,
+        "failed": 0
+      },
+      "skipped": 0,
+      "pass_rate": 100.0
+    },
+    {
+      "path": "index/commute/10/slt_good_34.test",
+      "statements": {
+        "passed": 32,
+        "failed": 0
+      },
+      "queries": {
+        "passed": 10000,
+        "failed": 0
+      },
+      "skipped": 0,
+      "pass_rate": 100.0
+    },
+    {
+      "path": "index/commute/10/slt_good_4.test",
+      "statements": {
+        "passed": 30,
+        "failed": 0
+      },
+      "queries": {
+        "passed": 10000,
+        "failed": 0
+      },
+      "skipped": 0,
+      "pass_rate": 100.0
+    },
+    {
+      "path": "index/commute/10/slt_good_5.test",
+      "statements": {
+        "passed": 32,
+        "failed": 0
+      },
+      "queries": {
+        "passed": 10000,
+        "failed": 0
+      },
+      "skipped": 0,
+      "pass_rate": 100.0
+    },
+    {
+      "path": "index/commute/10/slt_good_6.test",
+      "statements": {
+        "passed": 36,
+        "failed": 0
+      },
+      "queries": {
+        "passed": 10000,
+        "failed": 0
+      },
+      "skipped": 0,
+      "pass_rate": 100.0
+    },
+    {
+      "path": "index/commute/10/slt_good_7.test",
+      "statements": {
+        "passed": 34,
+        "failed": 0
+      },
+      "queries": {
+        "passed": 10000,
+        "failed": 0
+      },
+      "skipped": 0,
+      "pass_rate": 100.0
+    },
+    {
+      "path": "index/commute/10/slt_good_8.test",
+      "statements": {
+        "passed": 32,
+        "failed": 0
+      },
+      "queries": {
+        "passed": 10000,
+        "failed": 0
+      },
+      "skipped": 0,
+      "pass_rate": 100.0
+    },
+    {
+      "path": "index/commute/10/slt_good_9.test",
+      "statements": {
+        "passed": 34,
+        "failed": 0
+      },
+      "queries": {
+        "passed": 10000,
+        "failed": 0
+      },
+      "skipped": 0,
+      "pass_rate": 100.0
+    },
+    {
+      "path": "index/commute/100/slt_good_0.test",
+      "statements": {
+        "passed": 122,
+        "failed": 0
+      },
+      "queries": {
+        "passed": 10000,
+        "failed": 0
+      },
+      "skipped": 0,
+      "pass_rate": 100.0
+    },
+    {
+      "path": "index/commute/100/slt_good_1.test",
+      "statements": {
+        "passed": 120,
+        "failed": 0
+      },
+      "queries": {
+        "passed": 10000,
+        "failed": 0
+      },
+      "skipped": 0,
+      "pass_rate": 100.0
+    },
+    {
+      "path": "index/commute/100/slt_good_10.test",
+      "statements": {
+        "passed": 124,
+        "failed": 0
+      },
+      "queries": {
+        "passed": 10000,
+        "failed": 0
+      },
+      "skipped": 0,
+      "pass_rate": 100.0
+    },
+    {
+      "path": "index/commute/100/slt_good_11.test",
+      "statements": {
+        "passed": 123,
+        "failed": 0
+      },
+      "queries": {
+        "passed": 10000,
+        "failed": 0
+      },
+      "skipped": 0,
+      "pass_rate": 100.0
+    },
+    {
+      "path": "index/commute/100/slt_good_12.test",
+      "statements": {
+        "passed": 123,
+        "failed": 0
+      },
+      "queries": {
+        "passed": 10000,
+        "failed": 0
+      },
+      "skipped": 0,
+      "pass_rate": 100.0
+    },
+    {
+      "path": "index/commute/100/slt_good_2.test",
+      "statements": {
+        "passed": 123,
+        "failed": 0
+      },
+      "queries": {
+        "passed": 10000,
+        "failed": 0
+      },
+      "skipped": 0,
+      "pass_rate": 100.0
+    },
+    {
+      "path": "index/commute/100/slt_good_3.test",
+      "statements": {
+        "passed": 121,
+        "failed": 0
+      },
+      "queries": {
+        "passed": 10000,
+        "failed": 0
+      },
+      "skipped": 0,
+      "pass_rate": 100.0
+    },
+    {
+      "path": "index/commute/100/slt_good_4.test",
+      "statements": {
+        "passed": 124,
+        "failed": 0
+      },
+      "queries": {
+        "passed": 10000,
+        "failed": 0
+      },
+      "skipped": 0,
+      "pass_rate": 100.0
+    },
+    {
+      "path": "index/commute/100/slt_good_5.test",
+      "statements": {
+        "passed": 121,
+        "failed": 0
+      },
+      "queries": {
+        "passed": 10000,
+        "failed": 0
+      },
+      "skipped": 0,
+      "pass_rate": 100.0
+    },
+    {
+      "path": "index/commute/100/slt_good_6.test",
+      "statements": {
+        "passed": 122,
+        "failed": 0
+      },
+      "queries": {
+        "passed": 10000,
+        "failed": 0
+      },
+      "skipped": 0,
+      "pass_rate": 100.0
+    },
+    {
+      "path": "index/commute/100/slt_good_7.test",
+      "statements": {
+        "passed": 123,
+        "failed": 0
+      },
+      "queries": {
+        "passed": 10000,
+        "failed": 0
+      },
+      "skipped": 0,
+      "pass_rate": 100.0
+    },
+    {
+      "path": "index/commute/100/slt_good_8.test",
+      "statements": {
+        "passed": 122,
+        "failed": 0
+      },
+      "queries": {
+        "passed": 10000,
+        "failed": 0
+      },
+      "skipped": 0,
+      "pass_rate": 100.0
+    },
+    {
+      "path": "index/commute/100/slt_good_9.test",
+      "statements": {
+        "passed": 123,
+        "failed": 0
+      },
+      "queries": {
+        "passed": 10000,
+        "failed": 0
+      },
+      "skipped": 0,
+      "pass_rate": 100.0
+    },
+    {
+      "path": "index/commute/1000/slt_good_0.test",
+      "statements": {
+        "passed": 1021,
+        "failed": 0
+      },
+      "queries": {
+        "passed": 3720,
+        "failed": 0
+      },
+      "skipped": 0,
+      "pass_rate": 100.0
+    },
+    {
+      "path": "index/commute/1000/slt_good_1.test",
+      "statements": {
+        "passed": 1021,
+        "failed": 0
+      },
+      "queries": {
+        "passed": 9562,
+        "failed": 0
+      },
+      "skipped": 0,
+      "pass_rate": 100.0
+    },
+    {
+      "path": "index/commute/1000/slt_good_2.test",
+      "statements": {
+        "passed": 1021,
+        "failed": 0
+      },
+      "queries": {
+        "passed": 10000,
+        "failed": 0
+      },
+      "skipped": 0,
+      "pass_rate": 100.0
+    },
+    {
+      "path": "index/commute/1000/slt_good_3.test",
+      "statements": {
+        "passed": 1025,
+        "failed": 0
+      },
+      "queries": {
+        "passed": 10000,
+        "failed": 0
+      },
+      "skipped": 0,
+      "pass_rate": 100.0
+    },
+    {
+      "path": "index/delete/1/slt_good_0.test",
+      "statements": {
+        "passed": 7146,
+        "failed": 0
+      },
+      "queries": {
+        "passed": 3761,
+        "failed": 0
+      },
+      "skipped": 0,
+      "pass_rate": 100.0
+    },
+    {
+      "path": "index/delete/10/slt_good_0.test",
+      "statements": {
+        "passed": 6476,
+        "failed": 0
+      },
+      "queries": {
+        "passed": 4254,
+        "failed": 0
+      },
+      "skipped": 0,
+      "pass_rate": 100.0
+    },
+    {
+      "path": "index/delete/10/slt_good_1.test",
+      "statements": {
+        "passed": 6515,
+        "failed": 0
+      },
+      "queries": {
+        "passed": 4259,
+        "failed": 0
+      },
+      "skipped": 0,
+      "pass_rate": 100.0
+    },
+    {
+      "path": "index/delete/10/slt_good_2.test",
+      "statements": {
+        "passed": 5625,
+        "failed": 0
+      },
+      "queries": {
+        "passed": 3765,
+        "failed": 0
+      },
+      "skipped": 0,
+      "pass_rate": 100.0
+    },
+    {
+      "path": "index/delete/10/slt_good_3.test",
+      "statements": {
+        "passed": 6204,
+        "failed": 0
+      },
+      "queries": {
+        "passed": 3861,
+        "failed": 0
+      },
+      "skipped": 0,
+      "pass_rate": 100.0
+    },
+    {
+      "path": "index/delete/10/slt_good_4.test",
+      "statements": {
+        "passed": 6584,
+        "failed": 0
+      },
+      "queries": {
+        "passed": 4015,
+        "failed": 0
+      },
+      "skipped": 0,
+      "pass_rate": 100.0
+    },
+    {
+      "path": "index/delete/10/slt_good_5.test",
+      "statements": {
+        "passed": 6182,
+        "failed": 0
+      },
+      "queries": {
+        "passed": 4171,
+        "failed": 0
+      },
+      "skipped": 0,
+      "pass_rate": 100.0
+    },
+    {
+      "path": "index/delete/100/slt_good_0.test",
+      "statements": {
+        "passed": 8024,
+        "failed": 0
+      },
+      "queries": {
+        "passed": 3121,
+        "failed": 0
+      },
+      "skipped": 0,
+      "pass_rate": 100.0
+    },
+    {
+      "path": "index/delete/100/slt_good_1.test",
+      "statements": {
+        "passed": 8280,
+        "failed": 0
+      },
+      "queries": {
+        "passed": 2615,
+        "failed": 0
+      },
+      "skipped": 0,
+      "pass_rate": 100.0
+    },
+    {
+      "path": "index/delete/100/slt_good_2.test",
+      "statements": {
+        "passed": 8071,
+        "failed": 0
+      },
+      "queries": {
+        "passed": 2962,
+        "failed": 0
+      },
+      "skipped": 0,
+      "pass_rate": 100.0
+    },
+    {
+      "path": "index/delete/100/slt_good_3.test",
+      "statements": {
+        "passed": 8205,
+        "failed": 0
+      },
+      "queries": {
+        "passed": 2737,
+        "failed": 0
+      },
+      "skipped": 0,
+      "pass_rate": 100.0
+    },
+    {
+      "path": "index/delete/1000/slt_good_0.test",
+      "statements": {
+        "passed": 11493,
+        "failed": 0
+      },
+      "queries": {
+        "passed": 431,
+        "failed": 0
+      },
+      "skipped": 0,
+      "pass_rate": 100.0
+    },
+    {
+      "path": "index/delete/1000/slt_good_1.test",
+      "statements": {
+        "passed": 11467,
+        "failed": 0
+      },
+      "queries": {
+        "passed": 371,
+        "failed": 0
+      },
+      "skipped": 0,
+      "pass_rate": 100.0
+    },
+    {
+      "path": "index/delete/10000/slt_good_0.test",
+      "statements": {
+        "passed": 20145,
+        "failed": 0
+      },
+      "queries": {
+        "passed": 202,
+        "failed": 0
+      },
+      "skipped": 0,
+      "pass_rate": 100.0
+    },
+    {
+      "path": "index/in/10/slt_good_0.test",
+      "statements": {
+        "passed": 30,
+        "failed": 0
+      },
+      "queries": {
+        "passed": 9990,
+        "failed": 15
+      },
+      "skipped": 0,
+      "pass_rate": 99.85
+    },
+    {
+      "path": "index/in/10/slt_good_1.test",
+      "statements": {
+        "passed": 31,
+        "failed": 0
+      },
+      "queries": {
+        "passed": 9990,
+        "failed": 15
+      },
+      "skipped": 0,
+      "pass_rate": 99.85
+    },
+    {
+      "path": "index/in/10/slt_good_2.test",
+      "statements": {
+        "passed": 30,
+        "failed": 0
+      },
+      "queries": {
+        "passed": 9975,
+        "failed": 30
+      },
+      "skipped": 0,
+      "pass_rate": 99.7
+    },
+    {
+      "path": "index/in/10/slt_good_3.test",
+      "statements": {
+        "passed": 32,
+        "failed": 0
+      },
+      "queries": {
+        "passed": 10005,
+        "failed": 0
+      },
+      "skipped": 0,
+      "pass_rate": 100.0
+    },
+    {
+      "path": "index/in/10/slt_good_4.test",
+      "statements": {
+        "passed": 33,
+        "failed": 0
+      },
+      "queries": {
+        "passed": 9990,
+        "failed": 15
+      },
+      "skipped": 0,
+      "pass_rate": 99.85
+    },
+    {
+      "path": "index/in/10/slt_good_5.test",
+      "statements": {
+        "passed": 33,
+        "failed": 0
+      },
+      "queries": {
+        "passed": 10005,
+        "failed": 0
+      },
+      "skipped": 0,
+      "pass_rate": 100.0
+    },
+    {
+      "path": "index/in/100/slt_good_0.test",
+      "statements": {
+        "passed": 123,
+        "failed": 0
+      },
+      "queries": {
+        "passed": 9990,
+        "failed": 15
+      },
+      "skipped": 0,
+      "pass_rate": 99.85
+    },
+    {
+      "path": "index/in/100/slt_good_1.test",
+      "statements": {
+        "passed": 122,
+        "failed": 0
+      },
+      "queries": {
+        "passed": 10005,
+        "failed": 0
+      },
+      "skipped": 0,
+      "pass_rate": 100.0
+    },
+    {
+      "path": "index/in/100/slt_good_2.test",
+      "statements": {
+        "passed": 123,
+        "failed": 0
+      },
+      "queries": {
+        "passed": 10005,
+        "failed": 0
+      },
+      "skipped": 0,
+      "pass_rate": 100.0
+    },
+    {
+      "path": "index/in/100/slt_good_3.test",
+      "statements": {
+        "passed": 121,
+        "failed": 0
+      },
+      "queries": {
+        "passed": 9990,
+        "failed": 15
+      },
+      "skipped": 0,
+      "pass_rate": 99.85
+    },
+    {
+      "path": "index/in/100/slt_good_4.test",
+      "statements": {
+        "passed": 122,
+        "failed": 0
+      },
+      "queries": {
+        "passed": 10005,
+        "failed": 0
+      },
+      "skipped": 0,
+      "pass_rate": 100.0
+    },
+    {
+      "path": "index/in/1000/slt_good_0.test",
+      "statements": {
+        "passed": 1023,
+        "failed": 0
+      },
+      "queries": {
+        "passed": 10005,
+        "failed": 0
+      },
+      "skipped": 0,
+      "pass_rate": 100.0
+    },
+    {
+      "path": "index/in/1000/slt_good_1.test",
+      "statements": {
+        "passed": 1019,
+        "failed": 0
+      },
+      "queries": {
+        "passed": 9975,
+        "failed": 30
+      },
+      "skipped": 0,
+      "pass_rate": 99.72
+    },
+    {
+      "path": "index/orderby/10/slt_good_0.test",
+      "statements": {
+        "passed": 33,
+        "failed": 0
+      },
+      "queries": {
+        "passed": 10020,
+        "failed": 0
+      },
+      "skipped": 0,
+      "pass_rate": 100.0
+    },
+    {
+      "path": "index/orderby/10/slt_good_1.test",
+      "statements": {
+        "passed": 34,
+        "failed": 0
+      },
+      "queries": {
+        "passed": 10020,
+        "failed": 0
+      },
+      "skipped": 0,
+      "pass_rate": 100.0
+    },
+    {
+      "path": "index/orderby/10/slt_good_10.test",
+      "statements": {
+        "passed": 31,
+        "failed": 0
+      },
+      "queries": {
+        "passed": 10020,
+        "failed": 0
+      },
+      "skipped": 0,
+      "pass_rate": 100.0
+    },
+    {
+      "path": "index/orderby/10/slt_good_11.test",
+      "statements": {
+        "passed": 33,
+        "failed": 0
+      },
+      "queries": {
+        "passed": 10020,
+        "failed": 0
+      },
+      "skipped": 0,
+      "pass_rate": 100.0
+    },
+    {
+      "path": "index/orderby/10/slt_good_12.test",
+      "statements": {
+        "passed": 33,
+        "failed": 0
+      },
+      "queries": {
+        "passed": 10020,
+        "failed": 0
+      },
+      "skipped": 0,
+      "pass_rate": 100.0
+    },
+    {
+      "path": "index/orderby/10/slt_good_13.test",
+      "statements": {
+        "passed": 31,
+        "failed": 0
+      },
+      "queries": {
+        "passed": 10020,
+        "failed": 0
+      },
+      "skipped": 0,
+      "pass_rate": 100.0
+    },
+    {
+      "path": "index/orderby/10/slt_good_14.test",
+      "statements": {
+        "passed": 33,
+        "failed": 0
+      },
+      "queries": {
+        "passed": 10020,
+        "failed": 0
+      },
+      "skipped": 0,
+      "pass_rate": 100.0
+    },
+    {
+      "path": "index/orderby/10/slt_good_15.test",
+      "statements": {
+        "passed": 32,
+        "failed": 0
+      },
+      "queries": {
+        "passed": 10020,
+        "failed": 0
+      },
+      "skipped": 0,
+      "pass_rate": 100.0
+    },
+    {
+      "path": "index/orderby/10/slt_good_16.test",
+      "statements": {
+        "passed": 30,
+        "failed": 0
+      },
+      "queries": {
+        "passed": 10020,
+        "failed": 0
+      },
+      "skipped": 0,
+      "pass_rate": 100.0
+    },
+    {
+      "path": "index/orderby/10/slt_good_17.test",
+      "statements": {
+        "passed": 34,
+        "failed": 0
+      },
+      "queries": {
+        "passed": 10020,
+        "failed": 0
+      },
+      "skipped": 0,
+      "pass_rate": 100.0
+    },
+    {
+      "path": "index/orderby/10/slt_good_18.test",
+      "statements": {
+        "passed": 33,
+        "failed": 0
+      },
+      "queries": {
+        "passed": 10020,
+        "failed": 0
+      },
+      "skipped": 0,
+      "pass_rate": 100.0
+    },
+    {
+      "path": "index/orderby/10/slt_good_19.test",
+      "statements": {
+        "passed": 32,
+        "failed": 0
+      },
+      "queries": {
+        "passed": 10020,
+        "failed": 0
+      },
+      "skipped": 0,
+      "pass_rate": 100.0
+    },
+    {
+      "path": "index/orderby/10/slt_good_2.test",
+      "statements": {
+        "passed": 31,
+        "failed": 0
+      },
+      "queries": {
+        "passed": 10020,
+        "failed": 0
+      },
+      "skipped": 0,
+      "pass_rate": 100.0
+    },
+    {
+      "path": "index/orderby/10/slt_good_20.test",
+      "statements": {
+        "passed": 32,
+        "failed": 0
+      },
+      "queries": {
+        "passed": 10020,
+        "failed": 0
+      },
+      "skipped": 0,
+      "pass_rate": 100.0
+    },
+    {
+      "path": "index/orderby/10/slt_good_21.test",
+      "statements": {
+        "passed": 33,
+        "failed": 0
+      },
+      "queries": {
+        "passed": 10020,
+        "failed": 0
+      },
+      "skipped": 0,
+      "pass_rate": 100.0
+    },
+    {
+      "path": "index/orderby/10/slt_good_22.test",
+      "statements": {
+        "passed": 32,
+        "failed": 0
+      },
+      "queries": {
+        "passed": 10020,
+        "failed": 0
+      },
+      "skipped": 0,
+      "pass_rate": 100.0
+    },
+    {
+      "path": "index/orderby/10/slt_good_23.test",
+      "statements": {
+        "passed": 33,
+        "failed": 0
+      },
+      "queries": {
+        "passed": 10020,
+        "failed": 0
+      },
+      "skipped": 0,
+      "pass_rate": 100.0
+    },
+    {
+      "path": "index/orderby/10/slt_good_24.test",
+      "statements": {
+        "passed": 31,
+        "failed": 0
+      },
+      "queries": {
+        "passed": 10020,
+        "failed": 0
+      },
+      "skipped": 0,
+      "pass_rate": 100.0
+    },
+    {
+      "path": "index/orderby/10/slt_good_25.test",
+      "statements": {
+        "passed": 33,
+        "failed": 0
+      },
+      "queries": {
+        "passed": 10020,
+        "failed": 0
+      },
+      "skipped": 0,
+      "pass_rate": 100.0
+    },
+    {
+      "path": "index/orderby/10/slt_good_3.test",
+      "statements": {
+        "passed": 31,
+        "failed": 0
+      },
+      "queries": {
+        "passed": 10020,
+        "failed": 0
+      },
+      "skipped": 0,
+      "pass_rate": 100.0
+    },
+    {
+      "path": "index/orderby/10/slt_good_4.test",
+      "statements": {
+        "passed": 32,
+        "failed": 0
+      },
+      "queries": {
+        "passed": 10020,
+        "failed": 0
+      },
+      "skipped": 0,
+      "pass_rate": 100.0
+    },
+    {
+      "path": "index/orderby/10/slt_good_5.test",
+      "statements": {
+        "passed": 31,
+        "failed": 0
+      },
+      "queries": {
+        "passed": 10020,
+        "failed": 0
+      },
+      "skipped": 0,
+      "pass_rate": 100.0
+    },
+    {
+      "path": "index/orderby/10/slt_good_6.test",
+      "statements": {
+        "passed": 28,
+        "failed": 0
+      },
+      "queries": {
+        "passed": 10020,
+        "failed": 0
+      },
+      "skipped": 0,
+      "pass_rate": 100.0
+    },
+    {
+      "path": "index/orderby/10/slt_good_7.test",
+      "statements": {
+        "passed": 32,
+        "failed": 0
+      },
+      "queries": {
+        "passed": 10020,
+        "failed": 0
+      },
+      "skipped": 0,
+      "pass_rate": 100.0
+    },
+    {
+      "path": "index/orderby/10/slt_good_8.test",
+      "statements": {
+        "passed": 31,
+        "failed": 0
+      },
+      "queries": {
+        "passed": 10020,
+        "failed": 0
+      },
+      "skipped": 0,
+      "pass_rate": 100.0
+    },
+    {
+      "path": "index/orderby/10/slt_good_9.test",
+      "statements": {
+        "passed": 30,
+        "failed": 0
+      },
+      "queries": {
+        "passed": 10020,
+        "failed": 0
+      },
+      "skipped": 0,
+      "pass_rate": 100.0
+    },
+    {
+      "path": "index/orderby/100/slt_good_0.test",
+      "statements": {
+        "passed": 121,
+        "failed": 0
+      },
+      "queries": {
+        "passed": 10020,
+        "failed": 0
+      },
+      "skipped": 0,
+      "pass_rate": 100.0
+    },
+    {
+      "path": "index/orderby/100/slt_good_1.test",
+      "statements": {
+        "passed": 120,
+        "failed": 0
+      },
+      "queries": {
+        "passed": 10020,
+        "failed": 0
+      },
+      "skipped": 0,
+      "pass_rate": 100.0
+    },
+    {
+      "path": "index/orderby/100/slt_good_2.test",
+      "statements": {
+        "passed": 122,
+        "failed": 0
+      },
+      "queries": {
+        "passed": 10020,
+        "failed": 0
+      },
+      "skipped": 0,
+      "pass_rate": 100.0
+    },
+    {
+      "path": "index/orderby/100/slt_good_3.test",
+      "statements": {
+        "passed": 120,
+        "failed": 0
+      },
+      "queries": {
+        "passed": 10020,
+        "failed": 0
+      },
+      "skipped": 0,
+      "pass_rate": 100.0
+    },
+    {
+      "path": "index/orderby/1000/slt_good_0.test",
+      "statements": {
+        "passed": 1023,
+        "failed": 0
+      },
+      "queries": {
+        "passed": 10020,
+        "failed": 0
+      },
+      "skipped": 0,
+      "pass_rate": 100.0
+    },
+    {
+      "path": "index/orderby_nosort/10/slt_good_0.test",
+      "statements": {
+        "passed": 33,
+        "failed": 0
+      },
+      "queries": {
+        "passed": 10020,
+        "failed": 0
+      },
+      "skipped": 0,
+      "pass_rate": 100.0
+    },
+    {
+      "path": "index/orderby_nosort/10/slt_good_1.test",
+      "statements": {
+        "passed": 31,
+        "failed": 0
+      },
+      "queries": {
+        "passed": 10020,
+        "failed": 0
+      },
+      "skipped": 0,
+      "pass_rate": 100.0
+    },
+    {
+      "path": "index/orderby_nosort/10/slt_good_10.test",
+      "statements": {
+        "passed": 31,
+        "failed": 0
+      },
+      "queries": {
+        "passed": 10020,
+        "failed": 0
+      },
+      "skipped": 0,
+      "pass_rate": 100.0
+    },
+    {
+      "path": "index/orderby_nosort/10/slt_good_11.test",
+      "statements": {
+        "passed": 32,
+        "failed": 0
+      },
+      "queries": {
+        "passed": 10020,
+        "failed": 0
+      },
+      "skipped": 0,
+      "pass_rate": 100.0
+    },
+    {
+      "path": "index/orderby_nosort/10/slt_good_12.test",
+      "statements": {
+        "passed": 31,
+        "failed": 0
+      },
+      "queries": {
+        "passed": 10020,
+        "failed": 0
+      },
+      "skipped": 0,
+      "pass_rate": 100.0
+    },
+    {
+      "path": "index/orderby_nosort/10/slt_good_13.test",
+      "statements": {
+        "passed": 33,
+        "failed": 0
+      },
+      "queries": {
+        "passed": 10020,
+        "failed": 0
+      },
+      "skipped": 0,
+      "pass_rate": 100.0
+    },
+    {
+      "path": "index/orderby_nosort/10/slt_good_14.test",
+      "statements": {
+        "passed": 32,
+        "failed": 0
+      },
+      "queries": {
+        "passed": 10020,
+        "failed": 0
+      },
+      "skipped": 0,
+      "pass_rate": 100.0
+    },
+    {
+      "path": "index/orderby_nosort/10/slt_good_15.test",
+      "statements": {
+        "passed": 34,
+        "failed": 0
+      },
+      "queries": {
+        "passed": 10020,
+        "failed": 0
+      },
+      "skipped": 0,
+      "pass_rate": 100.0
+    },
+    {
+      "path": "index/orderby_nosort/10/slt_good_16.test",
+      "statements": {
+        "passed": 33,
+        "failed": 0
+      },
+      "queries": {
+        "passed": 10020,
+        "failed": 0
+      },
+      "skipped": 0,
+      "pass_rate": 100.0
+    },
+    {
+      "path": "index/orderby_nosort/10/slt_good_17.test",
+      "statements": {
+        "passed": 30,
+        "failed": 0
+      },
+      "queries": {
+        "passed": 10020,
+        "failed": 0
+      },
+      "skipped": 0,
+      "pass_rate": 100.0
+    },
+    {
+      "path": "index/orderby_nosort/10/slt_good_18.test",
+      "statements": {
+        "passed": 30,
+        "failed": 0
+      },
+      "queries": {
+        "passed": 10020,
+        "failed": 0
+      },
+      "skipped": 0,
+      "pass_rate": 100.0
+    },
+    {
+      "path": "index/orderby_nosort/10/slt_good_19.test",
+      "statements": {
+        "passed": 33,
+        "failed": 0
+      },
+      "queries": {
+        "passed": 10020,
+        "failed": 0
+      },
+      "skipped": 0,
+      "pass_rate": 100.0
+    },
+    {
+      "path": "index/orderby_nosort/10/slt_good_2.test",
+      "statements": {
+        "passed": 32,
+        "failed": 0
+      },
+      "queries": {
+        "passed": 10020,
+        "failed": 0
+      },
+      "skipped": 0,
+      "pass_rate": 100.0
+    },
+    {
+      "path": "index/orderby_nosort/10/slt_good_20.test",
+      "statements": {
+        "passed": 33,
+        "failed": 0
+      },
+      "queries": {
+        "passed": 10020,
+        "failed": 0
+      },
+      "skipped": 0,
+      "pass_rate": 100.0
+    },
+    {
+      "path": "index/orderby_nosort/10/slt_good_21.test",
+      "statements": {
+        "passed": 32,
+        "failed": 0
+      },
+      "queries": {
+        "passed": 10020,
+        "failed": 0
+      },
+      "skipped": 0,
+      "pass_rate": 100.0
+    },
+    {
+      "path": "index/orderby_nosort/10/slt_good_22.test",
+      "statements": {
+        "passed": 34,
+        "failed": 0
+      },
+      "queries": {
+        "passed": 10020,
+        "failed": 0
+      },
+      "skipped": 0,
+      "pass_rate": 100.0
+    },
+    {
+      "path": "index/orderby_nosort/10/slt_good_23.test",
+      "statements": {
+        "passed": 31,
+        "failed": 0
+      },
+      "queries": {
+        "passed": 10020,
+        "failed": 0
+      },
+      "skipped": 0,
+      "pass_rate": 100.0
+    },
+    {
+      "path": "index/orderby_nosort/10/slt_good_24.test",
+      "statements": {
+        "passed": 34,
+        "failed": 0
+      },
+      "queries": {
+        "passed": 10020,
+        "failed": 0
+      },
+      "skipped": 0,
+      "pass_rate": 100.0
+    },
+    {
+      "path": "index/orderby_nosort/10/slt_good_25.test",
+      "statements": {
+        "passed": 32,
+        "failed": 0
+      },
+      "queries": {
+        "passed": 10020,
+        "failed": 0
+      },
+      "skipped": 0,
+      "pass_rate": 100.0
+    },
+    {
+      "path": "index/orderby_nosort/10/slt_good_26.test",
+      "statements": {
+        "passed": 33,
+        "failed": 0
+      },
+      "queries": {
+        "passed": 10020,
+        "failed": 0
+      },
+      "skipped": 0,
+      "pass_rate": 100.0
+    },
+    {
+      "path": "index/orderby_nosort/10/slt_good_27.test",
+      "statements": {
+        "passed": 31,
+        "failed": 0
+      },
+      "queries": {
+        "passed": 10020,
+        "failed": 0
+      },
+      "skipped": 0,
+      "pass_rate": 100.0
+    },
+    {
+      "path": "index/orderby_nosort/10/slt_good_28.test",
+      "statements": {
+        "passed": 32,
+        "failed": 0
+      },
+      "queries": {
+        "passed": 10020,
+        "failed": 0
+      },
+      "skipped": 0,
+      "pass_rate": 100.0
+    },
+    {
+      "path": "index/orderby_nosort/10/slt_good_29.test",
+      "statements": {
+        "passed": 30,
+        "failed": 0
+      },
+      "queries": {
+        "passed": 10020,
+        "failed": 0
+      },
+      "skipped": 0,
+      "pass_rate": 100.0
+    },
+    {
+      "path": "index/orderby_nosort/10/slt_good_3.test",
+      "statements": {
+        "passed": 31,
+        "failed": 0
+      },
+      "queries": {
+        "passed": 10020,
+        "failed": 0
+      },
+      "skipped": 0,
+      "pass_rate": 100.0
+    },
+    {
+      "path": "index/orderby_nosort/10/slt_good_30.test",
+      "statements": {
+        "passed": 32,
+        "failed": 0
+      },
+      "queries": {
+        "passed": 10020,
+        "failed": 0
+      },
+      "skipped": 0,
+      "pass_rate": 100.0
+    },
+    {
+      "path": "index/orderby_nosort/10/slt_good_31.test",
+      "statements": {
+        "passed": 32,
+        "failed": 0
+      },
+      "queries": {
+        "passed": 10020,
+        "failed": 0
+      },
+      "skipped": 0,
+      "pass_rate": 100.0
+    },
+    {
+      "path": "index/orderby_nosort/10/slt_good_32.test",
+      "statements": {
+        "passed": 32,
+        "failed": 0
+      },
+      "queries": {
+        "passed": 10020,
+        "failed": 0
+      },
+      "skipped": 0,
+      "pass_rate": 100.0
+    },
+    {
+      "path": "index/orderby_nosort/10/slt_good_33.test",
+      "statements": {
+        "passed": 30,
+        "failed": 0
+      },
+      "queries": {
+        "passed": 10020,
+        "failed": 0
+      },
+      "skipped": 0,
+      "pass_rate": 100.0
+    },
+    {
+      "path": "index/orderby_nosort/10/slt_good_34.test",
+      "statements": {
+        "passed": 32,
+        "failed": 0
+      },
+      "queries": {
+        "passed": 10020,
+        "failed": 0
+      },
+      "skipped": 0,
+      "pass_rate": 100.0
+    },
+    {
+      "path": "index/orderby_nosort/10/slt_good_35.test",
+      "statements": {
+        "passed": 29,
+        "failed": 0
+      },
+      "queries": {
+        "passed": 10020,
+        "failed": 0
+      },
+      "skipped": 0,
+      "pass_rate": 100.0
+    },
+    {
+      "path": "index/orderby_nosort/10/slt_good_36.test",
+      "statements": {
+        "passed": 32,
+        "failed": 0
+      },
+      "queries": {
+        "passed": 10020,
+        "failed": 0
+      },
+      "skipped": 0,
+      "pass_rate": 100.0
+    },
+    {
+      "path": "index/orderby_nosort/10/slt_good_37.test",
+      "statements": {
+        "passed": 32,
+        "failed": 0
+      },
+      "queries": {
+        "passed": 10020,
+        "failed": 0
+      },
+      "skipped": 0,
+      "pass_rate": 100.0
+    },
+    {
+      "path": "index/orderby_nosort/10/slt_good_38.test",
+      "statements": {
+        "passed": 32,
+        "failed": 0
+      },
+      "queries": {
+        "passed": 10020,
+        "failed": 0
+      },
+      "skipped": 0,
+      "pass_rate": 100.0
+    },
+    {
+      "path": "index/orderby_nosort/10/slt_good_39.test",
+      "statements": {
+        "passed": 32,
+        "failed": 0
+      },
+      "queries": {
+        "passed": 10020,
+        "failed": 0
+      },
+      "skipped": 0,
+      "pass_rate": 100.0
+    },
+    {
+      "path": "index/orderby_nosort/10/slt_good_4.test",
+      "statements": {
+        "passed": 33,
+        "failed": 0
+      },
+      "queries": {
+        "passed": 9960,
+        "failed": 60
+      },
+      "skipped": 0,
+      "pass_rate": 99.4
+    },
+    {
+      "path": "index/orderby_nosort/10/slt_good_5.test",
+      "statements": {
+        "passed": 32,
+        "failed": 0
+      },
+      "queries": {
+        "passed": 10020,
+        "failed": 0
+      },
+      "skipped": 0,
+      "pass_rate": 100.0
+    },
+    {
+      "path": "index/orderby_nosort/10/slt_good_6.test",
+      "statements": {
+        "passed": 33,
+        "failed": 0
+      },
+      "queries": {
+        "passed": 10020,
+        "failed": 0
+      },
+      "skipped": 0,
+      "pass_rate": 100.0
+    },
+    {
+      "path": "index/orderby_nosort/10/slt_good_7.test",
+      "statements": {
+        "passed": 32,
+        "failed": 0
+      },
+      "queries": {
+        "passed": 10020,
+        "failed": 0
+      },
+      "skipped": 0,
+      "pass_rate": 100.0
+    },
+    {
+      "path": "index/orderby_nosort/10/slt_good_8.test",
+      "statements": {
+        "passed": 34,
+        "failed": 0
+      },
+      "queries": {
+        "passed": 10020,
+        "failed": 0
+      },
+      "skipped": 0,
+      "pass_rate": 100.0
+    },
+    {
+      "path": "index/orderby_nosort/10/slt_good_9.test",
+      "statements": {
+        "passed": 35,
+        "failed": 0
+      },
+      "queries": {
+        "passed": 10020,
+        "failed": 0
+      },
+      "skipped": 0,
+      "pass_rate": 100.0
+    },
+    {
+      "path": "index/orderby_nosort/100/slt_good_0.test",
+      "statements": {
+        "passed": 123,
+        "failed": 0
+      },
+      "queries": {
+        "passed": 10026,
+        "failed": 0
+      },
+      "skipped": 0,
+      "pass_rate": 100.0
+    },
+    {
+      "path": "index/orderby_nosort/100/slt_good_1.test",
+      "statements": {
+        "passed": 121,
+        "failed": 0
+      },
+      "queries": {
+        "passed": 10020,
+        "failed": 0
+      },
+      "skipped": 0,
+      "pass_rate": 100.0
+    },
+    {
+      "path": "index/orderby_nosort/100/slt_good_2.test",
+      "statements": {
+        "passed": 122,
+        "failed": 0
+      },
+      "queries": {
+        "passed": 10020,
+        "failed": 0
+      },
+      "skipped": 0,
+      "pass_rate": 100.0
+    },
+    {
+      "path": "index/orderby_nosort/100/slt_good_3.test",
+      "statements": {
+        "passed": 123,
+        "failed": 0
+      },
+      "queries": {
+        "passed": 10020,
+        "failed": 0
+      },
+      "skipped": 0,
+      "pass_rate": 100.0
+    },
+    {
+      "path": "index/orderby_nosort/100/slt_good_4.test",
+      "statements": {
+        "passed": 121,
+        "failed": 0
+      },
+      "queries": {
+        "passed": 10020,
+        "failed": 0
+      },
+      "skipped": 0,
+      "pass_rate": 100.0
+    },
+    {
+      "path": "index/orderby_nosort/100/slt_good_5.test",
+      "statements": {
+        "passed": 122,
+        "failed": 0
+      },
+      "queries": {
+        "passed": 10020,
+        "failed": 0
+      },
+      "skipped": 0,
+      "pass_rate": 100.0
+    },
+    {
+      "path": "index/orderby_nosort/100/slt_good_6.test",
+      "statements": {
+        "passed": 124,
+        "failed": 0
+      },
+      "queries": {
+        "passed": 10020,
+        "failed": 0
+      },
+      "skipped": 0,
+      "pass_rate": 100.0
+    },
+    {
+      "path": "index/orderby_nosort/1000/slt_good_0.test",
+      "statements": {
+        "passed": 1020,
+        "failed": 0
+      },
+      "queries": {
+        "passed": 10020,
+        "failed": 0
+      },
+      "skipped": 0,
+      "pass_rate": 100.0
+    },
+    {
+      "path": "index/orderby_nosort/1000/slt_good_1.test",
+      "statements": {
+        "passed": 1023,
+        "failed": 0
+      },
+      "queries": {
+        "passed": 10020,
+        "failed": 0
+      },
+      "skipped": 0,
+      "pass_rate": 100.0
+    },
+    {
+      "path": "index/random/10/slt_good_0.test",
+      "statements": {
+        "passed": 32,
+        "failed": 0
+      },
+      "queries": {
+        "passed": 10000,
+        "failed": 0
+      },
+      "skipped": 2140,
+      "pass_rate": 100.0
+    },
+    {
+      "path": "index/random/10/slt_good_1.test",
+      "statements": {
+        "passed": 34,
+        "failed": 0
+      },
+      "queries": {
+        "passed": 10000,
+        "failed": 0
+      },
+      "skipped": 2255,
+      "pass_rate": 100.0
+    },
+    {
+      "path": "index/random/10/slt_good_10.test",
+      "statements": {
+        "passed": 34,
+        "failed": 0
+      },
+      "queries": {
+        "passed": 10000,
+        "failed": 0
+      },
+      "skipped": 2195,
+      "pass_rate": 100.0
+    },
+    {
+      "path": "index/random/10/slt_good_11.test",
+      "statements": {
+        "passed": 31,
+        "failed": 0
+      },
+      "queries": {
+        "passed": 10000,
+        "failed": 0
+      },
+      "skipped": 2220,
+      "pass_rate": 100.0
+    },
+    {
+      "path": "index/random/10/slt_good_12.test",
+      "statements": {
+        "passed": 33,
+        "failed": 0
+      },
+      "queries": {
+        "passed": 10000,
+        "failed": 0
+      },
+      "skipped": 2185,
+      "pass_rate": 100.0
+    },
+    {
+      "path": "index/random/10/slt_good_13.test",
+      "statements": {
+        "passed": 32,
+        "failed": 0
+      },
+      "queries": {
+        "passed": 10000,
+        "failed": 0
+      },
+      "skipped": 2220,
+      "pass_rate": 100.0
+    },
+    {
+      "path": "index/random/10/slt_good_14.test",
+      "statements": {
+        "passed": 31,
+        "failed": 0
+      },
+      "queries": {
+        "passed": 10000,
+        "failed": 0
+      },
+      "skipped": 2130,
+      "pass_rate": 100.0
+    },
+    {
+      "path": "index/random/10/slt_good_2.test",
+      "statements": {
+        "passed": 34,
+        "failed": 0
+      },
+      "queries": {
+        "passed": 10000,
+        "failed": 0
+      },
+      "skipped": 2090,
+      "pass_rate": 100.0
+    },
+    {
+      "path": "index/random/10/slt_good_3.test",
+      "statements": {
+        "passed": 34,
+        "failed": 0
+      },
+      "queries": {
+        "passed": 10000,
+        "failed": 0
+      },
+      "skipped": 2120,
+      "pass_rate": 100.0
+    },
+    {
+      "path": "index/random/10/slt_good_4.test",
+      "statements": {
+        "passed": 33,
+        "failed": 0
+      },
+      "queries": {
+        "passed": 10000,
+        "failed": 0
+      },
+      "skipped": 2205,
+      "pass_rate": 100.0
+    },
+    {
+      "path": "index/random/10/slt_good_5.test",
+      "statements": {
+        "passed": 34,
+        "failed": 0
+      },
+      "queries": {
+        "passed": 10000,
+        "failed": 0
+      },
+      "skipped": 1835,
+      "pass_rate": 100.0
+    },
+    {
+      "path": "index/random/10/slt_good_6.test",
+      "statements": {
+        "passed": 34,
+        "failed": 0
+      },
+      "queries": {
+        "passed": 10000,
+        "failed": 0
+      },
+      "skipped": 2010,
+      "pass_rate": 100.0
+    },
+    {
+      "path": "index/random/10/slt_good_7.test",
+      "statements": {
+        "passed": 31,
+        "failed": 0
+      },
+      "queries": {
+        "passed": 10000,
+        "failed": 0
+      },
+      "skipped": 2040,
+      "pass_rate": 100.0
+    },
+    {
+      "path": "index/random/10/slt_good_8.test",
+      "statements": {
+        "passed": 32,
+        "failed": 0
+      },
+      "queries": {
+        "passed": 10000,
+        "failed": 0
+      },
+      "skipped": 2085,
+      "pass_rate": 100.0
+    },
+    {
+      "path": "index/random/10/slt_good_9.test",
+      "statements": {
+        "passed": 31,
+        "failed": 0
+      },
+      "queries": {
+        "passed": 10000,
+        "failed": 0
+      },
+      "skipped": 2060,
+      "pass_rate": 100.0
+    },
+    {
+      "path": "index/random/100/slt_good_0.test",
+      "statements": {
+        "passed": 123,
+        "failed": 0
+      },
+      "queries": {
+        "passed": 10000,
+        "failed": 0
+      },
+      "skipped": 1905,
+      "pass_rate": 100.0
+    },
+    {
+      "path": "index/random/100/slt_good_1.test",
+      "statements": {
+        "passed": 123,
+        "failed": 0
+      },
+      "queries": {
+        "passed": 10000,
+        "failed": 0
+      },
+      "skipped": 2055,
+      "pass_rate": 100.0
+    },
+    {
+      "path": "index/random/1000/slt_good_0.test",
+      "statements": {
+        "passed": 1022,
+        "failed": 0
+      },
+      "queries": {
+        "passed": 1045,
+        "failed": 0
+      },
+      "skipped": 235,
+      "pass_rate": 100.0
+    },
+    {
+      "path": "index/random/1000/slt_good_1.test",
+      "statements": {
+        "passed": 1021,
+        "failed": 0
+      },
+      "queries": {
+        "passed": 35,
+        "failed": 0
+      },
+      "skipped": 5,
+      "pass_rate": 100.0
+    },
+    {
+      "path": "index/random/1000/slt_good_2.test",
+      "statements": {
+        "passed": 1022,
+        "failed": 0
+      },
+      "queries": {
+        "passed": 5,
+        "failed": 0
+      },
+      "skipped": 0,
+      "pass_rate": 100.0
+    },
+    {
+      "path": "index/random/1000/slt_good_3.test",
+      "statements": {
+        "passed": 1023,
+        "failed": 0
+      },
+      "queries": {
+        "passed": 10,
+        "failed": 0
+      },
+      "skipped": 0,
+      "pass_rate": 100.0
+    },
+    {
+      "path": "index/random/1000/slt_good_4.test",
+      "statements": {
+        "passed": 1022,
+        "failed": 0
+      },
+      "queries": {
+        "passed": 10,
+        "failed": 0
+      },
+      "skipped": 5,
+      "pass_rate": 100.0
+    },
+    {
+      "path": "index/random/1000/slt_good_5.test",
+      "statements": {
+        "passed": 1023,
+        "failed": 0
+      },
+      "queries": {
+        "passed": 3310,
+        "failed": 0
+      },
+      "skipped": 670,
+      "pass_rate": 100.0
+    },
+    {
+      "path": "index/random/1000/slt_good_6.test",
+      "statements": {
+        "passed": 1021,
+        "failed": 0
+      },
+      "queries": {
+        "passed": 10000,
+        "failed": 0
+      },
+      "skipped": 1930,
+      "pass_rate": 100.0
+    },
+    {
+      "path": "index/random/1000/slt_good_7.test",
+      "statements": {
+        "passed": 1022,
+        "failed": 0
+      },
+      "queries": {
+        "passed": 10000,
+        "failed": 0
+      },
+      "skipped": 1990,
+      "pass_rate": 100.0
+    },
+    {
+      "path": "index/random/1000/slt_good_8.test",
+      "statements": {
+        "passed": 1022,
+        "failed": 0
+      },
+      "queries": {
+        "passed": 3819,
+        "failed": 0
+      },
+      "skipped": 790,
+      "pass_rate": 100.0
+    },
+    {
+      "path": "index/view/10/slt_good_0.test",
+      "statements": {
+        "passed": 0,
+        "failed": 0
+      },
+      "queries": {
+        "passed": 0,
+        "failed": 0
+      },
+      "skipped": 0,
+      "pass_rate": 0.0
+    },
+    {
+      "path": "index/view/10/slt_good_1.test",
+      "statements": {
+        "passed": 3228,
+        "failed": 0
+      },
+      "queries": {
+        "passed": 3907,
+        "failed": 0
+      },
+      "skipped": 1065,
+      "pass_rate": 100.0
+    },
+    {
+      "path": "index/view/10/slt_good_2.test",
+      "statements": {
+        "passed": 3316,
+        "failed": 0
+      },
+      "queries": {
+        "passed": 4017,
+        "failed": 0
+      },
+      "skipped": 1095,
+      "pass_rate": 100.0
+    },
+    {
+      "path": "index/view/10/slt_good_3.test",
+      "statements": {
+        "passed": 3047,
+        "failed": 0
+      },
+      "queries": {
+        "passed": 3687,
+        "failed": 0
+      },
+      "skipped": 1005,
+      "pass_rate": 100.0
+    },
+    {
+      "path": "index/view/10/slt_good_4.test",
+      "statements": {
+        "passed": 3409,
+        "failed": 0
+      },
+      "queries": {
+        "passed": 4127,
+        "failed": 0
+      },
+      "skipped": 1125,
+      "pass_rate": 100.0
+    },
+    {
+      "path": "index/view/10/slt_good_5.test",
+      "statements": {
+        "passed": 3275,
+        "failed": 0
+      },
+      "queries": {
+        "passed": 3962,
+        "failed": 0
+      },
+      "skipped": 1080,
+      "pass_rate": 100.0
+    },
+    {
+      "path": "index/view/10/slt_good_6.test",
+      "statements": {
+        "passed": 2778,
+        "failed": 0
+      },
+      "queries": {
+        "passed": 3357,
+        "failed": 0
+      },
+      "skipped": 915,
+      "pass_rate": 100.0
+    },
+    {
+      "path": "index/view/10/slt_good_7.test",
+      "statements": {
+        "passed": 3139,
+        "failed": 0
+      },
+      "queries": {
+        "passed": 3797,
+        "failed": 0
+      },
+      "skipped": 1035,
+      "pass_rate": 100.0
+    },
+    {
+      "path": "index/view/100/slt_good_0.test",
+      "statements": {
+        "passed": 3544,
+        "failed": 0
+      },
+      "queries": {
+        "passed": 4182,
+        "failed": 0
+      },
+      "skipped": 1140,
+      "pass_rate": 100.0
+    },
+    {
+      "path": "index/view/100/slt_good_1.test",
+      "statements": {
+        "passed": 3270,
+        "failed": 0
+      },
+      "queries": {
+        "passed": 3852,
+        "failed": 0
+      },
+      "skipped": 1050,
+      "pass_rate": 100.0
+    },
+    {
+      "path": "index/view/100/slt_good_2.test",
+      "statements": {
+        "passed": 3361,
+        "failed": 0
+      },
+      "queries": {
+        "passed": 3962,
+        "failed": 0
+      },
+      "skipped": 1080,
+      "pass_rate": 100.0
+    },
+    {
+      "path": "index/view/100/slt_good_3.test",
+      "statements": {
+        "passed": 2910,
+        "failed": 0
+      },
+      "queries": {
+        "passed": 3412,
+        "failed": 0
+      },
+      "skipped": 930,
+      "pass_rate": 100.0
+    },
+    {
+      "path": "index/view/100/slt_good_4.test",
+      "statements": {
+        "passed": 3181,
+        "failed": 0
+      },
+      "queries": {
+        "passed": 3742,
+        "failed": 0
+      },
+      "skipped": 1020,
+      "pass_rate": 100.0
+    },
+    {
+      "path": "index/view/100/slt_good_5.test",
+      "statements": {
+        "passed": 3360,
+        "failed": 0
+      },
+      "queries": {
+        "passed": 3962,
+        "failed": 0
+      },
+      "skipped": 1080,
+      "pass_rate": 100.0
+    },
+    {
+      "path": "index/view/1000/slt_good_0.test",
+      "statements": {
+        "passed": 3631,
+        "failed": 0
+      },
+      "queries": {
+        "passed": 3192,
+        "failed": 0
+      },
+      "skipped": 870,
+      "pass_rate": 100.0
+    },
+    {
+      "path": "index/view/10000/slt_good_0.test",
+      "statements": {
+        "passed": 10290,
+        "failed": 0
+      },
+      "queries": {
+        "passed": 332,
+        "failed": 0
+      },
+      "skipped": 90,
+      "pass_rate": 100.0
+    },
+    {
+      "path": "random/aggregates/slt_good_0.test",
+      "statements": {
+        "passed": 12,
+        "failed": 0
+      },
+      "queries": {
+        "passed": 10000,
+        "failed": 0
+      },
+      "skipped": 3910,
+      "pass_rate": 100.0
+    },
+    {
+      "path": "random/aggregates/slt_good_1.test",
+      "statements": {
+        "passed": 12,
+        "failed": 0
+      },
+      "queries": {
+        "passed": 10000,
+        "failed": 0
+      },
+      "skipped": 4116,
+      "pass_rate": 100.0
+    },
+    {
+      "path": "random/aggregates/slt_good_10.test",
+      "statements": {
+        "passed": 12,
+        "failed": 0
+      },
+      "queries": {
+        "passed": 10000,
+        "failed": 0
+      },
+      "skipped": 4055,
+      "pass_rate": 100.0
+    },
+    {
+      "path": "random/aggregates/slt_good_100.test",
+      "statements": {
+        "passed": 12,
+        "failed": 0
+      },
+      "queries": {
+        "passed": 10000,
+        "failed": 0
+      },
+      "skipped": 3939,
+      "pass_rate": 100.0
+    },
+    {
+      "path": "random/aggregates/slt_good_101.test",
+      "statements": {
+        "passed": 12,
+        "failed": 0
+      },
+      "queries": {
+        "passed": 10000,
+        "failed": 0
+      },
+      "skipped": 3956,
+      "pass_rate": 100.0
+    },
+    {
+      "path": "random/aggregates/slt_good_102.test",
+      "statements": {
+        "passed": 12,
+        "failed": 0
+      },
+      "queries": {
+        "passed": 10000,
+        "failed": 0
+      },
+      "skipped": 3870,
+      "pass_rate": 100.0
+    },
+    {
+      "path": "random/aggregates/slt_good_103.test",
+      "statements": {
+        "passed": 12,
+        "failed": 0
+      },
+      "queries": {
+        "passed": 10000,
+        "failed": 0
+      },
+      "skipped": 3911,
+      "pass_rate": 100.0
+    },
+    {
+      "path": "random/aggregates/slt_good_104.test",
+      "statements": {
+        "passed": 12,
+        "failed": 0
+      },
+      "queries": {
+        "passed": 10000,
+        "failed": 0
+      },
+      "skipped": 3926,
+      "pass_rate": 100.0
+    },
+    {
+      "path": "random/aggregates/slt_good_105.test",
+      "statements": {
+        "passed": 12,
+        "failed": 0
+      },
+      "queries": {
+        "passed": 10000,
+        "failed": 0
+      },
+      "skipped": 4030,
+      "pass_rate": 100.0
+    },
+    {
+      "path": "random/aggregates/slt_good_106.test",
+      "statements": {
+        "passed": 12,
+        "failed": 0
+      },
+      "queries": {
+        "passed": 10000,
+        "failed": 0
+      },
+      "skipped": 3959,
+      "pass_rate": 100.0
+    },
+    {
+      "path": "random/aggregates/slt_good_107.test",
+      "statements": {
+        "passed": 12,
+        "failed": 0
+      },
+      "queries": {
+        "passed": 10000,
+        "failed": 0
+      },
+      "skipped": 4048,
+      "pass_rate": 100.0
+    },
+    {
+      "path": "random/aggregates/slt_good_108.test",
+      "statements": {
+        "passed": 12,
+        "failed": 0
+      },
+      "queries": {
+        "passed": 10000,
+        "failed": 0
+      },
+      "skipped": 3940,
+      "pass_rate": 100.0
+    },
+    {
+      "path": "random/aggregates/slt_good_109.test",
+      "statements": {
+        "passed": 12,
+        "failed": 0
+      },
+      "queries": {
+        "passed": 10000,
+        "failed": 0
+      },
+      "skipped": 3982,
+      "pass_rate": 100.0
+    },
+    {
+      "path": "random/aggregates/slt_good_11.test",
+      "statements": {
+        "passed": 12,
+        "failed": 0
+      },
+      "queries": {
+        "passed": 10000,
+        "failed": 0
+      },
+      "skipped": 3934,
+      "pass_rate": 100.0
+    },
+    {
+      "path": "random/aggregates/slt_good_110.test",
+      "statements": {
+        "passed": 12,
+        "failed": 0
+      },
+      "queries": {
+        "passed": 10000,
+        "failed": 0
+      },
+      "skipped": 3939,
+      "pass_rate": 100.0
+    },
+    {
+      "path": "random/aggregates/slt_good_111.test",
+      "statements": {
+        "passed": 12,
+        "failed": 0
+      },
+      "queries": {
+        "passed": 10000,
+        "failed": 0
+      },
+      "skipped": 3934,
+      "pass_rate": 100.0
+    },
+    {
+      "path": "random/aggregates/slt_good_112.test",
+      "statements": {
+        "passed": 12,
+        "failed": 0
+      },
+      "queries": {
+        "passed": 10000,
+        "failed": 0
+      },
+      "skipped": 3945,
+      "pass_rate": 100.0
+    },
+    {
+      "path": "random/aggregates/slt_good_113.test",
+      "statements": {
+        "passed": 12,
+        "failed": 0
+      },
+      "queries": {
+        "passed": 10000,
+        "failed": 0
+      },
+      "skipped": 3961,
+      "pass_rate": 100.0
+    },
+    {
+      "path": "random/aggregates/slt_good_114.test",
+      "statements": {
+        "passed": 12,
+        "failed": 0
+      },
+      "queries": {
+        "passed": 10000,
+        "failed": 0
+      },
+      "skipped": 3988,
+      "pass_rate": 100.0
+    },
+    {
+      "path": "random/aggregates/slt_good_115.test",
+      "statements": {
+        "passed": 12,
+        "failed": 0
+      },
+      "queries": {
+        "passed": 10000,
+        "failed": 0
+      },
+      "skipped": 3972,
+      "pass_rate": 100.0
+    },
+    {
+      "path": "random/aggregates/slt_good_116.test",
+      "statements": {
+        "passed": 12,
+        "failed": 0
+      },
+      "queries": {
+        "passed": 10000,
+        "failed": 0
+      },
+      "skipped": 4012,
+      "pass_rate": 100.0
+    },
+    {
+      "path": "random/aggregates/slt_good_117.test",
+      "statements": {
+        "passed": 12,
+        "failed": 0
+      },
+      "queries": {
+        "passed": 10000,
+        "failed": 0
+      },
+      "skipped": 4063,
+      "pass_rate": 100.0
+    },
+    {
+      "path": "random/aggregates/slt_good_118.test",
+      "statements": {
+        "passed": 12,
+        "failed": 0
+      },
+      "queries": {
+        "passed": 10000,
+        "failed": 0
+      },
+      "skipped": 4028,
+      "pass_rate": 100.0
+    },
+    {
+      "path": "random/aggregates/slt_good_119.test",
+      "statements": {
+        "passed": 12,
+        "failed": 0
+      },
+      "queries": {
+        "passed": 10000,
+        "failed": 0
+      },
+      "skipped": 3917,
+      "pass_rate": 100.0
+    },
+    {
+      "path": "random/aggregates/slt_good_12.test",
+      "statements": {
+        "passed": 12,
+        "failed": 0
+      },
+      "queries": {
+        "passed": 10000,
+        "failed": 0
+      },
+      "skipped": 3985,
+      "pass_rate": 100.0
+    },
+    {
+      "path": "random/aggregates/slt_good_120.test",
+      "statements": {
+        "passed": 12,
+        "failed": 0
+      },
+      "queries": {
+        "passed": 10000,
+        "failed": 0
+      },
+      "skipped": 3931,
+      "pass_rate": 100.0
+    },
+    {
+      "path": "random/aggregates/slt_good_121.test",
+      "statements": {
+        "passed": 12,
+        "failed": 0
+      },
+      "queries": {
+        "passed": 10000,
+        "failed": 0
+      },
+      "skipped": 3915,
+      "pass_rate": 100.0
+    },
+    {
+      "path": "random/aggregates/slt_good_122.test",
+      "statements": {
+        "passed": 12,
+        "failed": 0
+      },
+      "queries": {
+        "passed": 10000,
+        "failed": 0
+      },
+      "skipped": 3980,
+      "pass_rate": 100.0
+    },
+    {
+      "path": "random/aggregates/slt_good_123.test",
+      "statements": {
+        "passed": 12,
+        "failed": 0
+      },
+      "queries": {
+        "passed": 10000,
+        "failed": 0
+      },
+      "skipped": 4091,
+      "pass_rate": 100.0
+    },
+    {
+      "path": "random/aggregates/slt_good_124.test",
+      "statements": {
+        "passed": 12,
+        "failed": 0
+      },
+      "queries": {
+        "passed": 10000,
+        "failed": 0
+      },
+      "skipped": 3934,
+      "pass_rate": 100.0
+    },
+    {
+      "path": "random/aggregates/slt_good_125.test",
+      "statements": {
+        "passed": 12,
+        "failed": 0
+      },
+      "queries": {
+        "passed": 10000,
+        "failed": 0
+      },
+      "skipped": 3981,
+      "pass_rate": 100.0
+    },
+    {
+      "path": "random/aggregates/slt_good_126.test",
+      "statements": {
+        "passed": 12,
+        "failed": 0
+      },
+      "queries": {
+        "passed": 10000,
+        "failed": 0
+      },
+      "skipped": 3921,
+      "pass_rate": 100.0
+    },
+    {
+      "path": "random/aggregates/slt_good_127.test",
+      "statements": {
+        "passed": 12,
+        "failed": 0
+      },
+      "queries": {
+        "passed": 10000,
+        "failed": 0
+      },
+      "skipped": 3994,
+      "pass_rate": 100.0
+    },
+    {
+      "path": "random/aggregates/slt_good_128.test",
+      "statements": {
+        "passed": 12,
+        "failed": 0
+      },
+      "queries": {
+        "passed": 10000,
+        "failed": 0
+      },
+      "skipped": 3928,
+      "pass_rate": 100.0
+    },
+    {
+      "path": "random/aggregates/slt_good_129.test",
+      "statements": {
+        "passed": 12,
+        "failed": 0
+      },
+      "queries": {
+        "passed": 790,
+        "failed": 0
+      },
+      "skipped": 344,
+      "pass_rate": 100.0
+    },
+    {
+      "path": "random/aggregates/slt_good_13.test",
+      "statements": {
+        "passed": 12,
+        "failed": 0
+      },
+      "queries": {
+        "passed": 10000,
+        "failed": 0
+      },
+      "skipped": 4036,
+      "pass_rate": 100.0
+    },
+    {
+      "path": "random/aggregates/slt_good_14.test",
+      "statements": {
+        "passed": 12,
+        "failed": 0
+      },
+      "queries": {
+        "passed": 10000,
+        "failed": 0
+      },
+      "skipped": 3921,
+      "pass_rate": 100.0
+    },
+    {
+      "path": "random/aggregates/slt_good_15.test",
+      "statements": {
+        "passed": 12,
+        "failed": 0
+      },
+      "queries": {
+        "passed": 10000,
+        "failed": 0
+      },
+      "skipped": 3853,
+      "pass_rate": 100.0
+    },
+    {
+      "path": "random/aggregates/slt_good_16.test",
+      "statements": {
+        "passed": 12,
+        "failed": 0
+      },
+      "queries": {
+        "passed": 10000,
+        "failed": 0
+      },
+      "skipped": 3943,
+      "pass_rate": 100.0
+    },
+    {
+      "path": "random/aggregates/slt_good_17.test",
+      "statements": {
+        "passed": 12,
+        "failed": 0
+      },
+      "queries": {
+        "passed": 10000,
+        "failed": 0
+      },
+      "skipped": 3922,
+      "pass_rate": 100.0
+    },
+    {
+      "path": "random/aggregates/slt_good_18.test",
+      "statements": {
+        "passed": 12,
+        "failed": 0
+      },
+      "queries": {
+        "passed": 10000,
+        "failed": 0
+      },
+      "skipped": 3941,
+      "pass_rate": 100.0
+    },
+    {
+      "path": "random/aggregates/slt_good_19.test",
+      "statements": {
+        "passed": 12,
+        "failed": 0
+      },
+      "queries": {
+        "passed": 10000,
+        "failed": 0
+      },
+      "skipped": 3924,
+      "pass_rate": 100.0
+    },
+    {
+      "path": "random/aggregates/slt_good_2.test",
+      "statements": {
+        "passed": 12,
+        "failed": 0
+      },
+      "queries": {
+        "passed": 10000,
+        "failed": 0
+      },
+      "skipped": 4038,
+      "pass_rate": 100.0
+    },
+    {
+      "path": "random/aggregates/slt_good_20.test",
+      "statements": {
+        "passed": 12,
+        "failed": 0
+      },
+      "queries": {
+        "passed": 10000,
+        "failed": 0
+      },
+      "skipped": 3943,
+      "pass_rate": 100.0
+    },
+    {
+      "path": "random/aggregates/slt_good_21.test",
+      "statements": {
+        "passed": 12,
+        "failed": 0
+      },
+      "queries": {
+        "passed": 10000,
+        "failed": 0
+      },
+      "skipped": 3917,
+      "pass_rate": 100.0
+    },
+    {
+      "path": "random/aggregates/slt_good_22.test",
+      "statements": {
+        "passed": 12,
+        "failed": 0
+      },
+      "queries": {
+        "passed": 10000,
+        "failed": 0
+      },
+      "skipped": 3965,
+      "pass_rate": 100.0
+    },
+    {
+      "path": "random/aggregates/slt_good_23.test",
+      "statements": {
+        "passed": 12,
+        "failed": 0
+      },
+      "queries": {
+        "passed": 10000,
+        "failed": 0
+      },
+      "skipped": 3988,
+      "pass_rate": 100.0
+    },
+    {
+      "path": "random/aggregates/slt_good_24.test",
+      "statements": {
+        "passed": 12,
+        "failed": 0
+      },
+      "queries": {
+        "passed": 10000,
+        "failed": 0
+      },
+      "skipped": 4026,
+      "pass_rate": 100.0
+    },
+    {
+      "path": "random/aggregates/slt_good_25.test",
+      "statements": {
+        "passed": 12,
+        "failed": 0
+      },
+      "queries": {
+        "passed": 10000,
+        "failed": 0
+      },
+      "skipped": 4161,
+      "pass_rate": 100.0
+    },
+    {
+      "path": "random/aggregates/slt_good_26.test",
+      "statements": {
+        "passed": 12,
+        "failed": 0
+      },
+      "queries": {
+        "passed": 10000,
+        "failed": 0
+      },
+      "skipped": 3955,
+      "pass_rate": 100.0
+    },
+    {
+      "path": "random/aggregates/slt_good_27.test",
+      "statements": {
+        "passed": 12,
+        "failed": 0
+      },
+      "queries": {
+        "passed": 10000,
+        "failed": 0
+      },
+      "skipped": 3966,
+      "pass_rate": 100.0
+    },
+    {
+      "path": "random/aggregates/slt_good_28.test",
+      "statements": {
+        "passed": 12,
+        "failed": 0
+      },
+      "queries": {
+        "passed": 10000,
+        "failed": 0
+      },
+      "skipped": 3994,
+      "pass_rate": 100.0
+    },
+    {
+      "path": "random/aggregates/slt_good_29.test",
+      "statements": {
+        "passed": 12,
+        "failed": 0
+      },
+      "queries": {
+        "passed": 10000,
+        "failed": 0
+      },
+      "skipped": 4011,
+      "pass_rate": 100.0
+    },
+    {
+      "path": "random/aggregates/slt_good_3.test",
+      "statements": {
+        "passed": 12,
+        "failed": 0
+      },
+      "queries": {
+        "passed": 10000,
+        "failed": 0
+      },
+      "skipped": 3897,
+      "pass_rate": 100.0
+    },
+    {
+      "path": "random/aggregates/slt_good_30.test",
+      "statements": {
+        "passed": 12,
+        "failed": 0
+      },
+      "queries": {
+        "passed": 10000,
+        "failed": 0
+      },
+      "skipped": 4078,
+      "pass_rate": 100.0
+    },
+    {
+      "path": "random/aggregates/slt_good_31.test",
+      "statements": {
+        "passed": 12,
+        "failed": 0
+      },
+      "queries": {
+        "passed": 10000,
+        "failed": 0
+      },
+      "skipped": 4049,
+      "pass_rate": 100.0
+    },
+    {
+      "path": "random/aggregates/slt_good_32.test",
+      "statements": {
+        "passed": 12,
+        "failed": 0
+      },
+      "queries": {
+        "passed": 10000,
+        "failed": 0
+      },
+      "skipped": 3993,
+      "pass_rate": 100.0
+    },
+    {
+      "path": "random/aggregates/slt_good_33.test",
+      "statements": {
+        "passed": 12,
+        "failed": 0
+      },
+      "queries": {
+        "passed": 10000,
+        "failed": 0
+      },
+      "skipped": 4069,
+      "pass_rate": 100.0
+    },
+    {
+      "path": "random/aggregates/slt_good_34.test",
+      "statements": {
+        "passed": 12,
+        "failed": 0
+      },
+      "queries": {
+        "passed": 10000,
+        "failed": 0
+      },
+      "skipped": 3899,
+      "pass_rate": 100.0
+    },
+    {
+      "path": "random/aggregates/slt_good_35.test",
+      "statements": {
+        "passed": 12,
+        "failed": 0
+      },
+      "queries": {
+        "passed": 10000,
+        "failed": 0
+      },
+      "skipped": 4019,
+      "pass_rate": 100.0
+    },
+    {
+      "path": "random/aggregates/slt_good_36.test",
+      "statements": {
+        "passed": 12,
+        "failed": 0
+      },
+      "queries": {
+        "passed": 10000,
+        "failed": 0
+      },
+      "skipped": 3898,
+      "pass_rate": 100.0
+    },
+    {
+      "path": "random/aggregates/slt_good_37.test",
+      "statements": {
+        "passed": 12,
+        "failed": 0
+      },
+      "queries": {
+        "passed": 10000,
+        "failed": 0
+      },
+      "skipped": 3957,
+      "pass_rate": 100.0
+    },
+    {
+      "path": "random/aggregates/slt_good_38.test",
+      "statements": {
+        "passed": 12,
+        "failed": 0
+      },
+      "queries": {
+        "passed": 10000,
+        "failed": 0
+      },
+      "skipped": 4000,
+      "pass_rate": 100.0
+    },
+    {
+      "path": "random/aggregates/slt_good_39.test",
+      "statements": {
+        "passed": 12,
+        "failed": 0
+      },
+      "queries": {
+        "passed": 10000,
+        "failed": 0
+      },
+      "skipped": 3903,
+      "pass_rate": 100.0
+    },
+    {
+      "path": "random/aggregates/slt_good_4.test",
+      "statements": {
+        "passed": 12,
+        "failed": 0
+      },
+      "queries": {
+        "passed": 10000,
+        "failed": 0
+      },
+      "skipped": 3913,
+      "pass_rate": 100.0
+    },
+    {
+      "path": "random/aggregates/slt_good_40.test",
+      "statements": {
+        "passed": 12,
+        "failed": 0
+      },
+      "queries": {
+        "passed": 10000,
+        "failed": 0
+      },
+      "skipped": 4000,
+      "pass_rate": 100.0
+    },
+    {
+      "path": "random/aggregates/slt_good_41.test",
+      "statements": {
+        "passed": 12,
+        "failed": 0
+      },
+      "queries": {
+        "passed": 10000,
+        "failed": 0
+      },
+      "skipped": 3881,
+      "pass_rate": 100.0
+    },
+    {
+      "path": "random/aggregates/slt_good_42.test",
+      "statements": {
+        "passed": 12,
+        "failed": 0
+      },
+      "queries": {
+        "passed": 10000,
+        "failed": 0
+      },
+      "skipped": 3951,
+      "pass_rate": 100.0
+    },
+    {
+      "path": "random/aggregates/slt_good_43.test",
+      "statements": {
+        "passed": 12,
+        "failed": 0
+      },
+      "queries": {
+        "passed": 10000,
+        "failed": 0
+      },
+      "skipped": 3870,
+      "pass_rate": 100.0
+    },
+    {
+      "path": "random/aggregates/slt_good_44.test",
+      "statements": {
+        "passed": 12,
+        "failed": 0
+      },
+      "queries": {
+        "passed": 10000,
+        "failed": 0
+      },
+      "skipped": 3880,
+      "pass_rate": 100.0
+    },
+    {
+      "path": "random/aggregates/slt_good_45.test",
+      "statements": {
+        "passed": 12,
+        "failed": 0
+      },
+      "queries": {
+        "passed": 10000,
+        "failed": 0
+      },
+      "skipped": 3958,
+      "pass_rate": 100.0
+    },
+    {
+      "path": "random/aggregates/slt_good_46.test",
+      "statements": {
+        "passed": 12,
+        "failed": 0
+      },
+      "queries": {
+        "passed": 10000,
+        "failed": 0
+      },
+      "skipped": 3963,
+      "pass_rate": 100.0
+    },
+    {
+      "path": "random/aggregates/slt_good_47.test",
+      "statements": {
+        "passed": 12,
+        "failed": 0
+      },
+      "queries": {
+        "passed": 10000,
+        "failed": 0
+      },
+      "skipped": 3902,
+      "pass_rate": 100.0
+    },
+    {
+      "path": "random/aggregates/slt_good_48.test",
+      "statements": {
+        "passed": 12,
+        "failed": 0
+      },
+      "queries": {
+        "passed": 10000,
+        "failed": 0
+      },
+      "skipped": 3891,
+      "pass_rate": 100.0
+    },
+    {
+      "path": "random/aggregates/slt_good_49.test",
+      "statements": {
+        "passed": 12,
+        "failed": 0
+      },
+      "queries": {
+        "passed": 10000,
+        "failed": 0
+      },
+      "skipped": 3894,
+      "pass_rate": 100.0
+    },
+    {
+      "path": "random/aggregates/slt_good_5.test",
+      "statements": {
+        "passed": 12,
+        "failed": 0
+      },
+      "queries": {
+        "passed": 10000,
+        "failed": 0
+      },
+      "skipped": 3941,
+      "pass_rate": 100.0
+    },
+    {
+      "path": "random/aggregates/slt_good_50.test",
+      "statements": {
+        "passed": 12,
+        "failed": 0
+      },
+      "queries": {
+        "passed": 10000,
+        "failed": 0
+      },
+      "skipped": 3860,
+      "pass_rate": 100.0
+    },
+    {
+      "path": "random/aggregates/slt_good_51.test",
+      "statements": {
+        "passed": 12,
+        "failed": 0
+      },
+      "queries": {
+        "passed": 10000,
+        "failed": 0
+      },
+      "skipped": 3940,
+      "pass_rate": 100.0
+    },
+    {
+      "path": "random/aggregates/slt_good_52.test",
+      "statements": {
+        "passed": 12,
+        "failed": 0
+      },
+      "queries": {
+        "passed": 10000,
+        "failed": 0
+      },
+      "skipped": 3941,
+      "pass_rate": 100.0
+    },
+    {
+      "path": "random/aggregates/slt_good_53.test",
+      "statements": {
+        "passed": 12,
+        "failed": 0
+      },
+      "queries": {
+        "passed": 10000,
+        "failed": 0
+      },
+      "skipped": 3884,
+      "pass_rate": 100.0
+    },
+    {
+      "path": "random/aggregates/slt_good_54.test",
+      "statements": {
+        "passed": 12,
+        "failed": 0
+      },
+      "queries": {
+        "passed": 10000,
+        "failed": 0
+      },
+      "skipped": 3856,
+      "pass_rate": 100.0
+    },
+    {
+      "path": "random/aggregates/slt_good_55.test",
+      "statements": {
+        "passed": 12,
+        "failed": 0
+      },
+      "queries": {
+        "passed": 10000,
+        "failed": 0
+      },
+      "skipped": 3873,
+      "pass_rate": 100.0
+    },
+    {
+      "path": "random/aggregates/slt_good_56.test",
+      "statements": {
+        "passed": 12,
+        "failed": 0
+      },
+      "queries": {
+        "passed": 10000,
+        "failed": 0
+      },
+      "skipped": 3925,
+      "pass_rate": 100.0
+    },
+    {
+      "path": "random/aggregates/slt_good_57.test",
+      "statements": {
+        "passed": 12,
+        "failed": 0
+      },
+      "queries": {
+        "passed": 10000,
+        "failed": 0
+      },
+      "skipped": 3996,
+      "pass_rate": 100.0
+    },
+    {
+      "path": "random/aggregates/slt_good_58.test",
+      "statements": {
+        "passed": 12,
+        "failed": 0
+      },
+      "queries": {
+        "passed": 10000,
+        "failed": 0
+      },
+      "skipped": 3878,
+      "pass_rate": 100.0
+    },
+    {
+      "path": "random/aggregates/slt_good_59.test",
+      "statements": {
+        "passed": 12,
+        "failed": 0
+      },
+      "queries": {
+        "passed": 10000,
+        "failed": 0
+      },
+      "skipped": 3963,
+      "pass_rate": 100.0
+    },
+    {
+      "path": "random/aggregates/slt_good_6.test",
+      "statements": {
+        "passed": 12,
+        "failed": 0
+      },
+      "queries": {
+        "passed": 10000,
+        "failed": 0
+      },
+      "skipped": 3937,
+      "pass_rate": 100.0
+    },
+    {
+      "path": "random/aggregates/slt_good_60.test",
+      "statements": {
+        "passed": 12,
+        "failed": 0
+      },
+      "queries": {
+        "passed": 10000,
+        "failed": 0
+      },
+      "skipped": 3971,
+      "pass_rate": 100.0
+    },
+    {
+      "path": "random/aggregates/slt_good_61.test",
+      "statements": {
+        "passed": 12,
+        "failed": 0
+      },
+      "queries": {
+        "passed": 10000,
+        "failed": 0
+      },
+      "skipped": 3940,
+      "pass_rate": 100.0
+    },
+    {
+      "path": "random/aggregates/slt_good_62.test",
+      "statements": {
+        "passed": 12,
+        "failed": 0
+      },
+      "queries": {
+        "passed": 10000,
+        "failed": 0
+      },
+      "skipped": 3897,
+      "pass_rate": 100.0
+    },
+    {
+      "path": "random/aggregates/slt_good_63.test",
+      "statements": {
+        "passed": 12,
+        "failed": 0
+      },
+      "queries": {
+        "passed": 10000,
+        "failed": 0
+      },
+      "skipped": 4010,
+      "pass_rate": 100.0
+    },
+    {
+      "path": "random/aggregates/slt_good_64.test",
+      "statements": {
+        "passed": 12,
+        "failed": 0
+      },
+      "queries": {
+        "passed": 10000,
+        "failed": 0
+      },
+      "skipped": 3905,
+      "pass_rate": 100.0
+    },
+    {
+      "path": "random/aggregates/slt_good_65.test",
+      "statements": {
+        "passed": 12,
+        "failed": 0
+      },
+      "queries": {
+        "passed": 10000,
+        "failed": 0
+      },
+      "skipped": 3969,
+      "pass_rate": 100.0
+    },
+    {
+      "path": "random/aggregates/slt_good_66.test",
+      "statements": {
+        "passed": 12,
+        "failed": 0
+      },
+      "queries": {
+        "passed": 10000,
+        "failed": 0
+      },
+      "skipped": 3908,
+      "pass_rate": 100.0
+    },
+    {
+      "path": "random/aggregates/slt_good_67.test",
+      "statements": {
+        "passed": 12,
+        "failed": 0
+      },
+      "queries": {
+        "passed": 10000,
+        "failed": 0
+      },
+      "skipped": 3967,
+      "pass_rate": 100.0
+    },
+    {
+      "path": "random/aggregates/slt_good_68.test",
+      "statements": {
+        "passed": 12,
+        "failed": 0
+      },
+      "queries": {
+        "passed": 10000,
+        "failed": 0
+      },
+      "skipped": 4017,
+      "pass_rate": 100.0
+    },
+    {
+      "path": "random/aggregates/slt_good_69.test",
+      "statements": {
+        "passed": 12,
+        "failed": 0
+      },
+      "queries": {
+        "passed": 10000,
+        "failed": 0
+      },
+      "skipped": 3957,
+      "pass_rate": 100.0
+    },
+    {
+      "path": "random/aggregates/slt_good_7.test",
+      "statements": {
+        "passed": 12,
+        "failed": 0
+      },
+      "queries": {
+        "passed": 10000,
+        "failed": 0
+      },
+      "skipped": 3878,
+      "pass_rate": 100.0
+    },
+    {
+      "path": "random/aggregates/slt_good_70.test",
+      "statements": {
+        "passed": 12,
+        "failed": 0
+      },
+      "queries": {
+        "passed": 10000,
+        "failed": 0
+      },
+      "skipped": 3884,
+      "pass_rate": 100.0
+    },
+    {
+      "path": "random/aggregates/slt_good_71.test",
+      "statements": {
+        "passed": 12,
+        "failed": 0
+      },
+      "queries": {
+        "passed": 10000,
+        "failed": 0
+      },
+      "skipped": 3979,
+      "pass_rate": 100.0
+    },
+    {
+      "path": "random/aggregates/slt_good_72.test",
+      "statements": {
+        "passed": 12,
+        "failed": 0
+      },
+      "queries": {
+        "passed": 10000,
+        "failed": 0
+      },
+      "skipped": 3960,
+      "pass_rate": 100.0
+    },
+    {
+      "path": "random/aggregates/slt_good_73.test",
+      "statements": {
+        "passed": 12,
+        "failed": 0
+      },
+      "queries": {
+        "passed": 10000,
+        "failed": 0
+      },
+      "skipped": 4008,
+      "pass_rate": 100.0
+    },
+    {
+      "path": "random/aggregates/slt_good_74.test",
+      "statements": {
+        "passed": 12,
+        "failed": 0
+      },
+      "queries": {
+        "passed": 10000,
+        "failed": 0
+      },
+      "skipped": 4018,
+      "pass_rate": 100.0
+    },
+    {
+      "path": "random/aggregates/slt_good_75.test",
+      "statements": {
+        "passed": 12,
+        "failed": 0
+      },
+      "queries": {
+        "passed": 10000,
+        "failed": 0
+      },
+      "skipped": 4099,
+      "pass_rate": 100.0
+    },
+    {
+      "path": "random/aggregates/slt_good_76.test",
+      "statements": {
+        "passed": 12,
+        "failed": 0
+      },
+      "queries": {
+        "passed": 10000,
+        "failed": 0
+      },
+      "skipped": 3968,
+      "pass_rate": 100.0
+    },
+    {
+      "path": "random/aggregates/slt_good_77.test",
+      "statements": {
+        "passed": 12,
+        "failed": 0
+      },
+      "queries": {
+        "passed": 10000,
+        "failed": 0
+      },
+      "skipped": 3968,
+      "pass_rate": 100.0
+    },
+    {
+      "path": "random/aggregates/slt_good_78.test",
+      "statements": {
+        "passed": 12,
+        "failed": 0
+      },
+      "queries": {
+        "passed": 10000,
+        "failed": 0
+      },
+      "skipped": 4022,
+      "pass_rate": 100.0
+    },
+    {
+      "path": "random/aggregates/slt_good_79.test",
+      "statements": {
+        "passed": 12,
+        "failed": 0
+      },
+      "queries": {
+        "passed": 10000,
+        "failed": 0
+      },
+      "skipped": 3948,
+      "pass_rate": 100.0
+    },
+    {
+      "path": "random/aggregates/slt_good_8.test",
+      "statements": {
+        "passed": 12,
+        "failed": 0
+      },
+      "queries": {
+        "passed": 10000,
+        "failed": 0
+      },
+      "skipped": 3896,
+      "pass_rate": 100.0
+    },
+    {
+      "path": "random/aggregates/slt_good_80.test",
+      "statements": {
+        "passed": 12,
+        "failed": 0
+      },
+      "queries": {
+        "passed": 10000,
+        "failed": 0
+      },
+      "skipped": 4006,
+      "pass_rate": 100.0
+    },
+    {
+      "path": "random/aggregates/slt_good_81.test",
+      "statements": {
+        "passed": 12,
+        "failed": 0
+      },
+      "queries": {
+        "passed": 10000,
+        "failed": 0
+      },
+      "skipped": 3927,
+      "pass_rate": 100.0
+    },
+    {
+      "path": "random/aggregates/slt_good_82.test",
+      "statements": {
+        "passed": 12,
+        "failed": 0
+      },
+      "queries": {
+        "passed": 10000,
+        "failed": 0
+      },
+      "skipped": 3940,
+      "pass_rate": 100.0
+    },
+    {
+      "path": "random/aggregates/slt_good_83.test",
+      "statements": {
+        "passed": 12,
+        "failed": 0
+      },
+      "queries": {
+        "passed": 10000,
+        "failed": 0
+      },
+      "skipped": 3924,
+      "pass_rate": 100.0
+    },
+    {
+      "path": "random/aggregates/slt_good_84.test",
+      "statements": {
+        "passed": 12,
+        "failed": 0
+      },
+      "queries": {
+        "passed": 10000,
+        "failed": 0
+      },
+      "skipped": 3893,
+      "pass_rate": 100.0
+    },
+    {
+      "path": "random/aggregates/slt_good_85.test",
+      "statements": {
+        "passed": 12,
+        "failed": 0
+      },
+      "queries": {
+        "passed": 10000,
+        "failed": 0
+      },
+      "skipped": 3902,
+      "pass_rate": 100.0
+    },
+    {
+      "path": "random/aggregates/slt_good_86.test",
+      "statements": {
+        "passed": 12,
+        "failed": 0
+      },
+      "queries": {
+        "passed": 10000,
+        "failed": 0
+      },
+      "skipped": 3893,
+      "pass_rate": 100.0
+    },
+    {
+      "path": "random/aggregates/slt_good_87.test",
+      "statements": {
+        "passed": 12,
+        "failed": 0
+      },
+      "queries": {
+        "passed": 10000,
+        "failed": 0
+      },
+      "skipped": 3945,
+      "pass_rate": 100.0
+    },
+    {
+      "path": "random/aggregates/slt_good_88.test",
+      "statements": {
+        "passed": 12,
+        "failed": 0
+      },
+      "queries": {
+        "passed": 10000,
+        "failed": 0
+      },
+      "skipped": 3918,
+      "pass_rate": 100.0
+    },
+    {
+      "path": "random/aggregates/slt_good_89.test",
+      "statements": {
+        "passed": 12,
+        "failed": 0
+      },
+      "queries": {
+        "passed": 10000,
+        "failed": 0
+      },
+      "skipped": 4016,
+      "pass_rate": 100.0
+    },
+    {
+      "path": "random/aggregates/slt_good_9.test",
+      "statements": {
+        "passed": 12,
+        "failed": 0
+      },
+      "queries": {
+        "passed": 10000,
+        "failed": 0
+      },
+      "skipped": 3828,
+      "pass_rate": 100.0
+    },
+    {
+      "path": "random/aggregates/slt_good_90.test",
+      "statements": {
+        "passed": 12,
+        "failed": 0
+      },
+      "queries": {
+        "passed": 10000,
+        "failed": 0
+      },
+      "skipped": 3941,
+      "pass_rate": 100.0
+    },
+    {
+      "path": "random/aggregates/slt_good_91.test",
+      "statements": {
+        "passed": 12,
+        "failed": 0
+      },
+      "queries": {
+        "passed": 10000,
+        "failed": 0
+      },
+      "skipped": 3909,
+      "pass_rate": 100.0
+    },
+    {
+      "path": "random/aggregates/slt_good_92.test",
+      "statements": {
+        "passed": 12,
+        "failed": 0
+      },
+      "queries": {
+        "passed": 10000,
+        "failed": 0
+      },
+      "skipped": 3881,
+      "pass_rate": 100.0
+    },
+    {
+      "path": "random/aggregates/slt_good_93.test",
+      "statements": {
+        "passed": 12,
+        "failed": 0
+      },
+      "queries": {
+        "passed": 10000,
+        "failed": 0
+      },
+      "skipped": 3856,
+      "pass_rate": 100.0
+    },
+    {
+      "path": "random/aggregates/slt_good_94.test",
+      "statements": {
+        "passed": 12,
+        "failed": 0
+      },
+      "queries": {
+        "passed": 10000,
+        "failed": 0
+      },
+      "skipped": 3886,
+      "pass_rate": 100.0
+    },
+    {
+      "path": "random/aggregates/slt_good_95.test",
+      "statements": {
+        "passed": 12,
+        "failed": 0
+      },
+      "queries": {
+        "passed": 10000,
+        "failed": 0
+      },
+      "skipped": 3871,
+      "pass_rate": 100.0
+    },
+    {
+      "path": "random/aggregates/slt_good_96.test",
+      "statements": {
+        "passed": 12,
+        "failed": 0
+      },
+      "queries": {
+        "passed": 10000,
+        "failed": 0
+      },
+      "skipped": 4006,
+      "pass_rate": 100.0
+    },
+    {
+      "path": "random/aggregates/slt_good_97.test",
+      "statements": {
+        "passed": 12,
+        "failed": 0
+      },
+      "queries": {
+        "passed": 10000,
+        "failed": 0
+      },
+      "skipped": 4000,
+      "pass_rate": 100.0
+    },
+    {
+      "path": "random/aggregates/slt_good_98.test",
+      "statements": {
+        "passed": 12,
+        "failed": 0
+      },
+      "queries": {
+        "passed": 10000,
+        "failed": 0
+      },
+      "skipped": 3888,
+      "pass_rate": 100.0
+    },
+    {
+      "path": "random/aggregates/slt_good_99.test",
+      "statements": {
+        "passed": 12,
+        "failed": 0
+      },
+      "queries": {
+        "passed": 10000,
+        "failed": 0
+      },
+      "skipped": 3902,
+      "pass_rate": 100.0
+    },
+    {
+      "path": "random/expr/slt_good_0.test",
+      "statements": {
+        "passed": 12,
+        "failed": 0
+      },
+      "queries": {
+        "passed": 10000,
+        "failed": 0
+      },
+      "skipped": 5414,
+      "pass_rate": 100.0
+    },
+    {
+      "path": "random/expr/slt_good_1.test",
+      "statements": {
+        "passed": 12,
+        "failed": 0
+      },
+      "queries": {
+        "passed": 10000,
+        "failed": 0
+      },
+      "skipped": 3871,
+      "pass_rate": 100.0
+    },
+    {
+      "path": "random/expr/slt_good_10.test",
+      "statements": {
+        "passed": 12,
+        "failed": 0
+      },
+      "queries": {
+        "passed": 10000,
+        "failed": 0
+      },
+      "skipped": 5811,
+      "pass_rate": 100.0
+    },
+    {
+      "path": "random/expr/slt_good_100.test",
+      "statements": {
+        "passed": 12,
+        "failed": 0
+      },
+      "queries": {
+        "passed": 10000,
+        "failed": 0
+      },
+      "skipped": 5878,
+      "pass_rate": 100.0
+    },
+    {
+      "path": "random/expr/slt_good_101.test",
+      "statements": {
+        "passed": 12,
+        "failed": 0
+      },
+      "queries": {
+        "passed": 10000,
+        "failed": 0
+      },
+      "skipped": 5838,
+      "pass_rate": 100.0
+    },
+    {
+      "path": "random/expr/slt_good_102.test",
+      "statements": {
+        "passed": 12,
+        "failed": 0
+      },
+      "queries": {
+        "passed": 10000,
+        "failed": 0
+      },
+      "skipped": 5899,
+      "pass_rate": 100.0
+    },
+    {
+      "path": "random/expr/slt_good_103.test",
+      "statements": {
+        "passed": 12,
+        "failed": 0
+      },
+      "queries": {
+        "passed": 10000,
+        "failed": 0
+      },
+      "skipped": 5901,
+      "pass_rate": 100.0
+    },
+    {
+      "path": "random/expr/slt_good_104.test",
+      "statements": {
+        "passed": 12,
+        "failed": 0
+      },
+      "queries": {
+        "passed": 10000,
+        "failed": 0
+      },
+      "skipped": 5798,
+      "pass_rate": 100.0
+    },
+    {
+      "path": "random/expr/slt_good_105.test",
+      "statements": {
+        "passed": 12,
+        "failed": 0
+      },
+      "queries": {
+        "passed": 10000,
+        "failed": 0
+      },
+      "skipped": 5775,
+      "pass_rate": 100.0
+    },
+    {
+      "path": "random/expr/slt_good_106.test",
+      "statements": {
+        "passed": 12,
+        "failed": 0
+      },
+      "queries": {
+        "passed": 10000,
+        "failed": 0
+      },
+      "skipped": 5871,
+      "pass_rate": 100.0
+    },
+    {
+      "path": "random/expr/slt_good_107.test",
+      "statements": {
+        "passed": 12,
+        "failed": 0
+      },
+      "queries": {
+        "passed": 10000,
+        "failed": 0
+      },
+      "skipped": 5797,
+      "pass_rate": 100.0
+    },
+    {
+      "path": "random/expr/slt_good_108.test",
+      "statements": {
+        "passed": 12,
+        "failed": 0
+      },
+      "queries": {
+        "passed": 10000,
+        "failed": 0
+      },
+      "skipped": 5755,
+      "pass_rate": 100.0
+    },
+    {
+      "path": "random/expr/slt_good_109.test",
+      "statements": {
+        "passed": 12,
+        "failed": 0
+      },
+      "queries": {
+        "passed": 10000,
+        "failed": 0
+      },
+      "skipped": 5483,
+      "pass_rate": 100.0
+    },
+    {
+      "path": "random/expr/slt_good_11.test",
+      "statements": {
+        "passed": 12,
+        "failed": 0
+      },
+      "queries": {
+        "passed": 10000,
+        "failed": 0
+      },
+      "skipped": 5833,
+      "pass_rate": 100.0
+    },
+    {
+      "path": "random/expr/slt_good_110.test",
+      "statements": {
+        "passed": 12,
+        "failed": 0
+      },
+      "queries": {
+        "passed": 10000,
+        "failed": 0
+      },
+      "skipped": 5740,
+      "pass_rate": 100.0
+    },
+    {
+      "path": "random/expr/slt_good_111.test",
+      "statements": {
+        "passed": 12,
+        "failed": 0
+      },
+      "queries": {
+        "passed": 10000,
+        "failed": 0
+      },
+      "skipped": 5803,
+      "pass_rate": 100.0
+    },
+    {
+      "path": "random/expr/slt_good_112.test",
+      "statements": {
+        "passed": 12,
+        "failed": 0
+      },
+      "queries": {
+        "passed": 10000,
+        "failed": 0
+      },
+      "skipped": 5865,
+      "pass_rate": 100.0
+    },
+    {
+      "path": "random/expr/slt_good_113.test",
+      "statements": {
+        "passed": 12,
+        "failed": 0
+      },
+      "queries": {
+        "passed": 10000,
+        "failed": 0
+      },
+      "skipped": 5824,
+      "pass_rate": 100.0
+    },
+    {
+      "path": "random/expr/slt_good_114.test",
+      "statements": {
+        "passed": 12,
+        "failed": 0
+      },
+      "queries": {
+        "passed": 10000,
+        "failed": 0
+      },
+      "skipped": 5765,
+      "pass_rate": 100.0
+    },
+    {
+      "path": "random/expr/slt_good_115.test",
+      "statements": {
+        "passed": 12,
+        "failed": 0
+      },
+      "queries": {
+        "passed": 10000,
+        "failed": 0
+      },
+      "skipped": 5822,
+      "pass_rate": 100.0
+    },
+    {
+      "path": "random/expr/slt_good_116.test",
+      "statements": {
+        "passed": 12,
+        "failed": 0
+      },
+      "queries": {
+        "passed": 10000,
+        "failed": 0
+      },
+      "skipped": 5829,
+      "pass_rate": 100.0
+    },
+    {
+      "path": "random/expr/slt_good_117.test",
+      "statements": {
+        "passed": 12,
+        "failed": 0
+      },
+      "queries": {
+        "passed": 10000,
+        "failed": 0
+      },
+      "skipped": 5775,
+      "pass_rate": 100.0
+    },
+    {
+      "path": "random/expr/slt_good_118.test",
+      "statements": {
+        "passed": 12,
+        "failed": 0
+      },
+      "queries": {
+        "passed": 10000,
+        "failed": 0
+      },
+      "skipped": 5869,
+      "pass_rate": 100.0
+    },
+    {
+      "path": "random/expr/slt_good_119.test",
+      "statements": {
+        "passed": 12,
+        "failed": 0
+      },
+      "queries": {
+        "passed": 8926,
+        "failed": 0
+      },
+      "skipped": 5226,
+      "pass_rate": 100.0
+    },
+    {
+      "path": "random/expr/slt_good_12.test",
+      "statements": {
+        "passed": 12,
+        "failed": 0
+      },
+      "queries": {
+        "passed": 10000,
+        "failed": 0
+      },
+      "skipped": 5812,
+      "pass_rate": 100.0
+    },
+    {
+      "path": "random/expr/slt_good_13.test",
+      "statements": {
+        "passed": 12,
+        "failed": 0
+      },
+      "queries": {
+        "passed": 10000,
+        "failed": 0
+      },
+      "skipped": 4962,
+      "pass_rate": 100.0
+    },
+    {
+      "path": "random/expr/slt_good_14.test",
+      "statements": {
+        "passed": 12,
+        "failed": 0
+      },
+      "queries": {
+        "passed": 10000,
+        "failed": 0
+      },
+      "skipped": 5840,
+      "pass_rate": 100.0
+    },
+    {
+      "path": "random/expr/slt_good_15.test",
+      "statements": {
+        "passed": 12,
+        "failed": 0
+      },
+      "queries": {
+        "passed": 10000,
+        "failed": 0
+      },
+      "skipped": 5868,
+      "pass_rate": 100.0
+    },
+    {
+      "path": "random/expr/slt_good_16.test",
+      "statements": {
+        "passed": 12,
+        "failed": 0
+      },
+      "queries": {
+        "passed": 10000,
+        "failed": 0
+      },
+      "skipped": 5832,
+      "pass_rate": 100.0
+    },
+    {
+      "path": "random/expr/slt_good_17.test",
+      "statements": {
+        "passed": 12,
+        "failed": 0
+      },
+      "queries": {
+        "passed": 10000,
+        "failed": 0
+      },
+      "skipped": 5890,
+      "pass_rate": 100.0
+    },
+    {
+      "path": "random/expr/slt_good_18.test",
+      "statements": {
+        "passed": 12,
+        "failed": 0
+      },
+      "queries": {
+        "passed": 10000,
+        "failed": 0
+      },
+      "skipped": 5842,
+      "pass_rate": 100.0
+    },
+    {
+      "path": "random/expr/slt_good_19.test",
+      "statements": {
+        "passed": 12,
+        "failed": 0
+      },
+      "queries": {
+        "passed": 10000,
+        "failed": 0
+      },
+      "skipped": 5814,
+      "pass_rate": 100.0
+    },
+    {
+      "path": "random/expr/slt_good_2.test",
+      "statements": {
+        "passed": 12,
+        "failed": 0
+      },
+      "queries": {
+        "passed": 10000,
+        "failed": 0
+      },
+      "skipped": 4307,
+      "pass_rate": 100.0
+    },
+    {
+      "path": "random/expr/slt_good_20.test",
+      "statements": {
+        "passed": 12,
+        "failed": 0
+      },
+      "queries": {
+        "passed": 10000,
+        "failed": 0
+      },
+      "skipped": 5821,
+      "pass_rate": 100.0
+    },
+    {
+      "path": "random/expr/slt_good_21.test",
+      "statements": {
+        "passed": 12,
+        "failed": 0
+      },
+      "queries": {
+        "passed": 10000,
+        "failed": 0
+      },
+      "skipped": 5809,
+      "pass_rate": 100.0
+    },
+    {
+      "path": "random/expr/slt_good_22.test",
+      "statements": {
+        "passed": 12,
+        "failed": 0
+      },
+      "queries": {
+        "passed": 10000,
+        "failed": 0
+      },
+      "skipped": 5737,
+      "pass_rate": 100.0
+    },
+    {
+      "path": "random/expr/slt_good_23.test",
+      "statements": {
+        "passed": 12,
+        "failed": 0
+      },
+      "queries": {
+        "passed": 10000,
+        "failed": 0
+      },
+      "skipped": 5724,
+      "pass_rate": 100.0
+    },
+    {
+      "path": "random/expr/slt_good_24.test",
+      "statements": {
+        "passed": 12,
+        "failed": 0
+      },
+      "queries": {
+        "passed": 10000,
+        "failed": 0
+      },
+      "skipped": 5208,
+      "pass_rate": 100.0
+    },
+    {
+      "path": "random/expr/slt_good_25.test",
+      "statements": {
+        "passed": 12,
+        "failed": 0
+      },
+      "queries": {
+        "passed": 10000,
+        "failed": 0
+      },
+      "skipped": 5348,
+      "pass_rate": 100.0
+    },
+    {
+      "path": "random/expr/slt_good_26.test",
+      "statements": {
+        "passed": 12,
+        "failed": 0
+      },
+      "queries": {
+        "passed": 10000,
+        "failed": 0
+      },
+      "skipped": 5440,
+      "pass_rate": 100.0
+    },
+    {
+      "path": "random/expr/slt_good_27.test",
+      "statements": {
+        "passed": 12,
+        "failed": 0
+      },
+      "queries": {
+        "passed": 10000,
+        "failed": 0
+      },
+      "skipped": 5477,
+      "pass_rate": 100.0
+    },
+    {
+      "path": "random/expr/slt_good_28.test",
+      "statements": {
+        "passed": 12,
+        "failed": 0
+      },
+      "queries": {
+        "passed": 10000,
+        "failed": 0
+      },
+      "skipped": 5504,
+      "pass_rate": 100.0
+    },
+    {
+      "path": "random/expr/slt_good_29.test",
+      "statements": {
+        "passed": 12,
+        "failed": 0
+      },
+      "queries": {
+        "passed": 10000,
+        "failed": 0
+      },
+      "skipped": 4426,
+      "pass_rate": 100.0
+    },
+    {
+      "path": "random/expr/slt_good_3.test",
+      "statements": {
+        "passed": 12,
+        "failed": 0
+      },
+      "queries": {
+        "passed": 10000,
+        "failed": 0
+      },
+      "skipped": 5913,
+      "pass_rate": 100.0
+    },
+    {
+      "path": "random/expr/slt_good_30.test",
+      "statements": {
+        "passed": 12,
+        "failed": 0
+      },
+      "queries": {
+        "passed": 10000,
+        "failed": 0
+      },
+      "skipped": 4910,
+      "pass_rate": 100.0
+    },
+    {
+      "path": "random/expr/slt_good_31.test",
+      "statements": {
+        "passed": 12,
+        "failed": 0
+      },
+      "queries": {
+        "passed": 10000,
+        "failed": 0
+      },
+      "skipped": 5223,
+      "pass_rate": 100.0
+    },
+    {
+      "path": "random/expr/slt_good_32.test",
+      "statements": {
+        "passed": 12,
+        "failed": 0
+      },
+      "queries": {
+        "passed": 10000,
+        "failed": 0
+      },
+      "skipped": 5054,
+      "pass_rate": 100.0
+    },
+    {
+      "path": "random/expr/slt_good_33.test",
+      "statements": {
+        "passed": 12,
+        "failed": 0
+      },
+      "queries": {
+        "passed": 10000,
+        "failed": 0
+      },
+      "skipped": 5334,
+      "pass_rate": 100.0
+    },
+    {
+      "path": "random/expr/slt_good_34.test",
+      "statements": {
+        "passed": 12,
+        "failed": 0
+      },
+      "queries": {
+        "passed": 10000,
+        "failed": 0
+      },
+      "skipped": 5525,
+      "pass_rate": 100.0
+    },
+    {
+      "path": "random/expr/slt_good_35.test",
+      "statements": {
+        "passed": 12,
+        "failed": 0
+      },
+      "queries": {
+        "passed": 10000,
+        "failed": 0
+      },
+      "skipped": 5577,
+      "pass_rate": 100.0
+    },
+    {
+      "path": "random/expr/slt_good_36.test",
+      "statements": {
+        "passed": 12,
+        "failed": 0
+      },
+      "queries": {
+        "passed": 10000,
+        "failed": 0
+      },
+      "skipped": 5675,
+      "pass_rate": 100.0
+    },
+    {
+      "path": "random/expr/slt_good_37.test",
+      "statements": {
+        "passed": 12,
+        "failed": 0
+      },
+      "queries": {
+        "passed": 10000,
+        "failed": 0
+      },
+      "skipped": 5656,
+      "pass_rate": 100.0
+    },
+    {
+      "path": "random/expr/slt_good_38.test",
+      "statements": {
+        "passed": 12,
+        "failed": 0
+      },
+      "queries": {
+        "passed": 10000,
+        "failed": 0
+      },
+      "skipped": 5691,
+      "pass_rate": 100.0
+    },
+    {
+      "path": "random/expr/slt_good_39.test",
+      "statements": {
+        "passed": 12,
+        "failed": 0
+      },
+      "queries": {
+        "passed": 10000,
+        "failed": 0
+      },
+      "skipped": 5765,
+      "pass_rate": 100.0
+    },
+    {
+      "path": "random/expr/slt_good_4.test",
+      "statements": {
+        "passed": 12,
+        "failed": 0
+      },
+      "queries": {
+        "passed": 10000,
+        "failed": 0
+      },
+      "skipped": 5849,
+      "pass_rate": 100.0
+    },
+    {
+      "path": "random/expr/slt_good_40.test",
+      "statements": {
+        "passed": 12,
+        "failed": 0
+      },
+      "queries": {
+        "passed": 10000,
+        "failed": 0
+      },
+      "skipped": 5776,
+      "pass_rate": 100.0
+    },
+    {
+      "path": "random/expr/slt_good_41.test",
+      "statements": {
+        "passed": 12,
+        "failed": 0
+      },
+      "queries": {
+        "passed": 10000,
+        "failed": 0
+      },
+      "skipped": 5741,
+      "pass_rate": 100.0
+    },
+    {
+      "path": "random/expr/slt_good_42.test",
+      "statements": {
+        "passed": 12,
+        "failed": 0
+      },
+      "queries": {
+        "passed": 10000,
+        "failed": 0
+      },
+      "skipped": 5726,
+      "pass_rate": 100.0
+    },
+    {
+      "path": "random/expr/slt_good_43.test",
+      "statements": {
+        "passed": 12,
+        "failed": 0
+      },
+      "queries": {
+        "passed": 10000,
+        "failed": 0
+      },
+      "skipped": 5561,
+      "pass_rate": 100.0
+    },
+    {
+      "path": "random/expr/slt_good_44.test",
+      "statements": {
+        "passed": 12,
+        "failed": 0
+      },
+      "queries": {
+        "passed": 10000,
+        "failed": 0
+      },
+      "skipped": 5669,
+      "pass_rate": 100.0
+    },
+    {
+      "path": "random/expr/slt_good_45.test",
+      "statements": {
+        "passed": 12,
+        "failed": 0
+      },
+      "queries": {
+        "passed": 10000,
+        "failed": 0
+      },
+      "skipped": 5692,
+      "pass_rate": 100.0
+    },
+    {
+      "path": "random/expr/slt_good_46.test",
+      "statements": {
+        "passed": 12,
+        "failed": 0
+      },
+      "queries": {
+        "passed": 10000,
+        "failed": 0
+      },
+      "skipped": 5583,
+      "pass_rate": 100.0
+    },
+    {
+      "path": "random/expr/slt_good_47.test",
+      "statements": {
+        "passed": 12,
+        "failed": 0
+      },
+      "queries": {
+        "passed": 10000,
+        "failed": 0
+      },
+      "skipped": 5708,
+      "pass_rate": 100.0
+    },
+    {
+      "path": "random/expr/slt_good_48.test",
+      "statements": {
+        "passed": 12,
+        "failed": 0
+      },
+      "queries": {
+        "passed": 10000,
+        "failed": 0
+      },
+      "skipped": 5709,
+      "pass_rate": 100.0
+    },
+    {
+      "path": "random/expr/slt_good_49.test",
+      "statements": {
+        "passed": 12,
+        "failed": 0
+      },
+      "queries": {
+        "passed": 10000,
+        "failed": 0
+      },
+      "skipped": 5695,
+      "pass_rate": 100.0
+    },
+    {
+      "path": "random/expr/slt_good_5.test",
+      "statements": {
+        "passed": 12,
+        "failed": 0
+      },
+      "queries": {
+        "passed": 10000,
+        "failed": 0
+      },
+      "skipped": 5890,
+      "pass_rate": 100.0
+    },
+    {
+      "path": "random/expr/slt_good_50.test",
+      "statements": {
+        "passed": 12,
+        "failed": 0
+      },
+      "queries": {
+        "passed": 10000,
+        "failed": 0
+      },
+      "skipped": 5710,
+      "pass_rate": 100.0
+    },
+    {
+      "path": "random/expr/slt_good_51.test",
+      "statements": {
+        "passed": 12,
+        "failed": 0
+      },
+      "queries": {
+        "passed": 10000,
+        "failed": 0
+      },
+      "skipped": 5766,
+      "pass_rate": 100.0
+    },
+    {
+      "path": "random/expr/slt_good_52.test",
+      "statements": {
+        "passed": 12,
+        "failed": 0
+      },
+      "queries": {
+        "passed": 10000,
+        "failed": 0
+      },
+      "skipped": 5742,
+      "pass_rate": 100.0
+    },
+    {
+      "path": "random/expr/slt_good_53.test",
+      "statements": {
+        "passed": 12,
+        "failed": 0
+      },
+      "queries": {
+        "passed": 10000,
+        "failed": 0
+      },
+      "skipped": 5726,
+      "pass_rate": 100.0
+    },
+    {
+      "path": "random/expr/slt_good_54.test",
+      "statements": {
+        "passed": 12,
+        "failed": 0
+      },
+      "queries": {
+        "passed": 10000,
+        "failed": 0
+      },
+      "skipped": 5688,
+      "pass_rate": 100.0
+    },
+    {
+      "path": "random/expr/slt_good_55.test",
+      "statements": {
+        "passed": 12,
+        "failed": 0
+      },
+      "queries": {
+        "passed": 10000,
+        "failed": 0
+      },
+      "skipped": 5694,
+      "pass_rate": 100.0
+    },
+    {
+      "path": "random/expr/slt_good_56.test",
+      "statements": {
+        "passed": 12,
+        "failed": 0
+      },
+      "queries": {
+        "passed": 10000,
+        "failed": 0
+      },
+      "skipped": 5793,
+      "pass_rate": 100.0
+    },
+    {
+      "path": "random/expr/slt_good_57.test",
+      "statements": {
+        "passed": 12,
+        "failed": 0
+      },
+      "queries": {
+        "passed": 10000,
+        "failed": 0
+      },
+      "skipped": 5708,
+      "pass_rate": 100.0
+    },
+    {
+      "path": "random/expr/slt_good_58.test",
+      "statements": {
+        "passed": 12,
+        "failed": 0
+      },
+      "queries": {
+        "passed": 10000,
+        "failed": 0
+      },
+      "skipped": 5751,
+      "pass_rate": 100.0
+    },
+    {
+      "path": "random/expr/slt_good_59.test",
+      "statements": {
+        "passed": 12,
+        "failed": 0
+      },
+      "queries": {
+        "passed": 10000,
+        "failed": 0
+      },
+      "skipped": 5751,
+      "pass_rate": 100.0
+    },
+    {
+      "path": "random/expr/slt_good_6.test",
+      "statements": {
+        "passed": 12,
+        "failed": 0
+      },
+      "queries": {
+        "passed": 10000,
+        "failed": 0
+      },
+      "skipped": 5840,
+      "pass_rate": 100.0
+    },
+    {
+      "path": "random/expr/slt_good_60.test",
+      "statements": {
+        "passed": 12,
+        "failed": 0
+      },
+      "queries": {
+        "passed": 10000,
+        "failed": 0
+      },
+      "skipped": 5712,
+      "pass_rate": 100.0
+    },
+    {
+      "path": "random/expr/slt_good_61.test",
+      "statements": {
+        "passed": 12,
+        "failed": 0
+      },
+      "queries": {
+        "passed": 10000,
+        "failed": 0
+      },
+      "skipped": 5777,
+      "pass_rate": 100.0
+    },
+    {
+      "path": "random/expr/slt_good_62.test",
+      "statements": {
+        "passed": 12,
+        "failed": 0
+      },
+      "queries": {
+        "passed": 10000,
+        "failed": 0
+      },
+      "skipped": 5770,
+      "pass_rate": 100.0
+    },
+    {
+      "path": "random/expr/slt_good_63.test",
+      "statements": {
+        "passed": 12,
+        "failed": 0
+      },
+      "queries": {
+        "passed": 10000,
+        "failed": 0
+      },
+      "skipped": 5800,
+      "pass_rate": 100.0
+    },
+    {
+      "path": "random/expr/slt_good_64.test",
+      "statements": {
+        "passed": 12,
+        "failed": 0
+      },
+      "queries": {
+        "passed": 10000,
+        "failed": 0
+      },
+      "skipped": 5808,
+      "pass_rate": 100.0
+    },
+    {
+      "path": "random/expr/slt_good_65.test",
+      "statements": {
+        "passed": 12,
+        "failed": 0
+      },
+      "queries": {
+        "passed": 10000,
+        "failed": 0
+      },
+      "skipped": 5839,
+      "pass_rate": 100.0
+    },
+    {
+      "path": "random/expr/slt_good_66.test",
+      "statements": {
+        "passed": 12,
+        "failed": 0
+      },
+      "queries": {
+        "passed": 10000,
+        "failed": 0
+      },
+      "skipped": 5874,
+      "pass_rate": 100.0
+    },
+    {
+      "path": "random/expr/slt_good_67.test",
+      "statements": {
+        "passed": 12,
+        "failed": 0
+      },
+      "queries": {
+        "passed": 10000,
+        "failed": 0
+      },
+      "skipped": 5814,
+      "pass_rate": 100.0
+    },
+    {
+      "path": "random/expr/slt_good_68.test",
+      "statements": {
+        "passed": 12,
+        "failed": 0
+      },
+      "queries": {
+        "passed": 10000,
+        "failed": 0
+      },
+      "skipped": 5792,
+      "pass_rate": 100.0
+    },
+    {
+      "path": "random/expr/slt_good_69.test",
+      "statements": {
+        "passed": 12,
+        "failed": 0
+      },
+      "queries": {
+        "passed": 10000,
+        "failed": 0
+      },
+      "skipped": 5731,
+      "pass_rate": 100.0
+    },
+    {
+      "path": "random/expr/slt_good_7.test",
+      "statements": {
+        "passed": 12,
+        "failed": 0
+      },
+      "queries": {
+        "passed": 10000,
+        "failed": 0
+      },
+      "skipped": 5815,
+      "pass_rate": 100.0
+    },
+    {
+      "path": "random/expr/slt_good_70.test",
+      "statements": {
+        "passed": 12,
+        "failed": 0
+      },
+      "queries": {
+        "passed": 10000,
+        "failed": 0
+      },
+      "skipped": 5713,
+      "pass_rate": 100.0
+    },
+    {
+      "path": "random/expr/slt_good_71.test",
+      "statements": {
+        "passed": 12,
+        "failed": 0
+      },
+      "queries": {
+        "passed": 10000,
+        "failed": 0
+      },
+      "skipped": 5755,
+      "pass_rate": 100.0
+    },
+    {
+      "path": "random/expr/slt_good_72.test",
+      "statements": {
+        "passed": 12,
+        "failed": 0
+      },
+      "queries": {
+        "passed": 10000,
+        "failed": 0
+      },
+      "skipped": 5777,
+      "pass_rate": 100.0
+    },
+    {
+      "path": "random/expr/slt_good_73.test",
+      "statements": {
+        "passed": 12,
+        "failed": 0
+      },
+      "queries": {
+        "passed": 10000,
+        "failed": 0
+      },
+      "skipped": 5779,
+      "pass_rate": 100.0
+    },
+    {
+      "path": "random/expr/slt_good_74.test",
+      "statements": {
+        "passed": 12,
+        "failed": 0
+      },
+      "queries": {
+        "passed": 10000,
+        "failed": 0
+      },
+      "skipped": 5786,
+      "pass_rate": 100.0
+    },
+    {
+      "path": "random/expr/slt_good_75.test",
+      "statements": {
+        "passed": 12,
+        "failed": 0
+      },
+      "queries": {
+        "passed": 10000,
+        "failed": 0
+      },
+      "skipped": 5839,
+      "pass_rate": 100.0
+    },
+    {
+      "path": "random/expr/slt_good_76.test",
+      "statements": {
+        "passed": 12,
+        "failed": 0
+      },
+      "queries": {
+        "passed": 10000,
+        "failed": 0
+      },
+      "skipped": 5984,
+      "pass_rate": 100.0
+    },
+    {
+      "path": "random/expr/slt_good_77.test",
+      "statements": {
+        "passed": 12,
+        "failed": 0
+      },
+      "queries": {
+        "passed": 10000,
+        "failed": 0
+      },
+      "skipped": 5840,
+      "pass_rate": 100.0
+    },
+    {
+      "path": "random/expr/slt_good_78.test",
+      "statements": {
+        "passed": 12,
+        "failed": 0
+      },
+      "queries": {
+        "passed": 10000,
+        "failed": 0
+      },
+      "skipped": 5688,
+      "pass_rate": 100.0
+    },
+    {
+      "path": "random/expr/slt_good_79.test",
+      "statements": {
+        "passed": 12,
+        "failed": 0
+      },
+      "queries": {
+        "passed": 10000,
+        "failed": 0
+      },
+      "skipped": 5762,
+      "pass_rate": 100.0
+    },
+    {
+      "path": "random/expr/slt_good_8.test",
+      "statements": {
+        "passed": 12,
+        "failed": 0
+      },
+      "queries": {
+        "passed": 10000,
+        "failed": 0
+      },
+      "skipped": 5885,
+      "pass_rate": 100.0
+    },
+    {
+      "path": "random/expr/slt_good_80.test",
+      "statements": {
+        "passed": 12,
+        "failed": 0
+      },
+      "queries": {
+        "passed": 10000,
+        "failed": 0
+      },
+      "skipped": 5793,
+      "pass_rate": 100.0
+    },
+    {
+      "path": "random/expr/slt_good_81.test",
+      "statements": {
+        "passed": 12,
+        "failed": 0
+      },
+      "queries": {
+        "passed": 10000,
+        "failed": 0
+      },
+      "skipped": 5714,
+      "pass_rate": 100.0
+    },
+    {
+      "path": "random/expr/slt_good_82.test",
+      "statements": {
+        "passed": 12,
+        "failed": 0
+      },
+      "queries": {
+        "passed": 10000,
+        "failed": 0
+      },
+      "skipped": 5789,
+      "pass_rate": 100.0
+    },
+    {
+      "path": "random/expr/slt_good_83.test",
+      "statements": {
+        "passed": 12,
+        "failed": 0
+      },
+      "queries": {
+        "passed": 10000,
+        "failed": 0
+      },
+      "skipped": 5793,
+      "pass_rate": 100.0
+    },
+    {
+      "path": "random/expr/slt_good_84.test",
+      "statements": {
+        "passed": 12,
+        "failed": 0
+      },
+      "queries": {
+        "passed": 10000,
+        "failed": 0
+      },
+      "skipped": 5796,
+      "pass_rate": 100.0
+    },
+    {
+      "path": "random/expr/slt_good_85.test",
+      "statements": {
+        "passed": 12,
+        "failed": 0
+      },
+      "queries": {
+        "passed": 10000,
+        "failed": 0
+      },
+      "skipped": 5821,
+      "pass_rate": 100.0
+    },
+    {
+      "path": "random/expr/slt_good_86.test",
+      "statements": {
+        "passed": 12,
+        "failed": 0
+      },
+      "queries": {
+        "passed": 10000,
+        "failed": 0
+      },
+      "skipped": 5812,
+      "pass_rate": 100.0
+    },
+    {
+      "path": "random/expr/slt_good_87.test",
+      "statements": {
+        "passed": 12,
+        "failed": 0
+      },
+      "queries": {
+        "passed": 10000,
+        "failed": 0
+      },
+      "skipped": 6056,
+      "pass_rate": 100.0
+    },
+    {
+      "path": "random/expr/slt_good_88.test",
+      "statements": {
+        "passed": 12,
+        "failed": 0
+      },
+      "queries": {
+        "passed": 10000,
+        "failed": 0
+      },
+      "skipped": 5871,
+      "pass_rate": 100.0
+    },
+    {
+      "path": "random/expr/slt_good_89.test",
+      "statements": {
+        "passed": 12,
+        "failed": 0
+      },
+      "queries": {
+        "passed": 10000,
+        "failed": 0
+      },
+      "skipped": 5735,
+      "pass_rate": 100.0
+    },
+    {
+      "path": "random/expr/slt_good_9.test",
+      "statements": {
+        "passed": 12,
+        "failed": 0
+      },
+      "queries": {
+        "passed": 10000,
+        "failed": 0
+      },
+      "skipped": 5772,
+      "pass_rate": 100.0
+    },
+    {
+      "path": "random/expr/slt_good_90.test",
+      "statements": {
+        "passed": 12,
+        "failed": 0
+      },
+      "queries": {
+        "passed": 10000,
+        "failed": 0
+      },
+      "skipped": 5767,
+      "pass_rate": 100.0
+    },
+    {
+      "path": "random/expr/slt_good_91.test",
+      "statements": {
+        "passed": 12,
+        "failed": 0
+      },
+      "queries": {
+        "passed": 10000,
+        "failed": 0
+      },
+      "skipped": 5817,
+      "pass_rate": 100.0
+    },
+    {
+      "path": "random/expr/slt_good_92.test",
+      "statements": {
+        "passed": 12,
+        "failed": 0
+      },
+      "queries": {
+        "passed": 10000,
+        "failed": 0
+      },
+      "skipped": 5828,
+      "pass_rate": 100.0
+    },
+    {
+      "path": "random/expr/slt_good_93.test",
+      "statements": {
+        "passed": 12,
+        "failed": 0
+      },
+      "queries": {
+        "passed": 10000,
+        "failed": 0
+      },
+      "skipped": 5820,
+      "pass_rate": 100.0
+    },
+    {
+      "path": "random/expr/slt_good_94.test",
+      "statements": {
+        "passed": 12,
+        "failed": 0
+      },
+      "queries": {
+        "passed": 10000,
+        "failed": 0
+      },
+      "skipped": 5719,
+      "pass_rate": 100.0
+    },
+    {
+      "path": "random/expr/slt_good_95.test",
+      "statements": {
+        "passed": 12,
+        "failed": 0
+      },
+      "queries": {
+        "passed": 10000,
+        "failed": 0
+      },
+      "skipped": 5794,
+      "pass_rate": 100.0
+    },
+    {
+      "path": "random/expr/slt_good_96.test",
+      "statements": {
+        "passed": 12,
+        "failed": 0
+      },
+      "queries": {
+        "passed": 10000,
+        "failed": 0
+      },
+      "skipped": 5857,
+      "pass_rate": 100.0
+    },
+    {
+      "path": "random/expr/slt_good_97.test",
+      "statements": {
+        "passed": 12,
+        "failed": 0
+      },
+      "queries": {
+        "passed": 10000,
+        "failed": 0
+      },
+      "skipped": 5858,
+      "pass_rate": 100.0
+    },
+    {
+      "path": "random/expr/slt_good_98.test",
+      "statements": {
+        "passed": 12,
+        "failed": 0
+      },
+      "queries": {
+        "passed": 10000,
+        "failed": 0
+      },
+      "skipped": 6012,
+      "pass_rate": 100.0
+    },
+    {
+      "path": "random/expr/slt_good_99.test",
+      "statements": {
+        "passed": 12,
+        "failed": 0
+      },
+      "queries": {
+        "passed": 10000,
+        "failed": 0
+      },
+      "skipped": 5913,
+      "pass_rate": 100.0
+    },
+    {
+      "path": "random/groupby/slt_good_0.test",
+      "statements": {
+        "passed": 12,
+        "failed": 0
+      },
+      "queries": {
+        "passed": 10000,
+        "failed": 0
+      },
+      "skipped": 547,
+      "pass_rate": 100.0
+    },
+    {
+      "path": "random/groupby/slt_good_1.test",
+      "statements": {
+        "passed": 12,
+        "failed": 0
+      },
+      "queries": {
+        "passed": 10000,
+        "failed": 0
+      },
+      "skipped": 706,
+      "pass_rate": 100.0
+    },
+    {
+      "path": "random/groupby/slt_good_10.test",
+      "statements": {
+        "passed": 12,
+        "failed": 0
+      },
+      "queries": {
+        "passed": 10000,
+        "failed": 0
+      },
+      "skipped": 242,
+      "pass_rate": 100.0
+    },
+    {
+      "path": "random/groupby/slt_good_11.test",
+      "statements": {
+        "passed": 12,
+        "failed": 0
+      },
+      "queries": {
+        "passed": 10000,
+        "failed": 0
+      },
+      "skipped": 1234,
+      "pass_rate": 100.0
+    },
+    {
+      "path": "random/groupby/slt_good_12.test",
+      "statements": {
+        "passed": 12,
+        "failed": 0
+      },
+      "queries": {
+        "passed": 9993,
+        "failed": 7
+      },
+      "skipped": 2694,
+      "pass_rate": 99.93
+    },
+    {
+      "path": "random/groupby/slt_good_13.test",
+      "statements": {
+        "passed": 12,
+        "failed": 0
+      },
+      "queries": {
+        "passed": 3170,
+        "failed": 0
+      },
+      "skipped": 270,
+      "pass_rate": 100.0
+    },
+    {
+      "path": "random/groupby/slt_good_2.test",
+      "statements": {
+        "passed": 12,
+        "failed": 0
+      },
+      "queries": {
+        "passed": 10000,
+        "failed": 0
+      },
+      "skipped": 672,
+      "pass_rate": 100.0
+    },
+    {
+      "path": "random/groupby/slt_good_3.test",
+      "statements": {
+        "passed": 12,
+        "failed": 0
+      },
+      "queries": {
+        "passed": 10000,
+        "failed": 0
+      },
+      "skipped": 828,
+      "pass_rate": 100.0
+    },
+    {
+      "path": "random/groupby/slt_good_4.test",
+      "statements": {
+        "passed": 12,
+        "failed": 0
+      },
+      "queries": {
+        "passed": 10000,
+        "failed": 0
+      },
+      "skipped": 801,
+      "pass_rate": 100.0
+    },
+    {
+      "path": "random/groupby/slt_good_5.test",
+      "statements": {
+        "passed": 12,
+        "failed": 0
+      },
+      "queries": {
+        "passed": 10000,
+        "failed": 0
+      },
+      "skipped": 804,
+      "pass_rate": 100.0
+    },
+    {
+      "path": "random/groupby/slt_good_6.test",
+      "statements": {
+        "passed": 12,
+        "failed": 0
+      },
+      "queries": {
+        "passed": 10000,
+        "failed": 0
+      },
+      "skipped": 869,
+      "pass_rate": 100.0
+    },
+    {
+      "path": "random/groupby/slt_good_7.test",
+      "statements": {
+        "passed": 12,
+        "failed": 0
+      },
+      "queries": {
+        "passed": 10000,
+        "failed": 0
+      },
+      "skipped": 877,
+      "pass_rate": 100.0
+    },
+    {
+      "path": "random/groupby/slt_good_8.test",
+      "statements": {
+        "passed": 12,
+        "failed": 0
+      },
+      "queries": {
+        "passed": 10000,
+        "failed": 0
+      },
+      "skipped": 626,
+      "pass_rate": 100.0
+    },
+    {
+      "path": "random/groupby/slt_good_9.test",
+      "statements": {
+        "passed": 12,
+        "failed": 0
+      },
+      "queries": {
+        "passed": 10000,
+        "failed": 0
+      },
+      "skipped": 233,
+      "pass_rate": 100.0
+    },
+    {
+      "path": "random/select/slt_good_0.test",
+      "statements": {
+        "passed": 12,
+        "failed": 0
+      },
+      "queries": {
+        "passed": 10000,
+        "failed": 0
+      },
+      "skipped": 1072,
+      "pass_rate": 100.0
+    },
+    {
+      "path": "random/select/slt_good_1.test",
+      "statements": {
+        "passed": 12,
+        "failed": 0
+      },
+      "queries": {
+        "passed": 10000,
+        "failed": 0
+      },
+      "skipped": 1307,
+      "pass_rate": 100.0
+    },
+    {
+      "path": "random/select/slt_good_10.test",
+      "statements": {
+        "passed": 12,
+        "failed": 0
+      },
+      "queries": {
+        "passed": 9999,
+        "failed": 0
+      },
+      "skipped": 1521,
+      "pass_rate": 100.0
+    },
+    {
+      "path": "random/select/slt_good_100.test",
+      "statements": {
+        "passed": 12,
+        "failed": 0
+      },
+      "queries": {
+        "passed": 10000,
+        "failed": 0
+      },
+      "skipped": 1906,
+      "pass_rate": 100.0
+    },
+    {
+      "path": "random/select/slt_good_101.test",
+      "statements": {
+        "passed": 12,
+        "failed": 0
+      },
+      "queries": {
+        "passed": 10000,
+        "failed": 0
+      },
+      "skipped": 1878,
+      "pass_rate": 100.0
+    },
+    {
+      "path": "random/select/slt_good_102.test",
+      "statements": {
+        "passed": 12,
+        "failed": 0
+      },
+      "queries": {
+        "passed": 10000,
+        "failed": 0
+      },
+      "skipped": 1940,
+      "pass_rate": 100.0
+    },
+    {
+      "path": "random/select/slt_good_103.test",
+      "statements": {
+        "passed": 12,
+        "failed": 0
+      },
+      "queries": {
+        "passed": 9999,
+        "failed": 0
+      },
+      "skipped": 1872,
+      "pass_rate": 100.0
+    },
+    {
+      "path": "random/select/slt_good_104.test",
+      "statements": {
+        "passed": 12,
+        "failed": 0
+      },
+      "queries": {
+        "passed": 10000,
+        "failed": 0
+      },
+      "skipped": 1899,
+      "pass_rate": 100.0
+    },
+    {
+      "path": "random/select/slt_good_105.test",
+      "statements": {
+        "passed": 12,
+        "failed": 0
+      },
+      "queries": {
+        "passed": 9998,
+        "failed": 0
+      },
+      "skipped": 1875,
+      "pass_rate": 100.0
+    },
+    {
+      "path": "random/select/slt_good_106.test",
+      "statements": {
+        "passed": 12,
+        "failed": 0
+      },
+      "queries": {
+        "passed": 10000,
+        "failed": 0
+      },
+      "skipped": 1879,
+      "pass_rate": 100.0
+    },
+    {
+      "path": "random/select/slt_good_107.test",
+      "statements": {
+        "passed": 12,
+        "failed": 0
+      },
+      "queries": {
+        "passed": 10000,
+        "failed": 0
+      },
+      "skipped": 1888,
+      "pass_rate": 100.0
+    },
+    {
+      "path": "random/select/slt_good_108.test",
+      "statements": {
+        "passed": 12,
+        "failed": 0
+      },
+      "queries": {
+        "passed": 9999,
+        "failed": 0
+      },
+      "skipped": 1842,
+      "pass_rate": 100.0
+    },
+    {
+      "path": "random/select/slt_good_109.test",
+      "statements": {
+        "passed": 12,
+        "failed": 0
+      },
+      "queries": {
+        "passed": 9999,
+        "failed": 0
+      },
+      "skipped": 1846,
+      "pass_rate": 100.0
+    },
+    {
+      "path": "random/select/slt_good_11.test",
+      "statements": {
+        "passed": 12,
+        "failed": 0
+      },
+      "queries": {
+        "passed": 10000,
+        "failed": 0
+      },
+      "skipped": 1611,
+      "pass_rate": 100.0
+    },
+    {
+      "path": "random/select/slt_good_110.test",
+      "statements": {
+        "passed": 12,
+        "failed": 0
+      },
+      "queries": {
+        "passed": 9997,
+        "failed": 0
+      },
+      "skipped": 1852,
+      "pass_rate": 100.0
+    },
+    {
+      "path": "random/select/slt_good_111.test",
+      "statements": {
+        "passed": 12,
+        "failed": 0
+      },
+      "queries": {
+        "passed": 9999,
+        "failed": 0
+      },
+      "skipped": 1929,
+      "pass_rate": 100.0
+    },
+    {
+      "path": "random/select/slt_good_112.test",
+      "statements": {
+        "passed": 12,
+        "failed": 0
+      },
+      "queries": {
+        "passed": 10000,
+        "failed": 0
+      },
+      "skipped": 1931,
+      "pass_rate": 100.0
+    },
+    {
+      "path": "random/select/slt_good_113.test",
+      "statements": {
+        "passed": 12,
+        "failed": 0
+      },
+      "queries": {
+        "passed": 9999,
+        "failed": 0
+      },
+      "skipped": 1765,
+      "pass_rate": 100.0
+    },
+    {
+      "path": "random/select/slt_good_114.test",
+      "statements": {
+        "passed": 12,
+        "failed": 0
+      },
+      "queries": {
+        "passed": 10000,
+        "failed": 0
+      },
+      "skipped": 1882,
+      "pass_rate": 100.0
+    },
+    {
+      "path": "random/select/slt_good_115.test",
+      "statements": {
+        "passed": 12,
+        "failed": 0
+      },
+      "queries": {
+        "passed": 10000,
+        "failed": 0
+      },
+      "skipped": 1910,
+      "pass_rate": 100.0
+    },
+    {
+      "path": "random/select/slt_good_116.test",
+      "statements": {
+        "passed": 12,
+        "failed": 0
+      },
+      "queries": {
+        "passed": 9998,
+        "failed": 0
+      },
+      "skipped": 1906,
+      "pass_rate": 100.0
+    },
+    {
+      "path": "random/select/slt_good_117.test",
+      "statements": {
+        "passed": 12,
+        "failed": 0
+      },
+      "queries": {
+        "passed": 10000,
+        "failed": 0
+      },
+      "skipped": 1982,
+      "pass_rate": 100.0
+    },
+    {
+      "path": "random/select/slt_good_118.test",
+      "statements": {
+        "passed": 12,
+        "failed": 0
+      },
+      "queries": {
+        "passed": 10000,
+        "failed": 0
+      },
+      "skipped": 1920,
+      "pass_rate": 100.0
+    },
+    {
+      "path": "random/select/slt_good_119.test",
+      "statements": {
+        "passed": 12,
+        "failed": 0
+      },
+      "queries": {
+        "passed": 9998,
+        "failed": 0
+      },
+      "skipped": 1936,
+      "pass_rate": 100.0
+    },
+    {
+      "path": "random/select/slt_good_12.test",
+      "statements": {
+        "passed": 12,
+        "failed": 0
+      },
+      "queries": {
+        "passed": 10000,
+        "failed": 0
+      },
+      "skipped": 1556,
+      "pass_rate": 100.0
+    },
+    {
+      "path": "random/select/slt_good_120.test",
+      "statements": {
+        "passed": 12,
+        "failed": 0
+      },
+      "queries": {
+        "passed": 10000,
+        "failed": 0
+      },
+      "skipped": 1894,
+      "pass_rate": 100.0
+    },
+    {
+      "path": "random/select/slt_good_121.test",
+      "statements": {
+        "passed": 12,
+        "failed": 0
+      },
+      "queries": {
+        "passed": 10000,
+        "failed": 0
+      },
+      "skipped": 1895,
+      "pass_rate": 100.0
+    },
+    {
+      "path": "random/select/slt_good_122.test",
+      "statements": {
+        "passed": 12,
+        "failed": 0
+      },
+      "queries": {
+        "passed": 9999,
+        "failed": 0
+      },
+      "skipped": 1929,
+      "pass_rate": 100.0
+    },
+    {
+      "path": "random/select/slt_good_123.test",
+      "statements": {
+        "passed": 12,
+        "failed": 0
+      },
+      "queries": {
+        "passed": 10000,
+        "failed": 0
+      },
+      "skipped": 1909,
+      "pass_rate": 100.0
+    },
+    {
+      "path": "random/select/slt_good_124.test",
+      "statements": {
+        "passed": 12,
+        "failed": 0
+      },
+      "queries": {
+        "passed": 2853,
+        "failed": 0
+      },
+      "skipped": 532,
+      "pass_rate": 100.0
+    },
+    {
+      "path": "random/select/slt_good_125.test",
+      "statements": {
+        "passed": 12,
+        "failed": 0
+      },
+      "queries": {
+        "passed": 0,
+        "failed": 0
+      },
+      "skipped": 0,
+      "pass_rate": 100.0
+    },
+    {
+      "path": "random/select/slt_good_126.test",
+      "statements": {
+        "passed": 12,
+        "failed": 0
+      },
+      "queries": {
+        "passed": 0,
+        "failed": 0
+      },
+      "skipped": 0,
+      "pass_rate": 100.0
+    },
+    {
+      "path": "random/select/slt_good_13.test",
+      "statements": {
+        "passed": 12,
+        "failed": 0
+      },
+      "queries": {
+        "passed": 10000,
+        "failed": 0
+      },
+      "skipped": 1592,
+      "pass_rate": 100.0
+    },
+    {
+      "path": "random/select/slt_good_14.test",
+      "statements": {
+        "passed": 12,
+        "failed": 0
+      },
+      "queries": {
+        "passed": 9999,
+        "failed": 0
+      },
+      "skipped": 1593,
+      "pass_rate": 100.0
+    },
+    {
+      "path": "random/select/slt_good_15.test",
+      "statements": {
+        "passed": 12,
+        "failed": 0
+      },
+      "queries": {
+        "passed": 10000,
+        "failed": 0
+      },
+      "skipped": 1610,
+      "pass_rate": 100.0
+    },
+    {
+      "path": "random/select/slt_good_16.test",
+      "statements": {
+        "passed": 12,
+        "failed": 0
+      },
+      "queries": {
+        "passed": 10000,
+        "failed": 0
+      },
+      "skipped": 1629,
+      "pass_rate": 100.0
+    },
+    {
+      "path": "random/select/slt_good_17.test",
+      "statements": {
+        "passed": 12,
+        "failed": 0
+      },
+      "queries": {
+        "passed": 10000,
+        "failed": 0
+      },
+      "skipped": 1632,
+      "pass_rate": 100.0
+    },
+    {
+      "path": "random/select/slt_good_18.test",
+      "statements": {
+        "passed": 12,
+        "failed": 0
+      },
+      "queries": {
+        "passed": 10000,
+        "failed": 0
+      },
+      "skipped": 1688,
+      "pass_rate": 100.0
+    },
+    {
+      "path": "random/select/slt_good_19.test",
+      "statements": {
+        "passed": 12,
+        "failed": 0
+      },
+      "queries": {
+        "passed": 9999,
+        "failed": 0
+      },
+      "skipped": 1614,
+      "pass_rate": 100.0
+    },
+    {
+      "path": "random/select/slt_good_2.test",
+      "statements": {
+        "passed": 12,
+        "failed": 0
+      },
+      "queries": {
+        "passed": 10000,
+        "failed": 0
+      },
+      "skipped": 1372,
+      "pass_rate": 100.0
+    },
+    {
+      "path": "random/select/slt_good_20.test",
+      "statements": {
+        "passed": 12,
+        "failed": 0
+      },
+      "queries": {
+        "passed": 10000,
+        "failed": 0
+      },
+      "skipped": 1624,
+      "pass_rate": 100.0
+    },
+    {
+      "path": "random/select/slt_good_21.test",
+      "statements": {
+        "passed": 12,
+        "failed": 0
+      },
+      "queries": {
+        "passed": 10000,
+        "failed": 0
+      },
+      "skipped": 1681,
+      "pass_rate": 100.0
+    },
+    {
+      "path": "random/select/slt_good_22.test",
+      "statements": {
+        "passed": 12,
+        "failed": 0
+      },
+      "queries": {
+        "passed": 9998,
+        "failed": 0
+      },
+      "skipped": 1712,
+      "pass_rate": 100.0
+    },
+    {
+      "path": "random/select/slt_good_23.test",
+      "statements": {
+        "passed": 12,
+        "failed": 0
+      },
+      "queries": {
+        "passed": 10000,
+        "failed": 0
+      },
+      "skipped": 1696,
+      "pass_rate": 100.0
+    },
+    {
+      "path": "random/select/slt_good_24.test",
+      "statements": {
+        "passed": 12,
+        "failed": 0
+      },
+      "queries": {
+        "passed": 9999,
+        "failed": 0
+      },
+      "skipped": 1679,
+      "pass_rate": 100.0
+    },
+    {
+      "path": "random/select/slt_good_25.test",
+      "statements": {
+        "passed": 12,
+        "failed": 0
+      },
+      "queries": {
+        "passed": 10000,
+        "failed": 0
+      },
+      "skipped": 1634,
+      "pass_rate": 100.0
+    },
+    {
+      "path": "random/select/slt_good_26.test",
+      "statements": {
+        "passed": 12,
+        "failed": 0
+      },
+      "queries": {
+        "passed": 10000,
+        "failed": 0
+      },
+      "skipped": 1753,
+      "pass_rate": 100.0
+    },
+    {
+      "path": "random/select/slt_good_27.test",
+      "statements": {
+        "passed": 12,
+        "failed": 0
+      },
+      "queries": {
+        "passed": 10000,
+        "failed": 0
+      },
+      "skipped": 1694,
+      "pass_rate": 100.0
+    },
+    {
+      "path": "random/select/slt_good_28.test",
+      "statements": {
+        "passed": 12,
+        "failed": 0
+      },
+      "queries": {
+        "passed": 10000,
+        "failed": 0
+      },
+      "skipped": 1716,
+      "pass_rate": 100.0
+    },
+    {
+      "path": "random/select/slt_good_29.test",
+      "statements": {
+        "passed": 12,
+        "failed": 0
+      },
+      "queries": {
+        "passed": 10000,
+        "failed": 0
+      },
+      "skipped": 1749,
+      "pass_rate": 100.0
+    },
+    {
+      "path": "random/select/slt_good_3.test",
+      "statements": {
+        "passed": 12,
+        "failed": 0
+      },
+      "queries": {
+        "passed": 9999,
+        "failed": 0
+      },
+      "skipped": 1405,
+      "pass_rate": 100.0
+    },
+    {
+      "path": "random/select/slt_good_30.test",
+      "statements": {
+        "passed": 12,
+        "failed": 0
+      },
+      "queries": {
+        "passed": 10000,
+        "failed": 0
+      },
+      "skipped": 1778,
+      "pass_rate": 100.0
+    },
+    {
+      "path": "random/select/slt_good_31.test",
+      "statements": {
+        "passed": 12,
+        "failed": 0
+      },
+      "queries": {
+        "passed": 10000,
+        "failed": 0
+      },
+      "skipped": 1734,
+      "pass_rate": 100.0
+    },
+    {
+      "path": "random/select/slt_good_32.test",
+      "statements": {
+        "passed": 12,
+        "failed": 0
+      },
+      "queries": {
+        "passed": 9999,
+        "failed": 0
+      },
+      "skipped": 1745,
+      "pass_rate": 100.0
+    },
+    {
+      "path": "random/select/slt_good_33.test",
+      "statements": {
+        "passed": 12,
+        "failed": 0
+      },
+      "queries": {
+        "passed": 10000,
+        "failed": 0
+      },
+      "skipped": 1761,
+      "pass_rate": 100.0
+    },
+    {
+      "path": "random/select/slt_good_34.test",
+      "statements": {
+        "passed": 12,
+        "failed": 0
+      },
+      "queries": {
+        "passed": 10000,
+        "failed": 0
+      },
+      "skipped": 1767,
+      "pass_rate": 100.0
+    },
+    {
+      "path": "random/select/slt_good_35.test",
+      "statements": {
+        "passed": 12,
+        "failed": 0
+      },
+      "queries": {
+        "passed": 10000,
+        "failed": 0
+      },
+      "skipped": 1731,
+      "pass_rate": 100.0
+    },
+    {
+      "path": "random/select/slt_good_36.test",
+      "statements": {
+        "passed": 12,
+        "failed": 0
+      },
+      "queries": {
+        "passed": 9999,
+        "failed": 0
+      },
+      "skipped": 1775,
+      "pass_rate": 100.0
+    },
+    {
+      "path": "random/select/slt_good_37.test",
+      "statements": {
+        "passed": 12,
+        "failed": 0
+      },
+      "queries": {
+        "passed": 10000,
+        "failed": 0
+      },
+      "skipped": 1705,
+      "pass_rate": 100.0
+    },
+    {
+      "path": "random/select/slt_good_38.test",
+      "statements": {
+        "passed": 12,
+        "failed": 0
+      },
+      "queries": {
+        "passed": 10000,
+        "failed": 0
+      },
+      "skipped": 1714,
+      "pass_rate": 100.0
+    },
+    {
+      "path": "random/select/slt_good_39.test",
+      "statements": {
+        "passed": 12,
+        "failed": 0
+      },
+      "queries": {
+        "passed": 9998,
+        "failed": 0
+      },
+      "skipped": 1747,
+      "pass_rate": 100.0
+    },
+    {
+      "path": "random/select/slt_good_4.test",
+      "statements": {
+        "passed": 12,
+        "failed": 0
+      },
+      "queries": {
+        "passed": 9999,
+        "failed": 0
+      },
+      "skipped": 1494,
+      "pass_rate": 100.0
+    },
+    {
+      "path": "random/select/slt_good_40.test",
+      "statements": {
+        "passed": 12,
+        "failed": 0
+      },
+      "queries": {
+        "passed": 9998,
+        "failed": 0
+      },
+      "skipped": 1720,
+      "pass_rate": 100.0
+    },
+    {
+      "path": "random/select/slt_good_41.test",
+      "statements": {
+        "passed": 12,
+        "failed": 0
+      },
+      "queries": {
+        "passed": 9998,
+        "failed": 0
+      },
+      "skipped": 1747,
+      "pass_rate": 100.0
+    },
+    {
+      "path": "random/select/slt_good_42.test",
+      "statements": {
+        "passed": 12,
+        "failed": 0
+      },
+      "queries": {
+        "passed": 9999,
+        "failed": 0
+      },
+      "skipped": 1803,
+      "pass_rate": 100.0
+    },
+    {
+      "path": "random/select/slt_good_43.test",
+      "statements": {
+        "passed": 12,
+        "failed": 0
+      },
+      "queries": {
+        "passed": 10000,
+        "failed": 0
+      },
+      "skipped": 1693,
+      "pass_rate": 100.0
+    },
+    {
+      "path": "random/select/slt_good_44.test",
+      "statements": {
+        "passed": 12,
+        "failed": 0
+      },
+      "queries": {
+        "passed": 10000,
+        "failed": 0
+      },
+      "skipped": 1764,
+      "pass_rate": 100.0
+    },
+    {
+      "path": "random/select/slt_good_45.test",
+      "statements": {
+        "passed": 12,
+        "failed": 0
+      },
+      "queries": {
+        "passed": 10000,
+        "failed": 0
+      },
+      "skipped": 1719,
+      "pass_rate": 100.0
+    },
+    {
+      "path": "random/select/slt_good_46.test",
+      "statements": {
+        "passed": 12,
+        "failed": 0
+      },
+      "queries": {
+        "passed": 10000,
+        "failed": 0
+      },
+      "skipped": 1767,
+      "pass_rate": 100.0
+    },
+    {
+      "path": "random/select/slt_good_47.test",
+      "statements": {
+        "passed": 12,
+        "failed": 0
+      },
+      "queries": {
+        "passed": 9999,
+        "failed": 0
+      },
+      "skipped": 1735,
+      "pass_rate": 100.0
+    },
+    {
+      "path": "random/select/slt_good_48.test",
+      "statements": {
+        "passed": 12,
+        "failed": 0
+      },
+      "queries": {
+        "passed": 10000,
+        "failed": 0
+      },
+      "skipped": 1790,
+      "pass_rate": 100.0
+    },
+    {
+      "path": "random/select/slt_good_49.test",
+      "statements": {
+        "passed": 12,
+        "failed": 0
+      },
+      "queries": {
+        "passed": 10000,
+        "failed": 0
+      },
+      "skipped": 1740,
+      "pass_rate": 100.0
+    },
+    {
+      "path": "random/select/slt_good_5.test",
+      "statements": {
+        "passed": 12,
+        "failed": 0
+      },
+      "queries": {
+        "passed": 10000,
+        "failed": 0
+      },
+      "skipped": 1497,
+      "pass_rate": 100.0
+    },
+    {
+      "path": "random/select/slt_good_50.test",
+      "statements": {
+        "passed": 12,
+        "failed": 0
+      },
+      "queries": {
+        "passed": 10000,
+        "failed": 0
+      },
+      "skipped": 1828,
+      "pass_rate": 100.0
+    },
+    {
+      "path": "random/select/slt_good_51.test",
+      "statements": {
+        "passed": 12,
+        "failed": 0
+      },
+      "queries": {
+        "passed": 9999,
+        "failed": 0
+      },
+      "skipped": 1785,
+      "pass_rate": 100.0
+    },
+    {
+      "path": "random/select/slt_good_52.test",
+      "statements": {
+        "passed": 12,
+        "failed": 0
+      },
+      "queries": {
+        "passed": 9998,
+        "failed": 0
+      },
+      "skipped": 1833,
+      "pass_rate": 100.0
+    },
+    {
+      "path": "random/select/slt_good_53.test",
+      "statements": {
+        "passed": 12,
+        "failed": 0
+      },
+      "queries": {
+        "passed": 10000,
+        "failed": 0
+      },
+      "skipped": 1818,
+      "pass_rate": 100.0
+    },
+    {
+      "path": "random/select/slt_good_54.test",
+      "statements": {
+        "passed": 12,
+        "failed": 0
+      },
+      "queries": {
+        "passed": 10000,
+        "failed": 0
+      },
+      "skipped": 1914,
+      "pass_rate": 100.0
+    },
+    {
+      "path": "random/select/slt_good_55.test",
+      "statements": {
+        "passed": 12,
+        "failed": 0
+      },
+      "queries": {
+        "passed": 9997,
+        "failed": 0
+      },
+      "skipped": 1806,
+      "pass_rate": 100.0
+    },
+    {
+      "path": "random/select/slt_good_56.test",
+      "statements": {
+        "passed": 12,
+        "failed": 0
+      },
+      "queries": {
+        "passed": 10000,
+        "failed": 0
+      },
+      "skipped": 1755,
+      "pass_rate": 100.0
+    },
+    {
+      "path": "random/select/slt_good_57.test",
+      "statements": {
+        "passed": 12,
+        "failed": 0
+      },
+      "queries": {
+        "passed": 10000,
+        "failed": 0
+      },
+      "skipped": 1868,
+      "pass_rate": 100.0
+    },
+    {
+      "path": "random/select/slt_good_58.test",
+      "statements": {
+        "passed": 12,
+        "failed": 0
+      },
+      "queries": {
+        "passed": 10000,
+        "failed": 0
+      },
+      "skipped": 1816,
+      "pass_rate": 100.0
+    },
+    {
+      "path": "random/select/slt_good_59.test",
+      "statements": {
+        "passed": 12,
+        "failed": 0
+      },
+      "queries": {
+        "passed": 9999,
+        "failed": 0
+      },
+      "skipped": 1856,
+      "pass_rate": 100.0
+    },
+    {
+      "path": "random/select/slt_good_6.test",
+      "statements": {
+        "passed": 12,
+        "failed": 0
+      },
+      "queries": {
+        "passed": 10000,
+        "failed": 0
+      },
+      "skipped": 1556,
+      "pass_rate": 100.0
+    },
+    {
+      "path": "random/select/slt_good_60.test",
+      "statements": {
+        "passed": 12,
+        "failed": 0
+      },
+      "queries": {
+        "passed": 9999,
+        "failed": 0
+      },
+      "skipped": 1811,
+      "pass_rate": 100.0
+    },
+    {
+      "path": "random/select/slt_good_61.test",
+      "statements": {
+        "passed": 12,
+        "failed": 0
+      },
+      "queries": {
+        "passed": 10000,
+        "failed": 0
+      },
+      "skipped": 1806,
+      "pass_rate": 100.0
+    },
+    {
+      "path": "random/select/slt_good_62.test",
+      "statements": {
+        "passed": 12,
+        "failed": 0
+      },
+      "queries": {
+        "passed": 10000,
+        "failed": 0
+      },
+      "skipped": 1751,
+      "pass_rate": 100.0
+    },
+    {
+      "path": "random/select/slt_good_63.test",
+      "statements": {
+        "passed": 12,
+        "failed": 0
+      },
+      "queries": {
+        "passed": 10000,
+        "failed": 0
+      },
+      "skipped": 1808,
+      "pass_rate": 100.0
+    },
+    {
+      "path": "random/select/slt_good_64.test",
+      "statements": {
+        "passed": 12,
+        "failed": 0
+      },
+      "queries": {
+        "passed": 9999,
+        "failed": 0
+      },
+      "skipped": 1820,
+      "pass_rate": 100.0
+    },
+    {
+      "path": "random/select/slt_good_65.test",
+      "statements": {
+        "passed": 12,
+        "failed": 0
+      },
+      "queries": {
+        "passed": 9999,
+        "failed": 0
+      },
+      "skipped": 1809,
+      "pass_rate": 100.0
+    },
+    {
+      "path": "random/select/slt_good_66.test",
+      "statements": {
+        "passed": 12,
+        "failed": 0
+      },
+      "queries": {
+        "passed": 10000,
+        "failed": 0
+      },
+      "skipped": 1804,
+      "pass_rate": 100.0
+    },
+    {
+      "path": "random/select/slt_good_67.test",
+      "statements": {
+        "passed": 12,
+        "failed": 0
+      },
+      "queries": {
+        "passed": 10000,
+        "failed": 0
+      },
+      "skipped": 1773,
+      "pass_rate": 100.0
+    },
+    {
+      "path": "random/select/slt_good_68.test",
+      "statements": {
+        "passed": 12,
+        "failed": 0
+      },
+      "queries": {
+        "passed": 9999,
+        "failed": 0
+      },
+      "skipped": 1802,
+      "pass_rate": 100.0
+    },
+    {
+      "path": "random/select/slt_good_69.test",
+      "statements": {
+        "passed": 12,
+        "failed": 0
+      },
+      "queries": {
+        "passed": 9998,
+        "failed": 0
+      },
+      "skipped": 1862,
+      "pass_rate": 100.0
+    },
+    {
+      "path": "random/select/slt_good_7.test",
+      "statements": {
+        "passed": 12,
+        "failed": 0
+      },
+      "queries": {
+        "passed": 10000,
+        "failed": 0
+      },
+      "skipped": 1508,
+      "pass_rate": 100.0
+    },
+    {
+      "path": "random/select/slt_good_70.test",
+      "statements": {
+        "passed": 12,
+        "failed": 0
+      },
+      "queries": {
+        "passed": 9999,
+        "failed": 0
+      },
+      "skipped": 1842,
+      "pass_rate": 100.0
+    },
+    {
+      "path": "random/select/slt_good_71.test",
+      "statements": {
+        "passed": 12,
+        "failed": 0
+      },
+      "queries": {
+        "passed": 10000,
+        "failed": 0
+      },
+      "skipped": 1836,
+      "pass_rate": 100.0
+    },
+    {
+      "path": "random/select/slt_good_72.test",
+      "statements": {
+        "passed": 12,
+        "failed": 0
+      },
+      "queries": {
+        "passed": 10000,
+        "failed": 0
+      },
+      "skipped": 1860,
+      "pass_rate": 100.0
+    },
+    {
+      "path": "random/select/slt_good_73.test",
+      "statements": {
+        "passed": 12,
+        "failed": 0
+      },
+      "queries": {
+        "passed": 9998,
+        "failed": 0
+      },
+      "skipped": 1817,
+      "pass_rate": 100.0
+    },
+    {
+      "path": "random/select/slt_good_74.test",
+      "statements": {
+        "passed": 12,
+        "failed": 0
+      },
+      "queries": {
+        "passed": 10000,
+        "failed": 0
+      },
+      "skipped": 1818,
+      "pass_rate": 100.0
+    },
+    {
+      "path": "random/select/slt_good_75.test",
+      "statements": {
+        "passed": 12,
+        "failed": 0
+      },
+      "queries": {
+        "passed": 10000,
+        "failed": 0
+      },
+      "skipped": 1777,
+      "pass_rate": 100.0
+    },
+    {
+      "path": "random/select/slt_good_76.test",
+      "statements": {
+        "passed": 12,
+        "failed": 0
+      },
+      "queries": {
+        "passed": 10000,
+        "failed": 0
+      },
+      "skipped": 1900,
+      "pass_rate": 100.0
+    },
+    {
+      "path": "random/select/slt_good_77.test",
+      "statements": {
+        "passed": 12,
+        "failed": 0
+      },
+      "queries": {
+        "passed": 10000,
+        "failed": 0
+      },
+      "skipped": 1908,
+      "pass_rate": 100.0
+    },
+    {
+      "path": "random/select/slt_good_78.test",
+      "statements": {
+        "passed": 12,
+        "failed": 0
+      },
+      "queries": {
+        "passed": 9999,
+        "failed": 0
+      },
+      "skipped": 1830,
+      "pass_rate": 100.0
+    },
+    {
+      "path": "random/select/slt_good_79.test",
+      "statements": {
+        "passed": 12,
+        "failed": 0
+      },
+      "queries": {
+        "passed": 10000,
+        "failed": 0
+      },
+      "skipped": 1811,
+      "pass_rate": 100.0
+    },
+    {
+      "path": "random/select/slt_good_8.test",
+      "statements": {
+        "passed": 12,
+        "failed": 0
+      },
+      "queries": {
+        "passed": 10000,
+        "failed": 0
+      },
+      "skipped": 1545,
+      "pass_rate": 100.0
+    },
+    {
+      "path": "random/select/slt_good_80.test",
+      "statements": {
+        "passed": 12,
+        "failed": 0
+      },
+      "queries": {
+        "passed": 10000,
+        "failed": 0
+      },
+      "skipped": 1900,
+      "pass_rate": 100.0
+    },
+    {
+      "path": "random/select/slt_good_81.test",
+      "statements": {
+        "passed": 12,
+        "failed": 0
+      },
+      "queries": {
+        "passed": 10000,
+        "failed": 0
+      },
+      "skipped": 1878,
+      "pass_rate": 100.0
+    },
+    {
+      "path": "random/select/slt_good_82.test",
+      "statements": {
+        "passed": 12,
+        "failed": 0
+      },
+      "queries": {
+        "passed": 10000,
+        "failed": 0
+      },
+      "skipped": 1833,
+      "pass_rate": 100.0
+    },
+    {
+      "path": "random/select/slt_good_83.test",
+      "statements": {
+        "passed": 12,
+        "failed": 0
+      },
+      "queries": {
+        "passed": 10000,
+        "failed": 0
+      },
+      "skipped": 1885,
+      "pass_rate": 100.0
+    },
+    {
+      "path": "random/select/slt_good_84.test",
+      "statements": {
+        "passed": 12,
+        "failed": 0
+      },
+      "queries": {
+        "passed": 9999,
+        "failed": 0
+      },
+      "skipped": 1846,
+      "pass_rate": 100.0
+    },
+    {
+      "path": "random/select/slt_good_85.test",
+      "statements": {
+        "passed": 12,
+        "failed": 0
+      },
+      "queries": {
+        "passed": 10000,
+        "failed": 0
+      },
+      "skipped": 1903,
+      "pass_rate": 100.0
+    },
+    {
+      "path": "random/select/slt_good_86.test",
+      "statements": {
+        "passed": 12,
+        "failed": 0
+      },
+      "queries": {
+        "passed": 10000,
+        "failed": 0
+      },
+      "skipped": 1827,
+      "pass_rate": 100.0
+    },
+    {
+      "path": "random/select/slt_good_87.test",
+      "statements": {
+        "passed": 12,
+        "failed": 0
+      },
+      "queries": {
+        "passed": 10000,
+        "failed": 0
+      },
+      "skipped": 1853,
+      "pass_rate": 100.0
+    },
+    {
+      "path": "random/select/slt_good_88.test",
+      "statements": {
+        "passed": 12,
+        "failed": 0
+      },
+      "queries": {
+        "passed": 10000,
+        "failed": 0
+      },
+      "skipped": 1861,
+      "pass_rate": 100.0
+    },
+    {
+      "path": "random/select/slt_good_89.test",
+      "statements": {
+        "passed": 12,
+        "failed": 0
+      },
+      "queries": {
+        "passed": 10000,
+        "failed": 0
+      },
+      "skipped": 1846,
+      "pass_rate": 100.0
+    },
+    {
+      "path": "random/select/slt_good_9.test",
+      "statements": {
+        "passed": 12,
+        "failed": 0
+      },
+      "queries": {
+        "passed": 9998,
+        "failed": 0
+      },
+      "skipped": 1547,
+      "pass_rate": 100.0
+    },
+    {
+      "path": "random/select/slt_good_90.test",
+      "statements": {
+        "passed": 12,
+        "failed": 0
+      },
+      "queries": {
+        "passed": 10000,
+        "failed": 0
+      },
+      "skipped": 1895,
+      "pass_rate": 100.0
+    },
+    {
+      "path": "random/select/slt_good_91.test",
+      "statements": {
+        "passed": 12,
+        "failed": 0
+      },
+      "queries": {
+        "passed": 10000,
+        "failed": 0
+      },
+      "skipped": 1826,
+      "pass_rate": 100.0
+    },
+    {
+      "path": "random/select/slt_good_92.test",
+      "statements": {
+        "passed": 12,
+        "failed": 0
+      },
+      "queries": {
+        "passed": 10000,
+        "failed": 0
+      },
+      "skipped": 1937,
+      "pass_rate": 100.0
+    },
+    {
+      "path": "random/select/slt_good_93.test",
+      "statements": {
+        "passed": 12,
+        "failed": 0
+      },
+      "queries": {
+        "passed": 10000,
+        "failed": 0
+      },
+      "skipped": 1869,
+      "pass_rate": 100.0
+    },
+    {
+      "path": "random/select/slt_good_94.test",
+      "statements": {
+        "passed": 12,
+        "failed": 0
+      },
+      "queries": {
+        "passed": 10000,
+        "failed": 0
+      },
+      "skipped": 1873,
+      "pass_rate": 100.0
+    },
+    {
+      "path": "random/select/slt_good_95.test",
+      "statements": {
+        "passed": 12,
+        "failed": 0
+      },
+      "queries": {
+        "passed": 9999,
+        "failed": 0
+      },
+      "skipped": 1844,
+      "pass_rate": 100.0
+    },
+    {
+      "path": "random/select/slt_good_96.test",
+      "statements": {
+        "passed": 12,
+        "failed": 0
+      },
+      "queries": {
+        "passed": 10000,
+        "failed": 0
+      },
+      "skipped": 1806,
+      "pass_rate": 100.0
+    },
+    {
+      "path": "random/select/slt_good_97.test",
+      "statements": {
+        "passed": 12,
+        "failed": 0
+      },
+      "queries": {
+        "passed": 10000,
+        "failed": 0
+      },
+      "skipped": 1848,
+      "pass_rate": 100.0
+    },
+    {
+      "path": "random/select/slt_good_98.test",
+      "statements": {
+        "passed": 12,
+        "failed": 0
+      },
+      "queries": {
+        "passed": 10000,
+        "failed": 0
+      },
+      "skipped": 1881,
+      "pass_rate": 100.0
+    },
+    {
+      "path": "random/select/slt_good_99.test",
+      "statements": {
+        "passed": 12,
+        "failed": 0
+      },
+      "queries": {
+        "passed": 10000,
+        "failed": 0
+      },
+      "skipped": 1843,
+      "pass_rate": 100.0
+    },
+    {
+      "path": "select1.test",
+      "statements": {
+        "passed": 31,
+        "failed": 0
+      },
+      "queries": {
+        "passed": 1000,
+        "failed": 0
+      },
+      "skipped": 0,
+      "pass_rate": 100.0
+    },
+    {
+      "path": "select2.test",
+      "statements": {
+        "passed": 31,
+        "failed": 0
+      },
+      "queries": {
+        "passed": 1000,
+        "failed": 0
+      },
+      "skipped": 0,
+      "pass_rate": 100.0
+    },
+    {
+      "path": "select3.test",
+      "statements": {
+        "passed": 31,
+        "failed": 0
+      },
+      "queries": {
+        "passed": 3320,
+        "failed": 0
+      },
+      "skipped": 0,
+      "pass_rate": 100.0
+    },
+    {
+      "path": "select4.test",
+      "statements": {
+        "passed": 1025,
+        "failed": 0
+      },
+      "queries": {
+        "passed": 2832,
+        "failed": 0
+      },
+      "skipped": 0,
+      "pass_rate": 100.0
+    },
+    {
+      "path": "select5.test",
+      "statements": {
+        "passed": 704,
+        "failed": 0
+      },
+      "queries": {
+        "passed": 732,
+        "failed": 0
+      },
+      "skipped": 0,
+      "pass_rate": 100.0
+    }
+  ],
+  "failure_reasons": [
+    {
+      "reason": "parse error: recursion limit exceeded",
+      "count": 335,
+      "example": "index/between/1/slt_good_0.test:23219: parse error: sql parser error: recursion limit exceeded"
+    },
+    {
+      "reason": "parse error: Expected: (",
+      "count": 72,
+      "example": "evidence/in1.test:70: parse error: sql parser error: Expected: (, found: t1 at Line: 1, Column: 13"
+    },
+    {
+      "reason": "unsupported: DROP TRIGGER",
+      "count": 14,
+      "example": "evidence/slt_lang_createtrigger.test:191: not supported yet: DROP TRIGGER"
+    },
+    {
+      "reason": "unsupported: CREATE TRIGGER",
+      "count": 13,
+      "example": "evidence/slt_lang_createtrigger.test:24: not supported yet: CREATE TRIGGER"
+    },
+    {
+      "reason": "unsupported: plain columns beside min(DISTINCT ...) or max(DISTINCT ...)",
+      "count": 7,
+      "example": "random/groupby/slt_good_12.test:43214: not supported yet: plain columns beside min(DISTINCT ...) or max(DISTINCT ...)"
+    },
+    {
+      "reason": "parse error: Expected: end of statement",
+      "count": 6,
+      "example": "evidence/slt_lang_aggfunc.test:58: parse error: sql parser error: Expected: end of statement, found: INDEXED at Line: 1, Column: 45"
+    },
+    {
+      "reason": "unsupported: literal X'303132'",
+      "count": 4,
+      "example": "evidence/in1.test:296: not supported yet: literal X'303132'"
+    },
+    {
+      "reason": "wrong result",
+      "count": 4,
+      "example": "evidence/slt_lang_aggfunc.test:480: expected [], got [8.000]"
+    },
+    {
+      "reason": "parse error: No infix parser for token ShiftLeft",
+      "count": 2,
+      "example": "evidence/slt_lang_aggfunc.test:470: parse error: sql parser error: No infix parser for token ShiftLeft at Line: 1, Column: 24"
+    },
+    {
+      "reason": "parse error: Expected: an SQL statement",
+      "count": 1,
+      "example": "evidence/slt_lang_reindex.test:37: parse error: sql parser error: Expected: an SQL statement, found: REINDEX at Line: 1, Column: 1"
+    }
+  ]
+}
