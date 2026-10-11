@@ -540,7 +540,8 @@ impl Target<'_> {
                          table, so reading it whole beats reading the table"
                     ),
                     (true, false) => format!(
-                        "{tree} returns rows already in the order wanted, which saves a sort"
+                        "{tree} is read whole, in key order, and each entry leads to its row by \
+                         rowid"
                     ),
                     _ if chosen.needs != 0 => format!(
                         "for each row on the left, {tree} finds about {}",
@@ -667,8 +668,8 @@ impl Target<'_> {
     /// A path in one line, the way the plan would show it.
     pub fn describe(&self, path: &Path) -> String {
         match &path.kind {
-            Kind::Seq => format!("SeqScan {}", self.name),
-            Kind::Index { .. } => format!("IndexScan {} {}", self.name, self.access(path)),
+            Kind::Seq => format!("SeqScan {}", self.schema().name),
+            Kind::Index { .. } => format!("IndexScan {} {}", self.schema().name, self.access(path)),
         }
     }
 }
