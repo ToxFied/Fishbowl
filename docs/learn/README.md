@@ -21,3 +21,5 @@ code where the idea lives. Every milestone adds notes for what it touched.
 | [Splits and merges](splits-and-merges.md) | M3 |
 | [How UPDATE and DELETE run](update-and-delete.md) | M3 |
 | [Property testing the B-tree](property-testing.md) | M3 |
+| [Indexes](indexes.md) | M4 |
+| [How constraints are checked](constraints.md) | M4 |

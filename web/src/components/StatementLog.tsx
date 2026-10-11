@@ -14,6 +14,10 @@ function summary(entry: Entry): string {
       return `deleted ${result.rows}`;
     case "drop_table":
       return `dropped ${result.table}`;
+    case "create_index":
+      return `created ${result.index}`;
+    case "drop_index":
+      return `dropped ${result.index}`;
     case "query":
       return `${result.rows.length} ${result.rows.length === 1 ? "row" : "rows"}`;
   }

@@ -21,9 +21,11 @@ The same query can have many correct plans that differ hugely in speed. If
 difference between microseconds and seconds. Choosing well is the planner's job,
 and it chooses by estimating the cost of each option.
 
-Today Fishbowl has no indexes, so there is only one plan, and the UI says so:
-"fish has no index, so every row is read". Later milestones add indexes and a
-cost model, and the UI will show the rejected plans next to the chosen one.
+Fishbowl has indexes (milestone 4) but no cost model yet. It follows one rule:
+if a WHERE term is an equality or range on an indexed column, read the index
+(an IndexScan); otherwise read every row (a SeqScan). The plan's "why" line
+says which applied. Milestone 5 adds a cost model, and the UI will show the
+rejected plans next to the chosen one. See [indexes](indexes.md).
 
 ## Seeing plans in Fishbowl
 

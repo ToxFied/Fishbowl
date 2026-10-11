@@ -88,7 +88,7 @@ fn unsupported_sql_is_rejected_not_ignored() {
     for sql in [
         "SELECT id FROM fish, fish AS other",
         "SELECT printf('%d', id) FROM fish",
-        "CREATE TABLE p(a INTEGER PRIMARY KEY)",
+        "CREATE TABLE p(a INTEGER PRIMARY KEY AUTOINCREMENT)",
     ] {
         assert!(
             matches!(db.execute(sql), Err(Error::Unsupported(_))),

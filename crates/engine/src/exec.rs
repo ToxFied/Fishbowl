@@ -10,6 +10,7 @@ use std::cmp::Ordering;
 use std::collections::btree_map::Entry;
 use std::collections::{BTreeMap, BTreeSet};
 
+use crate::access;
 use crate::error::{Error, Result};
 use crate::expr::{Accumulator, AggregateCall, Expr, RowKey};
 use crate::plan::{PlanNode, PlanProfile, SortKey};
@@ -58,6 +59,7 @@ enum State {
     Scan {
         scan: TableScan,
     },
+    IndexScan(access::Scan),
     OneRow {
         done: bool,
     },
@@ -81,6 +83,9 @@ impl<'p> Operator<'p> {
             PlanNode::SeqScan { table, .. } => State::Scan {
                 scan: TableScan::new(table),
             },
+            PlanNode::IndexScan { table, access, .. } => {
+                State::IndexScan(access::Scan::new(table, access))
+            }
             PlanNode::OneRow => State::OneRow { done: false },
             PlanNode::Filter { .. } | PlanNode::Project { .. } => State::None,
             PlanNode::Sort { .. } | PlanNode::Aggregate { .. } => State::Buffered(None),
@@ -111,6 +116,7 @@ impl<'p> Operator<'p> {
         let input = &mut self.input;
         match (self.node, &mut self.state) {
             (PlanNode::SeqScan { .. }, State::Scan { scan }) => scan.next(ctx.storage),
+            (PlanNode::IndexScan { .. }, State::IndexScan(scan)) => scan.next(ctx.storage),
             (PlanNode::OneRow, State::OneRow { done }) => {
                 let first = !*done;
                 *done = true;

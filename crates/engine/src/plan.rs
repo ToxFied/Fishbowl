@@ -4,8 +4,10 @@ use std::fmt;
 
 use serde::Serialize;
 
-use crate::catalog::TableSchema;
+use crate::access::IndexAccess;
+use crate::catalog::{IndexSchema, TableSchema};
 use crate::expr::{AggregateCall, Expr};
+use crate::write::OnConflict;
 
 /// What a statement will do, decided before any row is touched.
 #[derive(Debug, Clone)]
@@ -19,6 +21,7 @@ pub enum Plan {
         /// For each value in a VALUES row, the column it fills.
         targets: Vec<usize>,
         rows: Vec<Vec<Expr>>,
+        on_conflict: OnConflict,
     },
     Update {
         table: String,
@@ -35,6 +38,22 @@ pub enum Plan {
         if_exists: bool,
     },
     Query(QueryPlan),
+    CreateIndex {
+        table: String,
+        index: IndexSchema,
+        if_not_exists: bool,
+    },
+    DropIndex {
+        name: String,
+        if_exists: bool,
+    },
+    /// `INSERT INTO table SELECT ...`: the query's rows, stored like VALUES.
+    InsertSelect {
+        table: String,
+        targets: Vec<usize>,
+        query: QueryPlan,
+        on_conflict: OnConflict,
+    },
 }
 
 #[derive(Debug, Clone)]
@@ -48,6 +67,13 @@ pub struct QueryPlan {
 pub enum PlanNode {
     /// Reads every row of a table, in storage order.
     SeqScan { table: String, reason: String },
+    /// Reads only the rows an index points to, in index order. A Filter
+    /// above it still checks the whole WHERE clause.
+    IndexScan {
+        table: String,
+        access: IndexAccess,
+        reason: String,
+    },
     /// Produces one empty row, for `SELECT` without `FROM`.
     OneRow,
     /// Passes on only the rows where the predicate is true.
@@ -128,6 +154,7 @@ impl PlanNode {
     pub fn operator(&self) -> &'static str {
         match self {
             PlanNode::SeqScan { .. } => "SeqScan",
+            PlanNode::IndexScan { .. } => "IndexScan",
             PlanNode::OneRow => "OneRow",
             PlanNode::Filter { .. } => "Filter",
             PlanNode::Project { .. } => "Project",
@@ -141,6 +168,7 @@ impl PlanNode {
     pub fn detail(&self) -> String {
         match self {
             PlanNode::SeqScan { table, .. } => table.clone(),
+            PlanNode::IndexScan { table, access, .. } => format!("{table} {access}"),
             PlanNode::OneRow | PlanNode::Distinct { .. } => String::new(),
             PlanNode::Filter { predicate, .. } => predicate.to_string(),
             PlanNode::Project { exprs, .. } => joined(exprs),
@@ -166,14 +194,16 @@ impl PlanNode {
     /// Why the planner chose this step, when there was a choice to explain.
     pub fn reason(&self) -> Option<&str> {
         match self {
-            PlanNode::SeqScan { reason, .. } | PlanNode::Sort { reason, .. } => Some(reason),
+            PlanNode::SeqScan { reason, .. }
+            | PlanNode::IndexScan { reason, .. }
+            | PlanNode::Sort { reason, .. } => Some(reason),
             _ => None,
         }
     }
 
     pub fn children(&self) -> Vec<&PlanNode> {
         match self {
-            PlanNode::SeqScan { .. } | PlanNode::OneRow => vec![],
+            PlanNode::SeqScan { .. } | PlanNode::IndexScan { .. } | PlanNode::OneRow => vec![],
             PlanNode::Filter { input, .. }
             | PlanNode::Project { input, .. }
             | PlanNode::Aggregate { input, .. }
