@@ -27,3 +27,9 @@ code where the idea lives. Every milestone adds notes for what it touched.
 | [The nested-loop join](nested-loop-join.md) | M2 |
 | [Subqueries and correlation](subqueries.md) | M2 |
 | [UNION, INTERSECT and EXCEPT](set-operations.md) | M2 |
+| [Transactions](transactions.md) | M6 |
+| [The write-ahead log](write-ahead-log.md) | M6 |
+| [Checkpoints](checkpoints.md) | M6 |
+| [Crash recovery](crash-recovery.md) | M6 |
+| [Durability: when is a write safe?](durability.md) | M6 |
+| [The crash test](crash-harness.md) | M6 |

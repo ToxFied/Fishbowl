@@ -243,6 +243,8 @@ pub(super) fn plan_drop_index(if_exists: bool, names: &[ast::ObjectName]) -> Res
 }
 
 /// The rule after `INSERT OR`. `REPLACE INTO` is `INSERT OR REPLACE INTO`.
+/// `OR ROLLBACK` undoes the statement like `ABORT`, and then `Database`
+/// rolls back the rest of the transaction too.
 pub(super) fn on_conflict(or: Option<ast::SqliteOnConflict>) -> OnConflict {
     match or {
         None | Some(ast::SqliteOnConflict::Abort | ast::SqliteOnConflict::Rollback) => {

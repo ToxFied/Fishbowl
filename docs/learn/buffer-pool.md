@@ -24,22 +24,24 @@ the pool.
 ## Dirty pages
 
 Changing a page only changes the copy in its frame. The frame is marked
-**dirty**, meaning it differs from what is in the file. A dirty page must be
-written back before its frame is reused, or the change would be lost. This is
-called **write-back**.
+**dirty**, meaning it differs from what is on disk.
 
-At the end of every statement that changes data, Fishbowl **flushes**: it
-writes every dirty page to the store, then asks the operating system to sync
-the file to disk.
+A dirty page is never evicted. If every frame is dirty, the pool grows past
+its size until the transaction ends. So an uncommitted change never reaches
+the disk, and recovery after a crash never has to undo anything. Textbooks
+call this policy **no steal**. The cost is that one transaction's changes must
+fit in memory.
 
-Flushing at the end of a statement is not yet crash-safe. If the power fails
-halfway through the writes, the file can hold some new pages and some old ones.
-Milestone 6 fixes that with a write-ahead log.
+When the transaction commits, the pager hands every dirty page to the
+[write-ahead log](write-ahead-log.md) at once, and the frames become clean
+again. When it rolls back, the pager throws the dirty frames away; the next
+read fetches the committed copy.
 
 ## Watching it work
 
 The pager counts hits, misses and evictions. The property tests run the B-tree
-with a pool of only three frames, so nearly every access evicts something and
-every write-back path is exercised.
+with a pool of only three frames, so nearly every access between commits
+evicts something, and a long transaction makes the pool grow.
 
-Code: `crates/engine/src/storage/pager.rs` (`Pager::page`, `Pager::flush`).
+Code: `crates/engine/src/storage/pager.rs` (`Pager::page`, `Pager::commit`,
+`Pager::rollback`).

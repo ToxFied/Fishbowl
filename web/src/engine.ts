@@ -32,6 +32,7 @@ export type StatementResult =
   | { kind: "drop_table"; table: string }
   | { kind: "create_view"; view: string }
   | { kind: "drop_view"; view: string }
+  | { kind: "begin" | "commit" | "rollback" }
   | QueryResult;
 
 export type Entry =

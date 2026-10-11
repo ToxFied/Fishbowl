@@ -28,11 +28,14 @@ must give the same answer. At the end:
   same depth, an unbroken leaf chain.
 - Every page must be accounted for: in the tree, on the free list, or the
   header. None leaked, none used twice.
-- The pager flushes, and a new pager reopens the store from its bytes. The
-  contents must still match, which proves nothing lived only in memory.
+- Commits and rollbacks are mixed into the sequence. After a rollback, the
+  tree must match the model as it was at the last commit.
+- The pager commits, and a new pager reopens the files from their bytes. The
+  contents must still match, which proves nothing committed lived only in
+  memory.
 
 This runs 256 times with a three-frame buffer pool, which forces constant
-eviction, and 256 times with the normal pool. Another test fills a tree and
+eviction between commits, and 256 times with the normal pool. Another test fills a tree and
 deletes every key in random order, then checks that the tree is back to one
 empty page. A fixed test builds a three-level tree, which random runs rarely
 reach. A last property test runs random `INSERT`, `UPDATE` and `DELETE`

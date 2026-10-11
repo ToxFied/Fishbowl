@@ -2,10 +2,14 @@
 //!
 //! From the bottom up:
 //!
-//! - [`store`]: a [`PageStore`] reads and writes numbered 4 KiB pages, in a
-//!   file on native builds or in memory in the browser.
-//! - [`pager`]: the [`Pager`] caches pages in a small buffer pool and hands
-//!   out free pages.
+//! - [`store`]: a [`PageStore`] reads and writes numbered 4 KiB pages, and a
+//!   [`LogStore`] holds the write-ahead log, in files on native builds or in
+//!   memory in the browser. [`fault`] has stores that lose power on purpose.
+//! - [`wal`]: the write-ahead log. A commit appends the changed pages to it,
+//!   and a checkpoint copies them into the database file.
+//! - [`pager`]: the [`Pager`] caches pages in a small buffer pool, keeps a
+//!   transaction's changes in memory until it commits, and hands out free
+//!   pages.
 //! - [`page`]: the byte layout of every kind of page.
 //! - [`btree`]: each table is a B+tree of rows keyed by rowid, and each index
 //!   a B+tree of (values, rowid) keys.
@@ -19,13 +23,18 @@
 //!
 //! Storage knows nothing about columns or constraints. The caller decides
 //! what goes into an index and checks the rules; see `write.rs`.
+//!
+//! Every change waits in memory until [`Storage::commit`] makes it durable
+//! or [`Storage::rollback`] forgets it.
 
 pub mod btree;
+pub mod fault;
 pub mod index;
 pub mod page;
 pub mod pager;
 pub mod record;
 pub mod store;
+pub mod wal;
 
 use std::cell::RefCell;
 use std::collections::HashMap;
@@ -36,8 +45,10 @@ use crate::value::Value;
 use btree::{BTree, Cursor};
 use index::{IndexKey, MAX_KEY_SIZE};
 use page::{Key, PageId};
-use pager::{DEFAULT_POOL_PAGES, Pager};
-pub use store::{MemoryStore, PageStore};
+pub use pager::Options;
+use pager::Pager;
+pub use store::{LogStore, MemoryLog, MemoryStore, PageStore};
+pub use wal::Recovery;
 
 pub type Row = Vec<Value>;
 
@@ -61,8 +72,19 @@ pub struct Storage {
     indexes: HashMap<String, Index>,
     /// Each view's row in the schema table.
     views: HashMap<String, i64>,
+    /// The three maps above as they were at the last commit, saved before
+    /// the first change after it, for rollback.
+    saved: Option<Saved>,
 }
 
+#[derive(Clone)]
+struct Saved {
+    tables: HashMap<String, Table>,
+    indexes: HashMap<String, Index>,
+    views: HashMap<String, i64>,
+}
+
+#[derive(Clone)]
 struct Table {
     tree: BTree,
     /// The table's row in the schema table.
@@ -70,6 +92,7 @@ struct Table {
     rows: usize,
 }
 
+#[derive(Clone)]
 struct Index {
     tree: BTree<IndexKey>,
     /// The table it indexes, lowercase.
@@ -91,22 +114,31 @@ fn schema_row(kind: &str, name: &str, table: &str, root: PageId, sql: Option<&st
 }
 
 impl Storage {
-    /// A new database held in memory.
+    /// A new database held in memory, log included.
     pub fn memory() -> Storage {
-        let (storage, _) = Storage::open(Box::new(MemoryStore::default()))
-            .expect("creating an empty in-memory database touches no I/O");
+        let (storage, _) = Storage::open(
+            Box::new(MemoryStore::default()),
+            Box::new(MemoryLog::default()),
+            Options::default(),
+        )
+        .expect("creating an empty in-memory database cannot fail");
         storage
     }
 
-    /// Opens a store, creating a new database if it is empty. Also returns
+    /// Opens a database file and its log, recovering any transactions the
+    /// log holds, or creates a new database if both are empty. Also returns
     /// the `CREATE TABLE`, `CREATE INDEX` and `CREATE VIEW` statements it
     /// holds, oldest first, so the caller can rebuild its catalog.
-    pub fn open(store: Box<dyn PageStore>) -> Result<(Storage, Vec<String>)> {
-        let mut pager = Pager::open(store, DEFAULT_POOL_PAGES)?;
+    pub fn open(
+        store: Box<dyn PageStore>,
+        log: Box<dyn LogStore>,
+        options: Options,
+    ) -> Result<(Storage, Vec<String>)> {
+        let mut pager = Pager::open(store, log, options)?;
         let schema = if pager.page_count() == 1 {
             let schema = BTree::create(&mut pager)?;
             debug_assert_eq!(schema.root(), SCHEMA_ROOT);
-            pager.flush()?;
+            pager.commit()?;
             schema
         } else {
             BTree::open(SCHEMA_ROOT)
@@ -167,13 +199,60 @@ impl Storage {
             tables,
             indexes,
             views,
+            saved: None,
         };
         Ok((storage, statements))
+    }
+
+    /// Makes every change since the last commit durable. On an error the
+    /// outcome is unknown until the database is reopened, and every later
+    /// call fails.
+    pub fn commit(&mut self) -> Result<()> {
+        self.pager.get_mut().commit()?;
+        self.saved = None;
+        Ok(())
+    }
+
+    /// Forgets every change since the last commit.
+    pub fn rollback(&mut self) {
+        self.pager.get_mut().rollback();
+        if let Some(saved) = self.saved.take() {
+            self.tables = saved.tables;
+            self.indexes = saved.indexes;
+            self.views = saved.views;
+        }
+    }
+
+    /// Copies the write-ahead log into the database file and empties it.
+    pub fn checkpoint(&mut self) -> Result<()> {
+        self.pager.get_mut().checkpoint()
+    }
+
+    /// What recovery found when the database was opened.
+    pub fn recovery(&self) -> Recovery {
+        self.pager.borrow().recovery()
+    }
+
+    /// Frames in the log waiting for a checkpoint.
+    pub fn log_frames(&self) -> u64 {
+        self.pager.borrow().log_frames()
+    }
+
+    /// Saves the maps before the first change since the last commit.
+    fn save(&mut self) {
+        if self.saved.is_none() {
+            self.saved = Some(Saved {
+                tables: self.tables.clone(),
+                indexes: self.indexes.clone(),
+                views: self.views.clone(),
+            });
+        }
     }
 
     /// Creates an empty table. `sql` is recorded so the table can be rebuilt
     /// when the file is reopened.
     pub fn create_table(&mut self, name: &str, sql: &str) -> Result<()> {
+        self.save();
         let pager = self.pager.get_mut();
         let tree = BTree::create(pager)?;
         let schema_rowid = add_schema_row(
@@ -196,6 +275,7 @@ impl Storage {
     /// statement, or `None` for an index a constraint made, which the
     /// `CREATE TABLE` statement brings back.
     pub fn create_index(&mut self, name: &str, table: &str, sql: Option<&str>) -> Result<()> {
+        self.save();
         let table_name = table.to_ascii_lowercase();
         if !self.tables.contains_key(&table_name) {
             return Err(no_such_table(table));
@@ -219,6 +299,7 @@ impl Storage {
     /// Deletes a table and its indexes, and returns all of their pages to
     /// the free list.
     pub fn drop_table(&mut self, name: &str) -> Result<()> {
+        self.save();
         let key = name.to_ascii_lowercase();
         let table = self
             .tables
@@ -242,6 +323,7 @@ impl Storage {
     /// Records a view's `CREATE VIEW` statement. A view holds no rows, so
     /// that is all there is to store.
     pub fn create_view(&mut self, name: &str, sql: &str) -> Result<()> {
+        self.save();
         let pager = self.pager.get_mut();
         let row = schema_row("view", name, name, 0, Some(sql));
         let schema_rowid = add_schema_row(pager, self.schema, &row)?;
@@ -252,6 +334,7 @@ impl Storage {
     /// Forgets a view. A view that was never stored, like a TEMP view, is
     /// not an error.
     pub fn drop_view(&mut self, name: &str) -> Result<()> {
+        self.save();
         if let Some(schema_rowid) = self.views.remove(&name.to_ascii_lowercase()) {
             self.schema.delete(self.pager.get_mut(), schema_rowid)?;
         }
@@ -259,6 +342,7 @@ impl Storage {
     }
 
     pub fn drop_index(&mut self, name: &str) -> Result<()> {
+        self.save();
         let index = self
             .indexes
             .remove(&name.to_ascii_lowercase())
@@ -279,6 +363,7 @@ impl Storage {
 
     /// Stores `row` under `rowid`, replacing any row already there.
     pub fn put(&mut self, table: &str, rowid: i64, row: &[Value]) -> Result<()> {
+        self.save();
         let pager = self.pager.get_mut();
         let table = table_mut(&mut self.tables, table)?;
         if table.tree.insert(pager, rowid, &record::encode(row))? {
@@ -289,6 +374,7 @@ impl Storage {
 
     /// Removes the row stored under `rowid`. Returns whether it existed.
     pub fn delete(&mut self, table: &str, rowid: i64) -> Result<bool> {
+        self.save();
         let pager = self.pager.get_mut();
         let table = table_mut(&mut self.tables, table)?;
         let found = table.tree.delete(pager, rowid)?;
@@ -353,9 +439,50 @@ impl Storage {
         Ok(())
     }
 
-    /// Writes every changed page to the store.
-    pub fn flush(&mut self) -> Result<()> {
-        self.pager.get_mut().flush()
+    /// Checks that every page has exactly one use: the header, a node or
+    /// overflow page of one tree, or a place on the free list. A page with
+    /// two uses would be corrupted by one of them; a page with none has
+    /// leaked.
+    pub fn check_pages(&self) -> Result<()> {
+        let pager = &mut *self.pager.borrow_mut();
+        let mut used = vec![false; pager.page_count() as usize];
+        used[0] = true;
+        let mut pages = self.schema.check(pager)?.pages;
+        for table in self.tables.values() {
+            pages.extend(table.tree.check(pager)?.pages);
+        }
+        for index in self.indexes.values() {
+            pages.extend(index.tree.check(pager)?.pages);
+        }
+        let free = pager.free_pages()?;
+        if free.len() != pager.free_count() as usize {
+            return Err(Error::Storage(format!(
+                "integrity check: the header counts {} free pages, the list has {}",
+                pager.free_count(),
+                free.len()
+            )));
+        }
+        for page in pages.iter().chain(&free) {
+            match used.get_mut(*page as usize) {
+                Some(seen) if !*seen => *seen = true,
+                Some(_) => {
+                    return Err(Error::Storage(format!(
+                        "integrity check: page {page} is used twice"
+                    )));
+                }
+                None => {
+                    return Err(Error::Storage(format!(
+                        "integrity check: page {page} is past the end"
+                    )));
+                }
+            }
+        }
+        match used.iter().position(|seen| !seen) {
+            Some(page) => Err(Error::Storage(format!(
+                "integrity check: page {page} is not used by anything"
+            ))),
+            None => Ok(()),
+        }
     }
 
     fn tree(&self, table: &str) -> Result<BTree> {

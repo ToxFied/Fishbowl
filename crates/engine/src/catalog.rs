@@ -84,7 +84,7 @@ pub struct View {
 
 /// Tables and views keyed by lowercase name, so lookups ignore case like
 /// SQLite does. A table and a view cannot share a name.
-#[derive(Debug, Default)]
+#[derive(Debug, Default, Clone)]
 pub struct Catalog {
     tables: BTreeMap<String, TableSchema>,
     views: BTreeMap<String, View>,
