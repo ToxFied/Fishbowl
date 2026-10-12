@@ -1,4 +1,7 @@
-# Joins
+---
+title: "Joins"
+description: "How a join combines rows from two tables, and how LEFT JOIN keeps the unmatched ones."
+---
 
 A join combines rows from two tables. Put two tables in FROM and every row of
 the first is paired with every row of the second:

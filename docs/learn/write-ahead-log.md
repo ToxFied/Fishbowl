@@ -1,4 +1,7 @@
-# The write-ahead log
+---
+title: "The write-ahead log"
+description: "How commits append to a log first, so a crash can never leave half a change."
+---
 
 ## The problem
 

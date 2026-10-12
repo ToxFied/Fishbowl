@@ -1,4 +1,7 @@
-# Statistics and ANALYZE
+---
+title: "Statistics and ANALYZE"
+description: "What ANALYZE counts, and what the planner guesses without it."
+---
 
 To choose a plan, the planner needs to know how big things are: how many
 rows a table has, and how many of them a condition like `species = 'koi'`

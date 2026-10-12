@@ -1,4 +1,7 @@
-# Sorting, LIMIT and DISTINCT
+---
+title: "Sorting, LIMIT and DISTINCT"
+description: "The Sort, Distinct and Limit steps, and when an index makes the sort free."
+---
 
 Three steps shape the rows a query returns: Sort puts them in order, Distinct
 drops repeats, and Limit cuts the list short. In the plan they sit above the

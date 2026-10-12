@@ -1,4 +1,7 @@
-# Property testing the B-tree
+---
+title: "Property testing the B-tree"
+description: "Testing the B-tree against Rust's BTreeMap with random lists of operations."
+---
 
 A normal test checks one example: insert 1, 2, 3, then expect 1, 2, 3 back.
 B-tree bugs hide in rare situations, such as a merge right after a split, at

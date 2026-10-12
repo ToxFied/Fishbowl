@@ -1,4 +1,7 @@
-# Pages and the page store
+---
+title: "Pages and the page store"
+description: "How a database file is cut into 4 KiB pages, and what each page holds."
+---
 
 A Fishbowl database is one file cut into **pages** of exactly 4,096 bytes.
 Page 0 is the first 4 KiB of the file, page 1 the next 4 KiB, and so on. Every

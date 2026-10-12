@@ -1,4 +1,7 @@
-# Join ordering
+---
+title: "Join ordering"
+description: "How the planner picks which table to read first in a join."
+---
 
 A [nested-loop join](nested-loop-join.md) of three tables can run in six
 orders, and they can differ in work by a factor of millions. Join ordering

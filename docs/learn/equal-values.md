@@ -1,4 +1,7 @@
-# Why 2 and 2.0 matter
+---
+title: "Why 2 and 2.0 matter"
+description: "Why read order decides which of two equal values a query shows."
+---
 
 In SQL, `2 = 2.0` is true. The integer and the real are equal. But they
 print differently. So what should this print?

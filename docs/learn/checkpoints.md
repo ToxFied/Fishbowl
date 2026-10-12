@@ -1,4 +1,7 @@
-# Checkpoints
+---
+title: "Checkpoints"
+description: "How committed pages move from the log back into the database file."
+---
 
 The [write-ahead log](write-ahead-log.md) grows with every commit. A
 **checkpoint** moves its contents into the database file and empties it. It

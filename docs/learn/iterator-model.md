@@ -1,4 +1,7 @@
-# The iterator model
+---
+title: "The iterator model"
+description: "How plan steps pull rows from each other one at a time."
+---
 
 Fishbowl executes plans with the iterator model, also called the Volcano model
 after the 1990s research system that popularized it. Most databases you have

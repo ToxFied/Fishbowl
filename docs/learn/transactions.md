@@ -1,4 +1,7 @@
-# Transactions
+---
+title: "Transactions"
+description: "BEGIN, COMMIT and ROLLBACK: changes that happen together or not at all."
+---
 
 A **transaction** is a group of changes that happen together or not at all.
 The classic example moves money between two accounts:

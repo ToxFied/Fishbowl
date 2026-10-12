@@ -1,4 +1,7 @@
-# Cost models
+---
+title: "Cost models"
+description: "How the planner puts a number on a plan before running it, using SQLite's weights."
+---
 
 A planner has to choose between plans that all give the right answer. A
 **cost model** puts a number on each plan, a guess at how much work it

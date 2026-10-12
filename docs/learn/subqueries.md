@@ -1,4 +1,7 @@
-# Subqueries and correlation
+---
+title: "Subqueries and correlation"
+description: "Scalar, IN and EXISTS subqueries, and how correlated ones rerun per row."
+---
 
 A subquery is a SELECT inside another statement. Fishbowl runs three kinds
 inside expressions:

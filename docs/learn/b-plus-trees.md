@@ -1,4 +1,7 @@
-# B+trees
+---
+title: "B+trees"
+description: "How each table is stored as a tree of pages sorted by rowid."
+---
 
 Each Fishbowl table is a **B+tree**: a tree of pages that keeps rows sorted by
 their **rowid**, a 64-bit number every row gets when it is inserted (one more

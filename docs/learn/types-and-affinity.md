@@ -1,4 +1,7 @@
-# Types and affinity
+---
+title: "Types and affinity"
+description: "SQLite's loose typing: how a column's affinity nudges values without rejecting them."
+---
 
 Most databases give each column a strict type and reject values that do not fit.
 SQLite, and so Fishbowl, works differently: **each value carries its own type**.

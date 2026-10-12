@@ -139,6 +139,13 @@ export function App() {
               {v}
             </button>
           ))}
+          {/* The docs site is deployed next to this app, under docs/. */}
+          <a href="docs/" className="text-white/60 hover:text-white">
+            docs
+          </a>
+          <a href="https://github.com/ToxFied/Fishbowl" className="text-white/60 hover:text-white">
+            github
+          </a>
         </nav>
       </header>
 

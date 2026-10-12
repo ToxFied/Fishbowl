@@ -1,4 +1,7 @@
-# Indexes
+---
+title: "Indexes"
+description: "Separate B-trees that find rows by value instead of by rowid."
+---
 
 A table's B-tree is sorted by rowid, so finding "row 42" takes a few page
 reads. Finding "every fish named nemo" does not: names are scattered across the

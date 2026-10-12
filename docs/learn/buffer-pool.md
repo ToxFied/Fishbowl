@@ -1,4 +1,7 @@
-# The buffer pool
+---
+title: "The buffer pool"
+description: "How recently used pages stay in memory so most reads skip the disk."
+---
 
 Reading a page from disk is thousands of times slower than reading it from
 memory. A query that touches the same page twice should not pay for the disk

@@ -1,4 +1,7 @@
-# What a query plan is
+---
+title: "What a query plan is"
+description: "The tree of steps that says how a query will be answered."
+---
 
 SQL says *what* you want, not *how* to get it. A query plan is the "how": a
 tree of small steps that together produce the answer.

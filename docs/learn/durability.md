@@ -1,4 +1,7 @@
-# Durability: when is a write safe?
+---
+title: "Durability: when is a write safe?"
+description: "What sync means, and the exact moment a commit becomes safe."
+---
 
 ## What sync means
 

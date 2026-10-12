@@ -1,4 +1,7 @@
-# The crash test
+---
+title: "The crash test"
+description: "Cutting the power at every write point and checking what survives."
+---
 
 Saying a database survives crashes is easy. This test cuts the power at every
 point where a crash could matter, and checks what comes back.

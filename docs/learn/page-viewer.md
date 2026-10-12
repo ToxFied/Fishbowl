@@ -1,4 +1,7 @@
-# Reading the page viewer
+---
+title: "Reading the page viewer"
+description: "How to read the B-tree drawing in the web UI's pages view."
+---
 
 The **pages** view in the web UI draws the B-tree behind one table or index,
 straight from the bytes on its 4 KiB [pages](pages.md). Pick a table or an

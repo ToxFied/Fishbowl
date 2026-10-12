@@ -1,4 +1,7 @@
-# Aggregation: GROUP BY and HAVING
+---
+title: "Aggregation: GROUP BY and HAVING"
+description: "How GROUP BY splits rows into groups and HAVING filters them after counting."
+---
 
 An aggregate function turns many rows into one value. `count(*)` counts rows,
 `sum(weight)` adds up a column, `max(weight)` finds the largest. With GROUP BY,

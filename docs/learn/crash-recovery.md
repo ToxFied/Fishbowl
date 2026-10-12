@@ -1,4 +1,7 @@
-# Crash recovery
+---
+title: "Crash recovery"
+description: "What Fishbowl does on open to get back to the last committed state."
+---
 
 Every time Fishbowl opens a database, it first recovers. It does not know
 whether the last run ended cleanly, and it does not need to: recovery does the

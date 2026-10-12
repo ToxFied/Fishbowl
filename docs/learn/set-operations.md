@@ -1,4 +1,7 @@
-# UNION, INTERSECT and EXCEPT
+---
+title: "UNION, INTERSECT and EXCEPT"
+description: "How compound SELECTs combine, compare and subtract rows."
+---
 
 These combine the rows of two SELECTs that have the same number of columns:
 

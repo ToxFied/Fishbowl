@@ -1,4 +1,7 @@
-# Triggers
+---
+title: "Triggers"
+description: "Statements the database runs by itself before, after or instead of a change."
+---
 
 A trigger is a list of statements the database runs by itself whenever a
 table changes. This one logs every fish that leaves the bowl:

@@ -1,4 +1,7 @@
-# The sqllogictest harness
+---
+title: "The sqllogictest harness"
+description: "How the runner reads SQLite's test files, pins the corpus and writes a report that never changes by accident."
+---
 
 Fishbowl's correctness claim is a pass rate on SQLite's
 [sqllogictest](https://www.sqlite.org/sqllogictest) suite. This page explains

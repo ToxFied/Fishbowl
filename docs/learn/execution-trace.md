@@ -1,4 +1,7 @@
-# The execution trace
+---
+title: "The execution trace"
+description: "How the engine records which rows each step read, kept and dropped."
+---
 
 The plan tree says how many rows each step produced. The trace says which
 rows, and in what order. It is the recording the web UI plays back when you

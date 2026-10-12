@@ -1,4 +1,7 @@
-# NULL and three-valued logic
+---
+title: "NULL and three-valued logic"
+description: "Why NULL means unknown, and how true, false and unknown combine."
+---
 
 `NULL` in SQL means "unknown". It is not zero and not an empty string. That one
 idea has surprising consequences.

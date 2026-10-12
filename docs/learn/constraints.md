@@ -1,4 +1,7 @@
-# How constraints are checked
+---
+title: "How constraints are checked"
+description: "How PRIMARY KEY, UNIQUE and NOT NULL are enforced on every write, and undone on failure."
+---
 
 A **constraint** is a rule the data must follow. Fishbowl checks three, on
 every INSERT and UPDATE:

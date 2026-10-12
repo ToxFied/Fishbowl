@@ -1,4 +1,7 @@
-# How a query runs
+---
+title: "How a query runs"
+description: "The four stages from SQL text to rows: parse, plan, execute, store."
+---
 
 A database turns a sentence of SQL into rows. Fishbowl does it in four stages.
 Each stage hands a more precise description to the next.

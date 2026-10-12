@@ -1,4 +1,7 @@
-# Measuring correctness with sqllogictest
+---
+title: "Measuring correctness with sqllogictest"
+description: "Comparing Fishbowl's answers with SQLite's on millions of test queries."
+---
 
 How do you know a database gives right answers? You compare it with one that
 already does, on a very large number of queries.

@@ -42,7 +42,7 @@ All three are free under the SIL Open Font License (`npm i geist`).
 | `social-card.png` | GitHub social preview, 1280x640 |
 | `src/mark.py` | Generates the mark. Run `python3 src/mark.py detail\|favicon\|mono` |
 
-The repo-root `fishbowl-mark.svg` is the favicon version, for the README and the T3 Code project icon.
+The repo-root `fishbowl-mark.svg` is the favicon version, for the README.
 
 ## Don't
 

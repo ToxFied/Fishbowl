@@ -1,4 +1,7 @@
-# How UPDATE and DELETE run
+---
+title: "How UPDATE and DELETE run"
+description: "How UPDATE and DELETE find their rows first, then change them."
+---
 
 `UPDATE` and `DELETE` both start like a query: scan the table and keep the rows
 where the `WHERE` condition is true. Then they change those rows. Fishbowl

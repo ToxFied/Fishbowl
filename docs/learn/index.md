@@ -1,4 +1,7 @@
-# Learn
+---
+title: "How it works"
+description: "Short notes on the ideas behind Fishbowl, in plain English, each pointing at the code."
+---
 
 Short notes on the ideas behind Fishbowl, in plain English. Each one names the
 code where the idea lives. Every milestone adds notes for what it touched.
@@ -40,4 +43,4 @@ code where the idea lives. Every milestone adds notes for what it touched.
 | [Choosing an index](choosing-an-index.md) | M5 |
 | [Join ordering](join-ordering.md) | M5 |
 | [Why 2 and 2.0 matter](equal-values.md) | M5 |
-| [Triggers](triggers.md) | M9 |
+| [Triggers](triggers.md) | M8 |

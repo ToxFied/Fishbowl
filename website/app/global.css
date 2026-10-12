@@ -1,0 +1,196 @@
+@import "tailwindcss";
+@import "fumadocs-ui/css/neutral.css";
+@import "fumadocs-ui/css/preset.css";
+
+.dark {
+  --color-fd-background: #000;
+  --color-fd-foreground: hsl(0 0% 96%);
+  --color-fd-primary: hsl(0 0% 96%);
+  --color-fd-primary-foreground: hsl(0 0% 3%);
+  --color-fd-border: hsl(0 0% 100% / 14%);
+  --color-fd-ring: hsl(0 0% 82%);
+  --color-fd-accent: hsl(0 0% 100% / 9%);
+  --color-fd-accent-foreground: hsl(0 0% 96%);
+  --color-fd-muted: hsl(0 0% 10%);
+  --color-fd-muted-foreground: hsl(0 0% 65%);
+  --color-fd-secondary: hsl(0 0% 9%);
+  --color-fd-secondary-foreground: hsl(0 0% 92%);
+  --color-fd-card: #000;
+  --color-fd-card-foreground: hsl(0 0% 96%);
+  --color-fd-popover: hsl(0 0% 5%);
+  --color-fd-popover-foreground: hsl(0 0% 96%);
+  --color-fd-info: hsl(0 0% 78%);
+  --color-fd-warning: hsl(0 0% 78%);
+  --color-fd-error: hsl(0 0% 94%);
+  --color-fd-success: hsl(0 0% 78%);
+  --color-fd-idea: hsl(0 0% 78%);
+  --color-fd-diff-remove: hsl(0 0% 100% / 10%);
+  --color-fd-diff-remove-symbol: hsl(0 0% 88%);
+  --color-fd-diff-add: hsl(0 0% 100% / 6%);
+  --color-fd-diff-add-symbol: hsl(0 0% 65%);
+}
+
+html {
+  scrollbar-gutter: stable;
+}
+
+body {
+  font-feature-settings:
+    "ss01" 1,
+    "ss02" 1,
+    "cv01" 1;
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+html > body[data-scroll-locked] {
+  margin-right: 0 !important;
+  --removed-body-scroll-bar-size: 0px !important;
+}
+
+.dark ::selection {
+  background: #fff;
+  color: #000;
+}
+
+#nd-sidebar {
+  background: var(--color-fd-card);
+}
+
+#nd-sidebar a[data-active="true"] {
+  font-weight: 560;
+}
+
+#nd-page {
+  text-wrap: pretty;
+  outline: none;
+}
+
+#nd-page:focus-visible {
+  outline: 2px solid var(--color-fd-ring);
+  outline-offset: -2px;
+}
+
+#nd-page [aria-label="Copy Anchor Link"]:focus-visible {
+  opacity: 1;
+}
+
+#nd-page .prose {
+  font-size: 0.9375rem;
+  line-height: 1.75;
+}
+
+#nd-page .prose > p,
+#nd-page .prose > ul,
+#nd-page .prose > ol,
+#nd-page .prose > blockquote {
+  max-width: 72ch;
+}
+
+#nd-page .prose h2,
+#nd-page .prose h3 {
+  text-wrap: balance;
+}
+
+#nd-page .prose a {
+  text-underline-offset: 0.2em;
+  text-decoration-thickness: 1px;
+}
+
+#nd-page .prose :not(pre) > code {
+  border: 1px solid var(--color-fd-border);
+  border-radius: 0.35rem;
+  background: color-mix(
+    in oklab,
+    var(--color-fd-secondary) 78%,
+    transparent
+  );
+  padding: 0.12em 0.35em;
+  font-size: 0.86em;
+  font-variant-ligatures: none;
+}
+
+#nd-page .shiki {
+  border-color: var(--color-fd-border);
+  border-radius: 0.625rem;
+  background: #000 !important;
+  color: #fff !important;
+  box-shadow: none;
+}
+
+#nd-page .shiki pre,
+#nd-page .shiki code,
+#nd-page .shiki span {
+  background: #000 !important;
+  color: #fff !important;
+}
+
+#nd-page .shiki button {
+  color: #fff;
+}
+
+#nd-page .shiki ::selection {
+  background: #fff;
+  color: #000;
+}
+
+#nd-page .shiki code {
+  font-variant-ligatures: none;
+  tab-size: 2;
+}
+
+#nd-page [style*="--callout-color"] {
+  border-radius: 0.625rem;
+  background: color-mix(in oklab, var(--color-fd-card) 78%, transparent);
+  box-shadow: none;
+}
+
+#nd-page .prose table {
+  font-size: 0.8125rem;
+  line-height: 1.5;
+}
+
+#nd-page .prose th {
+  background: var(--color-fd-muted);
+  color: var(--color-fd-foreground);
+  font-size: 0.75rem;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+}
+
+#nd-page .prose th,
+#nd-page .prose td {
+  padding: 0.65rem 0.75rem;
+  vertical-align: top;
+}
+
+#nd-page .prose blockquote {
+  border-inline-start-color: var(--color-fd-foreground);
+  background: color-mix(in oklab, var(--color-fd-accent) 42%, transparent);
+  padding-block: 0.15rem;
+  padding-inline-end: 1rem;
+}
+
+#nd-toc a[data-active="true"] {
+  font-weight: 540;
+}
+
+@media (max-width: 767px) {
+  [data-search],
+  [aria-label="Open Sidebar"],
+  [aria-label="Collapse Sidebar"] {
+    min-width: 2.75rem;
+    min-height: 2.75rem;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    scroll-behavior: auto !important;
+    transition-duration: 0.01ms !important;
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+  }
+}

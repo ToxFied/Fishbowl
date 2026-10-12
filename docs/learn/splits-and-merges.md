@@ -1,4 +1,7 @@
-# Splits and merges
+---
+title: "Splits and merges"
+description: "How a B+tree stays balanced as rows come and go."
+---
 
 A [B+tree](b-plus-trees.md) stays shallow and balanced by itself. Every leaf is
 always the same distance from the root. Two operations keep it that way: a

@@ -1,4 +1,7 @@
-# Rust in the browser with WebAssembly
+---
+title: "Rust in the browser with WebAssembly"
+description: "How the Rust engine runs in the browser and talks to the React UI."
+---
 
 WebAssembly (wasm) is a compact binary instruction format that every modern
 browser can run at close to native speed. Rust can compile to it, so the same

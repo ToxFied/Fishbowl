@@ -1,4 +1,7 @@
-# Fishbowl: engineering case study
+---
+title: "Case study"
+description: "What Fishbowl is, how it was built and tested, and what it gets wrong."
+---
 
 Fishbowl is a SQL database written from scratch in Rust. It runs natively and,
 compiled to WebAssembly, in a browser page that shows each query running row by
@@ -259,6 +262,6 @@ merge, on the 29-file sample until M8:
 | M8: the full suite | 99.99% on 622 files |
 | Last 452 failures: parser gaps, blobs, triggers | 100.00% on 622 files |
 
-More detail: [the plan](PLAN.md), [the harness notes](sqllogictest.md) and
-[the learning notes](learn/README.md), which explain each idea in plain
-language.
+More detail: [the milestones](milestones.md), [the architecture](architecture.md),
+[the harness notes](sqllogictest.md) and [the learning notes](learn/index.md),
+which explain each idea in plain language.

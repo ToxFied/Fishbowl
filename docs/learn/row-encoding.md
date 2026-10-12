@@ -1,4 +1,7 @@
-# Row encoding
+---
+title: "Row encoding"
+description: "How a row of values becomes bytes on a page."
+---
 
 A row in memory is a list of values. On a page it has to be a run of bytes.
 **Row encoding** is the rule that turns one into the other and back.

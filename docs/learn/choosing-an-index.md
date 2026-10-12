@@ -1,4 +1,7 @@
-# Choosing an index
+---
+title: "Choosing an index"
+description: "How the planner lists every way to read a table and keeps the cheapest."
+---
 
 For each table a query reads, the planner lists every way to read it,
 costs each one with the [cost model](cost-models.md), and keeps the

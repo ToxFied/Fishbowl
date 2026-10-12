@@ -58,5 +58,5 @@ fixes, by cause:
 | 1 | `REINDEX` did not parse | Parsed; it checks the name and does nothing else, since index B-trees never go stale |
 
 The suite never uses some SQL, so 100% does not mean all of SQL works. See
-[the case study](../docs/CASE_STUDY.md#known-limits) for what is still
+[the case study](../docs/case-study.md#known-limits) for what is still
 "not supported yet".

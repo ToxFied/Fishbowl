@@ -5,25 +5,34 @@
   </picture>
 </p>
 
-<p align="center"><strong>A SQL database you can see inside.</strong></p>
-
 <p align="center">
-  <a href="docs/CASE_STUDY.md">Case study</a>
+  <a href="https://toxfied.github.io/Fishbowl/docs/"><strong>Documentation</strong></a>
+  · <a href="https://toxfied.github.io/Fishbowl/">Live demo</a>
+  · <a href="https://toxfied.github.io/Fishbowl/docs/case-study/">Case study</a>
+  · <a href="#run-it">Quickstart</a>
   · <a href="sqllogictest/RESULTS.md">Test results</a>
-  · <a href="docs/sqllogictest.md">How it's measured</a>
-  · <a href="docs/PLAN.md">Plan</a>
-  · <a href="docs/learn/README.md">Learn</a>
 </p>
-
-Fishbowl is a SQL database written from scratch in Rust. It compiles to
-WebAssembly and runs in your browser, where you type a query and watch it run
-row by row: each row rising out of its table, through every step of the plan,
-into the result. You can see why each step was chosen, which rows an index let
-the query skip, and the B-tree pages the data lives on.
 
 <p align="center">
-  <img src="docs/assets/trace-join.gif" width="760" alt="A join playing in the browser: each fish row is tried against each tank row, matches flow up into the result">
+  <a href="https://github.com/ToxFied/Fishbowl/actions/workflows/ci.yml"><img src="https://github.com/ToxFied/Fishbowl/actions/workflows/ci.yml/badge.svg?branch=main" alt="CI status"></a>
+  <code>Rust</code> <code>WebAssembly</code> <code>MIT</code>
 </p>
+
+**Fishbowl is a SQL database written from scratch in Rust. It passes 100% of
+SQLite's 5.9 million sqllogictest records, and it runs in your browser, where
+you can watch each query run row by row.**
+
+<p align="center">
+  <a href="https://toxfied.github.io/Fishbowl/media/fishbowl-demo.mp4">
+    <img src=".github/assets/demo-poster.png" width="760" alt="Watch the Fishbowl demo: a query traced row by row, the join order the planner chose, and a B-tree page splitting">
+  </a>
+</p>
+
+Type a query and each row rises out of its table, through every step of the
+plan, into the result. You can see why each step was chosen, which rows an
+index let the query skip, and the B-tree pages the data lives on. The
+[live demo](https://toxfied.github.io/Fishbowl/) is the real engine compiled to
+WebAssembly, with no server.
 
 ## Correctness, measured
 
@@ -53,7 +62,7 @@ Property tests compare the B-tree with Rust's `BTreeMap`. Bugs planted on
 purpose check that the tests notice. A [crash test](docs/learn/crash-harness.md)
 cuts the power at each of the 178 points where a workload writes to or syncs
 the disk, and checks after 7,189 recoveries that every committed transaction
-is there and nothing else is. [The case study](docs/CASE_STUDY.md) covers all
+is there and nothing else is. [The case study](docs/case-study.md) covers all
 five.
 
 ## What works
@@ -84,7 +93,9 @@ supported yet" rather than answered wrongly.
 ## Run it
 
 You need Rust (via [rustup](https://rustup.rs)) with the `wasm32-unknown-unknown`
-target, `wasm-bindgen-cli` 0.2.129, Node.js and pnpm.
+target, `wasm-bindgen-cli` 0.2.129, Node.js, pnpm, and the `sqlite3` CLI for the
+differential test. [Getting started](https://toxfied.github.io/Fishbowl/docs/getting-started/)
+has more detail.
 
 ```bash
 # Engine tests
@@ -140,17 +151,6 @@ cargo run --release -p fishbowl-slt -- --full --write
 downloads into `sqllogictest/test`, a symlink to `test.nosync` so iCloud Drive
 skips it.
 
-## Deploy the site
-
-`pnpm --dir web build` writes a static site to `web/dist` with relative paths,
-so it works from any URL prefix. To publish it on Cloudflare Pages:
-
-```bash
-npx -y wrangler@latest pages deploy web/dist --project-name fishbowl
-```
-
-It is not deployed yet.
-
 ## Layout
 
 | Path | What |
@@ -160,10 +160,10 @@ It is not deployed yet.
 | `crates/slt` | sqllogictest runner and report |
 | `crates/wasm` | WebAssembly bindings |
 | `web/` | React, Vite and Tailwind UI. A static site with no server |
-| `guide/` | Private course on how Fishbowl works, a Lakebed app. See [its README](guide/README.md) |
+| `website/` | The docs site, a Fumadocs app that renders `docs/` |
 | `sqllogictest/` | Corpus manifests, [results](sqllogictest/RESULTS.md) and generated reports |
 | `scripts/` | Fetch and pin the sqllogictest corpus |
-| `docs/` | [Case study](docs/CASE_STUDY.md), [plan](docs/PLAN.md), [harness notes](docs/sqllogictest.md), [learning notes](docs/learn/README.md) |
+| `docs/` | The docs: [case study](docs/case-study.md), [architecture](docs/architecture.md), [milestones](docs/milestones.md), [harness notes](docs/sqllogictest.md), [learning notes](docs/learn/index.md) |
 | `brand/` | Logo, colors and type. See [BRAND.md](brand/BRAND.md) |
 
 ## License

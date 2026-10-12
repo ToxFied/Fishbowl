@@ -1,4 +1,7 @@
-# The nested-loop join
+---
+title: "The nested-loop join"
+description: "The simplest join: two loops, and the index lookups that make it fast."
+---
 
 The simplest way to join two tables is two loops, one inside the other:
 
