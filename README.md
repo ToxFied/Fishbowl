@@ -26,6 +26,8 @@ you can watch each query run row by row.**
   <a href="https://toxfied.github.io/Fishbowl/media/fishbowl-demo.mp4">
     <img src=".github/assets/demo-poster.png" width="760" alt="Watch the Fishbowl demo: a query traced row by row, the join order the planner chose, and a B-tree page splitting">
   </a>
+  <br>
+  <a href="https://toxfied.github.io/Fishbowl/media/fishbowl-demo.mp4">Watch the 20-second demo</a>
 </p>
 
 Type a query and each row rises out of its table, through every step of the
