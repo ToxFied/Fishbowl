@@ -27,7 +27,7 @@ you can watch each query run row by row.**
     <img src=".github/assets/demo-poster.png" width="760" alt="Watch the Fishbowl demo: a three-table join typed, traced through its plan, the join orders the planner turned down, a B-tree page splitting, and the 5,939,879 SQLite test records it passes">
   </a>
   <br>
-  <a href="https://toxfied.github.io/Fishbowl/media/fishbowl-demo.mp4">Watch the 16-second demo</a>
+  <a href="https://toxfied.github.io/Fishbowl/media/fishbowl-demo.mp4">Watch the 22-second demo (sound on)</a>
 </p>
 
 Type a query and each row rises out of its table, through every step of the
