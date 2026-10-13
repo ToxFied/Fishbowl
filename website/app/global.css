@@ -2,17 +2,30 @@
 @import "fumadocs-ui/css/neutral.css";
 @import "fumadocs-ui/css/preset.css";
 
+/* The app's look (web/src/index.css, brand/BRAND.md): square corners, hairlines,
+   and orange only for where you are now. */
+@theme {
+  --color-fish: #ff7a1a;
+  --radius-xs: 0;
+  --radius-sm: 0;
+  --radius-md: 0;
+  --radius-lg: 0;
+  --radius-xl: 0;
+  --radius-2xl: 0;
+  --radius-3xl: 0;
+}
+
 .dark {
   --color-fd-background: #000;
   --color-fd-foreground: hsl(0 0% 96%);
   --color-fd-primary: hsl(0 0% 96%);
   --color-fd-primary-foreground: hsl(0 0% 3%);
-  --color-fd-border: hsl(0 0% 100% / 14%);
+  --color-fd-border: hsl(0 0% 100% / 15%);
   --color-fd-ring: hsl(0 0% 82%);
   --color-fd-accent: hsl(0 0% 100% / 9%);
   --color-fd-accent-foreground: hsl(0 0% 96%);
   --color-fd-muted: hsl(0 0% 10%);
-  --color-fd-muted-foreground: hsl(0 0% 65%);
+  --color-fd-muted-foreground: hsl(0 0% 60%);
   --color-fd-secondary: hsl(0 0% 9%);
   --color-fd-secondary-foreground: hsl(0 0% 92%);
   --color-fd-card: #000;
@@ -49,16 +62,73 @@ html > body[data-scroll-locked] {
 }
 
 .dark ::selection {
-  background: #fff;
-  color: #000;
+  background: rgb(255 255 255 / 0.25);
 }
 
 #nd-sidebar {
   background: var(--color-fd-card);
 }
 
+/* Page links: no fills. The current page is white, with the scrubber's orange mark. */
+#nd-sidebar a[data-active] {
+  background: transparent;
+}
+
+#nd-sidebar a[data-active]:hover {
+  color: var(--color-fd-foreground);
+}
+
 #nd-sidebar a[data-active="true"] {
+  color: var(--color-fd-foreground);
   font-weight: 560;
+}
+
+#nd-sidebar a[data-active="true"]::before {
+  content: "";
+  position: absolute;
+  inset-block: 0.5rem;
+  inset-inline-start: -0.25rem;
+  width: 3px;
+  background: var(--color-fish);
+}
+
+/* Inside a folder, the mark sits on the folder's guide line. */
+#nd-sidebar a[data-active="true"][class*="before:inset-s-2.5"]::before {
+  inset-inline-start: calc(0.625rem - 1px);
+}
+
+/* Section labels and the TOC title, set like the app's headings. */
+#nd-sidebar p,
+#nd-toc h3 {
+  color: var(--color-fd-foreground);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+#nd-sidebar button[data-search-full] {
+  background: #000;
+  border-color: hsl(0 0% 100% / 20%);
+}
+
+/* The GitHub link alone: a square, not a full-width bar. */
+#nd-sidebar div:has(> a[href^="https://github.com/"]) {
+  align-self: flex-start;
+  padding: 0;
+  background: #000;
+}
+
+#nd-sidebar a[href^="https://github.com/"] {
+  padding: 0.5rem;
+}
+
+#nd-toc .stroke-fd-primary {
+  stroke: var(--color-fish);
+}
+
+#nd-toc a[data-active="true"] {
+  color: var(--color-fd-foreground);
 }
 
 #nd-page {
@@ -99,12 +169,8 @@ html > body[data-scroll-locked] {
 
 #nd-page .prose :not(pre) > code {
   border: 1px solid var(--color-fd-border);
-  border-radius: 0.35rem;
-  background: color-mix(
-    in oklab,
-    var(--color-fd-secondary) 78%,
-    transparent
-  );
+  border-radius: 0;
+  background: #000;
   padding: 0.12em 0.35em;
   font-size: 0.86em;
   font-variant-ligatures: none;
@@ -112,7 +178,6 @@ html > body[data-scroll-locked] {
 
 #nd-page .shiki {
   border-color: var(--color-fd-border);
-  border-radius: 0.625rem;
   background: #000 !important;
   color: #fff !important;
   box-shadow: none;
@@ -130,8 +195,7 @@ html > body[data-scroll-locked] {
 }
 
 #nd-page .shiki ::selection {
-  background: #fff;
-  color: #000;
+  background: rgb(255 255 255 / 0.25);
 }
 
 #nd-page .shiki code {
@@ -140,7 +204,6 @@ html > body[data-scroll-locked] {
 }
 
 #nd-page [style*="--callout-color"] {
-  border-radius: 0.625rem;
   background: color-mix(in oklab, var(--color-fd-card) 78%, transparent);
   box-shadow: none;
 }
