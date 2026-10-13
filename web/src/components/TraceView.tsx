@@ -112,6 +112,22 @@ function Count({ step, frame }: { step: Step; frame: Frame }) {
   );
 }
 
+// Drawn rather than typed: iOS renders ⏮ and ⏭ as color emoji.
+const TRANSPORT = {
+  start: "M1 1h2v10H1zM11 1v10L3 6z",
+  back: "M10 1v10L2 6z",
+  forward: "M2 1v10l8-5z",
+  end: "M9 1h2v10H9zM1 1v10l8-5z",
+};
+
+function TransportIcon({ kind }: { kind: keyof typeof TRANSPORT }) {
+  return (
+    <svg viewBox="0 0 12 12" aria-hidden="true" className="inline size-3 fill-current">
+      <path d={TRANSPORT[kind]} />
+    </svg>
+  );
+}
+
 export function TraceView({ result, autoplay }: { result: QueryResult; autoplay: boolean }) {
   const trace = result.trace;
   const steps = useMemo(() => flatten(result.plan), [result.plan]);
@@ -300,7 +316,7 @@ export function TraceView({ result, autoplay }: { result: QueryResult; autoplay:
           className="px-2 py-1 pointer-coarse:min-h-11 pointer-coarse:min-w-11"
           onClick={() => go(0)}
         >
-          ⏮
+          <TransportIcon kind="start" />
         </button>
         <button
           type="button"
@@ -308,7 +324,7 @@ export function TraceView({ result, autoplay }: { result: QueryResult; autoplay:
           className="px-2 py-1 pointer-coarse:min-h-11 pointer-coarse:min-w-11"
           onClick={() => go(position - 1)}
         >
-          ◀
+          <TransportIcon kind="back" />
         </button>
         <button
           type="button"
@@ -323,7 +339,7 @@ export function TraceView({ result, autoplay }: { result: QueryResult; autoplay:
           className="px-2 py-1 pointer-coarse:min-h-11 pointer-coarse:min-w-11"
           onClick={() => go(position + 1)}
         >
-          ▶
+          <TransportIcon kind="forward" />
         </button>
         <button
           type="button"
@@ -331,7 +347,7 @@ export function TraceView({ result, autoplay }: { result: QueryResult; autoplay:
           className="px-2 py-1 pointer-coarse:min-h-11 pointer-coarse:min-w-11"
           onClick={() => go(total)}
         >
-          ⏭
+          <TransportIcon kind="end" />
         </button>
         <input
           type="range"
