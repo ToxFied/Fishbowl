@@ -65,25 +65,25 @@ html > body[data-scroll-locked] {
   background: rgb(255 255 255 / 0.25);
 }
 
-#nd-sidebar {
+:is(#nd-sidebar, #nd-sidebar-mobile) {
   background: var(--color-fd-card);
 }
 
-/* Page links: no fills. The current page is white, with the scrubber's orange mark. */
-#nd-sidebar a[data-active] {
+/* Page links, in the sidebar and the phone drawer: no fills. The current page is white, with the scrubber's orange mark. */
+:is(#nd-sidebar, #nd-sidebar-mobile) a[data-active] {
   background: transparent;
 }
 
-#nd-sidebar a[data-active]:hover {
+:is(#nd-sidebar, #nd-sidebar-mobile) a[data-active]:hover {
   color: var(--color-fd-foreground);
 }
 
-#nd-sidebar a[data-active="true"] {
+:is(#nd-sidebar, #nd-sidebar-mobile) a[data-active="true"] {
   color: var(--color-fd-foreground);
   font-weight: 560;
 }
 
-#nd-sidebar a[data-active="true"]::before {
+:is(#nd-sidebar, #nd-sidebar-mobile) a[data-active="true"]::before {
   content: "";
   position: absolute;
   inset-block: 0.5rem;
@@ -93,12 +93,12 @@ html > body[data-scroll-locked] {
 }
 
 /* Inside a folder, the mark sits on the folder's guide line. */
-#nd-sidebar a[data-active="true"][class*="before:inset-s-2.5"]::before {
+:is(#nd-sidebar, #nd-sidebar-mobile) a[data-active="true"][class*="before:inset-s-2.5"]::before {
   inset-inline-start: calc(0.625rem - 1px);
 }
 
 /* Section labels and the TOC title, set like the app's headings. */
-#nd-sidebar p,
+:is(#nd-sidebar, #nd-sidebar-mobile) p,
 #nd-toc h3 {
   color: var(--color-fd-foreground);
   font-family: var(--font-mono);
@@ -107,19 +107,19 @@ html > body[data-scroll-locked] {
   text-transform: uppercase;
 }
 
-#nd-sidebar button[data-search-full] {
+:is(#nd-sidebar, #nd-sidebar-mobile) button[data-search-full] {
   background: #000;
   border-color: hsl(0 0% 100% / 20%);
 }
 
 /* The GitHub link alone: a square, not a full-width bar. */
-#nd-sidebar div:has(> a[href^="https://github.com/"]) {
+:is(#nd-sidebar, #nd-sidebar-mobile) div:has(> a[href^="https://github.com/"]) {
   align-self: flex-start;
   padding: 0;
   background: #000;
 }
 
-#nd-sidebar a[href^="https://github.com/"] {
+:is(#nd-sidebar, #nd-sidebar-mobile) a[href^="https://github.com/"] {
   padding: 0.5rem;
 }
 

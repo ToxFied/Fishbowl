@@ -53,7 +53,7 @@ export function StatementLog({ entries, selected, onSelect }: Props) {
               type="button"
               disabled={!isQuery}
               onClick={() => onSelect(i)}
-              className="grid w-full grid-cols-[1ch_1fr_auto] gap-2 py-0.5 text-left"
+              className="grid w-full grid-cols-[1ch_1fr_auto] gap-2 py-0.5 text-left pointer-coarse:py-2"
             >
               <span className="text-fish">{i === selected ? "›" : ""}</span>
               <span className="truncate">{entry.sql}</span>

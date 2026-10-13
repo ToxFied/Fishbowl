@@ -128,22 +128,25 @@ export function App() {
         <img src={markUrl} alt="" className="size-5" />
         <h1 className="font-semibold tracking-tight">fishbowl</h1>
         <span className="hidden text-white/60 sm:inline">A SQL database you can see inside.</span>
-        <nav className="ml-auto flex gap-4 font-mono">
+        <nav className="-mr-2 ml-auto flex h-full font-mono">
           {(["trace", "pages"] as const).map((v) => (
             <button
               key={v}
               type="button"
               onClick={() => setView(v)}
-              className={v === view ? "text-white underline underline-offset-4" : "text-white/60"}
+              className={`px-2 ${v === view ? "text-white underline underline-offset-4" : "text-white/60"}`}
             >
               {v}
             </button>
           ))}
           {/* The docs site is deployed next to this app, under docs/. */}
-          <a href="docs/" className="text-white/60 hover:text-white">
+          <a href="docs/" className="flex items-center px-2 text-white/60 hover:text-white">
             docs
           </a>
-          <a href="https://github.com/ToxFied/Fishbowl" className="text-white/60 hover:text-white">
+          <a
+            href="https://github.com/ToxFied/Fishbowl"
+            className="flex items-center px-2 text-white/60 hover:text-white"
+          >
             github
           </a>
         </nav>
@@ -162,20 +165,22 @@ export function App() {
                 }
               }}
               spellCheck={false}
+              autoCapitalize="none"
+              autoCorrect="off"
               rows={5}
               aria-label="SQL"
-              className="w-full resize-y border border-white/20 bg-black p-2 font-mono leading-relaxed outline-none focus:border-white"
+              className="w-full resize-y border border-white/20 bg-black p-2 font-mono leading-relaxed outline-none focus:border-white pointer-coarse:text-base"
             />
-            <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5 font-mono">
+            <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5 font-mono pointer-coarse:gap-y-0">
               <button
                 type="button"
                 onClick={() => submit(sql)}
                 disabled={!engine}
-                className="border border-white px-3 py-1 disabled:border-white/34 disabled:text-white/34"
+                className="border border-white px-3 py-1 disabled:border-white/34 disabled:text-white/34 pointer-coarse:min-h-11"
               >
-                Run ⌘↵
+                Run<span className="pointer-coarse:hidden"> ⌘↵</span>
               </button>
-              <button type="button" onClick={reset} className="py-1">
+              <button type="button" onClick={reset} className="py-1 pointer-coarse:min-h-11">
                 Reset
               </button>
               {Object.entries(EXAMPLES).map(([name, text]) => (
@@ -186,7 +191,7 @@ export function App() {
                     setSql(text);
                     submit(text);
                   }}
-                  className="py-1 text-white/60 hover:text-white"
+                  className="py-1 text-white/60 hover:text-white pointer-coarse:min-h-11"
                 >
                   {name}
                 </button>
