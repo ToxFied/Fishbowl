@@ -9,6 +9,7 @@ import {
 } from "../engine";
 import { formatValue } from "../trace";
 import { Heading } from "./Heading";
+import { ScrollX } from "./ScrollX";
 
 function keyText(key: KeyInfo): string {
   if (key.values.length === 0) return String(key.rowid);
@@ -156,18 +157,27 @@ function PageDetail({ page, onSelect }: { page: PageInfo; onSelect: (id: number)
           <>
             {" "}
             · next leaf{" "}
-            <button type="button" className="underline" onClick={() => onSelect(page.next ?? 0)}>
+            <button
+              type="button"
+              className="underline pointer-coarse:px-2 pointer-coarse:py-3"
+              onClick={() => onSelect(page.next ?? 0)}
+            >
               p{page.next}
             </button>
           </>
         )}
       </p>
       {page.children.length > 0 && (
-        <p className="flex flex-wrap gap-x-3">
+        <p className="flex flex-wrap gap-x-3 pointer-coarse:gap-x-4">
           {page.children.map((child, i) => {
             const key = page.keys[i];
             return (
-              <button key={child} type="button" onClick={() => onSelect(child)}>
+              <button
+                key={child}
+                type="button"
+                onClick={() => onSelect(child)}
+                className="pointer-coarse:min-h-11"
+              >
                 <span className="text-white/60">{key ? `≤ ${keyText(key)}` : "rest"} →</span> p
                 {child}
               </button>
@@ -289,7 +299,7 @@ export function PageViewer({ engine, tables, version, onTables }: Props) {
     <section className="flex flex-col gap-4">
       <div className="flex flex-col gap-2">
         <Heading>B-tree pages</Heading>
-        <div className="flex flex-wrap gap-x-3 gap-y-1 font-mono">
+        <div className="flex flex-wrap gap-x-3 gap-y-1 font-mono pointer-coarse:gap-y-0">
           {names.map((n) => (
             <button
               key={n}
@@ -299,7 +309,7 @@ export function PageViewer({ engine, tables, version, onTables }: Props) {
                 setSelected(null);
                 setInserting(false);
               }}
-              className={n === name ? "text-white underline underline-offset-4" : "text-white/60"}
+              className={`pointer-coarse:min-h-11 ${n === name ? "text-white underline underline-offset-4" : "text-white/60"}`}
             >
               {n}
             </button>
@@ -323,7 +333,7 @@ export function PageViewer({ engine, tables, version, onTables }: Props) {
             setInserted(0);
             setInserting(!inserting);
           }}
-          className="border border-white px-3 py-1 disabled:border-white/34 disabled:text-white/34"
+          className="border border-white px-3 py-1 disabled:border-white/34 disabled:text-white/34 pointer-coarse:min-h-11"
         >
           {inserting ? "stop" : "insert until a split"}
         </button>
@@ -337,8 +347,12 @@ export function PageViewer({ engine, tables, version, onTables }: Props) {
       {error && <p className="font-mono">{error}</p>}
 
       {tree && (
-        <div ref={treeRef} className="overflow-x-auto pb-1">
-          <div className="flex" style={{ minWidth: `${leafCount(tree.root, byId) * 4.5}rem` }}>
+        <ScrollX className="pb-1">
+          <div
+            ref={treeRef}
+            className="flex"
+            style={{ minWidth: `${leafCount(tree.root, byId) * 4.5}rem` }}
+          >
             <Subtree
               id={tree.root}
               byId={byId}
@@ -347,7 +361,7 @@ export function PageViewer({ engine, tables, version, onTables }: Props) {
               onSelect={setSelected}
             />
           </div>
-        </div>
+        </ScrollX>
       )}
       {tree?.truncated && (
         <p className="text-white/60">Showing the first {tree.pages.length} pages.</p>

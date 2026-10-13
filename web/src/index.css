@@ -41,6 +41,13 @@ body {
   background: rgb(255 255 255 / 0.25);
 }
 
+/* Quick taps on the step buttons should step, not zoom the page. */
+button,
+a,
+input {
+  touch-action: manipulation;
+}
+
 /* The trace scrubber: a white line, and an orange mark where playback is now. */
 .scrubber {
   appearance: none;
@@ -69,4 +76,24 @@ body {
   background: var(--color-fish);
   border: 0;
   border-radius: 0;
+}
+
+/* On touch, the same mark inside a transparent border a finger can grab. */
+@media (pointer: coarse) {
+  .scrubber {
+    height: 2.75rem;
+  }
+  .scrubber::-webkit-slider-thumb {
+    box-sizing: content-box;
+    border: solid transparent;
+    border-width: 15px 12px;
+    margin-top: -22px;
+    background-clip: content-box;
+  }
+  .scrubber::-moz-range-thumb {
+    box-sizing: content-box;
+    border: solid transparent;
+    border-width: 15px 12px;
+    background-clip: content-box;
+  }
 }

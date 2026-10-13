@@ -1,5 +1,6 @@
 import type { ScanRows } from "../engine";
 import { type Frame, formatValue, type Step } from "../trace";
+import { ScrollX } from "./ScrollX";
 
 interface Props {
   steps: Step[];
@@ -63,7 +64,7 @@ export function ScanTables({ steps, scans, frame, register }: Props) {
               <Summary step={step} scan={scan} frame={frame} />
             </p>
             {scan.rows.length > 0 ? (
-              <div className="overflow-x-auto">
+              <ScrollX>
                 <table className="border-collapse">
                   <tbody>
                     {scan.rows.map((row, i) => {
@@ -89,7 +90,7 @@ export function ScanTables({ steps, scans, frame, register }: Props) {
                     })}
                   </tbody>
                 </table>
-              </div>
+              </ScrollX>
             ) : (
               <div
                 className="flex flex-wrap gap-[2px]"

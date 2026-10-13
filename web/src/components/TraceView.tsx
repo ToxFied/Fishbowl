@@ -238,9 +238,12 @@ export function TraceView({ result, autoplay }: { result: QueryResult; autoplay:
                 type="button"
                 title={`${node.operator} ${node.detail}`}
                 onClick={() => setFocus(focus === node.id ? null : node.id)}
-                className="grid w-full grid-cols-[minmax(0,1fr)_4.5rem] items-baseline gap-x-3 py-1 text-left sm:grid-cols-[minmax(0,1.25fr)_4.5rem_minmax(0,1fr)]"
+                className="grid w-full grid-cols-[minmax(0,1fr)_4.5rem] items-baseline gap-x-3 py-1 text-left sm:grid-cols-[minmax(0,1.25fr)_4.5rem_minmax(0,1fr)] pointer-coarse:py-2"
               >
-                <span className="truncate" style={{ paddingLeft: `${depth}rem` }}>
+                <span
+                  className="truncate pointer-coarse:whitespace-normal pointer-coarse:break-words"
+                  style={{ paddingLeft: `${depth}rem` }}
+                >
                   {depth > 0 && <span className="text-white/34">└ </span>}
                   <span className={live ? "text-fish" : touched ? "text-white" : "text-white/60"}>
                     {node.operator}
@@ -265,7 +268,9 @@ export function TraceView({ result, autoplay }: { result: QueryResult; autoplay:
           {current ? (
             <span className="text-fish">{narrate(frame, steps)}</span>
           ) : position === 0 ? (
-            <span className="text-white/60">Press play, or step with ← →</span>
+            <span className="text-white/60">
+              Press play<span className="pointer-coarse:hidden">, or step with ← →</span>
+            </span>
           ) : null}
           {trace.truncated && position === total && (
             <span className="text-white/60"> · the trace keeps the first {total} events</span>
@@ -288,14 +293,19 @@ export function TraceView({ result, autoplay }: { result: QueryResult; autoplay:
 
       <WhyPanel steps={steps} frame={frame} />
 
-      <div className="sticky bottom-0 -mx-4 flex items-center gap-1 border-t border-white/15 bg-black px-3 py-2 font-mono">
-        <button type="button" aria-label="Start" className="px-2 py-1" onClick={() => go(0)}>
+      <div className="sticky bottom-0 -mx-4 flex flex-wrap items-center gap-1 border-t border-white/15 bg-black px-3 py-2 font-mono sm:flex-nowrap pointer-coarse:gap-y-0 pointer-coarse:py-0">
+        <button
+          type="button"
+          aria-label="Start"
+          className="px-2 py-1 pointer-coarse:min-h-11 pointer-coarse:min-w-11"
+          onClick={() => go(0)}
+        >
           ⏮
         </button>
         <button
           type="button"
           aria-label="Step back"
-          className="px-2 py-1"
+          className="px-2 py-1 pointer-coarse:min-h-11 pointer-coarse:min-w-11"
           onClick={() => go(position - 1)}
         >
           ◀
@@ -303,19 +313,24 @@ export function TraceView({ result, autoplay }: { result: QueryResult; autoplay:
         <button
           type="button"
           onClick={toggle}
-          className="w-16 border border-white px-2 py-1 text-center"
+          className="w-16 border border-white px-2 py-1 text-center pointer-coarse:min-h-11"
         >
           {playing ? "pause" : "play"}
         </button>
         <button
           type="button"
           aria-label="Step forward"
-          className="px-2 py-1"
+          className="px-2 py-1 pointer-coarse:min-h-11 pointer-coarse:min-w-11"
           onClick={() => go(position + 1)}
         >
           ▶
         </button>
-        <button type="button" aria-label="End" className="px-2 py-1" onClick={() => go(total)}>
+        <button
+          type="button"
+          aria-label="End"
+          className="px-2 py-1 pointer-coarse:min-h-11 pointer-coarse:min-w-11"
+          onClick={() => go(total)}
+        >
           ⏭
         </button>
         <input
@@ -325,15 +340,15 @@ export function TraceView({ result, autoplay }: { result: QueryResult; autoplay:
           value={position}
           onChange={(e) => go(Number(e.target.value))}
           aria-label="Scrub through the trace"
-          className="scrubber mx-2 min-w-0 flex-1"
+          className="scrubber order-first min-w-0 basis-full sm:order-none sm:mx-2 sm:basis-auto sm:flex-1"
         />
-        <span className="text-right tabular-nums">
+        <span className="ml-auto text-right tabular-nums sm:ml-0">
           {position}/{total}
         </span>
         <button
           type="button"
           onClick={() => setFast(!fast)}
-          className={`w-8 px-1 py-1 text-right ${fast ? "text-white" : "text-white/60"}`}
+          className={`w-8 px-1 py-1 text-right pointer-coarse:min-h-11 pointer-coarse:w-11 ${fast ? "text-white" : "text-white/60"}`}
         >
           {fast ? "4×" : "1×"}
         </button>

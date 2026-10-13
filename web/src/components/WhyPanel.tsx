@@ -48,7 +48,10 @@ function Choices({ node }: { node: PlanProfile }) {
       <tbody>
         {rows.map((r) => (
           <tr key={r.plan} className={r.chosen ? "text-fish" : "text-white/60"}>
-            <td className="truncate pr-3" title={r.plan}>
+            <td
+              className="truncate pr-3 pointer-coarse:whitespace-normal pointer-coarse:break-words"
+              title={r.plan}
+            >
               {r.plan}
             </td>
             <td className="text-right tabular-nums">{compact(r.rows)}</td>
