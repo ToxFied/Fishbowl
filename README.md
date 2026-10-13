@@ -24,10 +24,10 @@ you can watch each query run row by row.**
 
 <p align="center">
   <a href="https://toxfied.github.io/Fishbowl/media/fishbowl-demo.mp4">
-    <img src=".github/assets/demo-poster.png" width="760" alt="Watch the Fishbowl launch film: a three-table join traced row by row through its plan, the join orders the planner turned down, a B-tree page splitting, and all 5,939,879 SQLite logic test records passing">
+    <img src=".github/assets/demo-poster.png" width="760" alt="Watch the Fishbowl demo: a three-table join traced row by row through its plan, the join orders the planner turned down, a B-tree page splitting, and all 5,939,879 SQLite logic test records passing">
   </a>
   <br>
-  <a href="https://toxfied.github.io/Fishbowl/media/fishbowl-demo.mp4">Watch the 30-second film (sound on)</a>
+  <a href="https://toxfied.github.io/Fishbowl/media/fishbowl-demo.mp4">Watch the 30-second demo</a>
 </p>
 
 Type a query and each row rises out of its table, through every step of the
